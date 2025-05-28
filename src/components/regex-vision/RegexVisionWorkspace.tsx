@@ -1,0 +1,300 @@
+"use client";
+import React, { useState, useEffect, useCallback } from 'react';
+import type { Block, RegexMatch } from './types';
+import { BlockType } from './types';
+import { BLOCK_CONFIGS } from './constants';
+import { generateId, generateRegexString } from './utils';
+import { useToast } from '@/hooks/use-toast';
+
+import AppHeader from './AppHeader';
+import BlockNode from './BlockNode';
+import SettingsPanel from './SettingsPanel';
+import BlockPalette from './BlockPalette';
+import RegexOutputDisplay from './RegexOutputDisplay';
+import TestArea from './TestArea';
+import CodeGenerationPanel from './CodeGenerationPanel';
+import DebugView from './DebugView';
+
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Layers, Puzzle, Edit3, Settings2, Code2, PlayCircle, Bug } from 'lucide-react';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+
+const RegexVisionWorkspace: React.FC = () => {
+  const [blocks, setBlocks] = useState<Block[]>([]);
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const [parentIdForNewBlock, setParentIdForNewBlock] = useState<string | null>(null);
+  const [isPaletteVisible, setIsPaletteVisible] = useState(false);
+  
+  const [testText, setTestText] = useState<string>('The quick brown fox jumps over the lazy dog.');
+  const [regexFlags, setRegexFlags] = useState<string>('g');
+  const [matches, setMatches] = useState<RegexMatch[]>([]);
+  const [generatedRegex, setGeneratedRegex] = useState<string>('');
+
+  const { toast } = useToast();
+
+  // Regenerate regex and test on changes
+  useEffect(() => {
+    const newRegex = generateRegexString(blocks);
+    setGeneratedRegex(newRegex);
+
+    if (newRegex && testText) {
+      try {
+        const regexObj = new RegExp(newRegex, regexFlags);
+        const foundRawMatches = [...testText.matchAll(regexObj)];
+        const formattedMatches: RegexMatch[] = foundRawMatches.map(rawMatch => ({
+          match: rawMatch[0],
+          index: rawMatch.index!,
+          groups: Array.from(rawMatch).slice(1),
+          namedGroups: rawMatch.groups,
+        }));
+        setMatches(formattedMatches);
+      } catch (error) {
+        // console.error("Regex testing error:", error);
+        setMatches([]); // Clear matches on error
+        // Optionally, show a toast or error message for invalid regex
+      }
+    } else {
+      setMatches([]);
+    }
+  }, [blocks, testText, regexFlags]);
+
+  const findBlockRecursive = (searchBlocks: Block[], id: string): Block | null => {
+    for (const block of searchBlocks) {
+      if (block.id === id) return block;
+      if (block.children) {
+        const found = findBlockRecursive(block.children, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const updateBlockRecursive = (currentBlocks: Block[], targetId: string, updatedBlock: Block): Block[] => {
+    return currentBlocks.map(block => {
+      if (block.id === targetId) return updatedBlock;
+      if (block.children) {
+        return { ...block, children: updateBlockRecursive(block.children, targetId, updatedBlock) };
+      }
+      return block;
+    });
+  };
+
+  const deleteBlockRecursive = (currentBlocks: Block[], targetId: string): Block[] => {
+    return currentBlocks.filter(block => {
+      if (block.id === targetId) return false;
+      if (block.children) {
+        block.children = deleteBlockRecursive(block.children, targetId);
+      }
+      return true;
+    });
+  };
+
+  const addChildRecursive = (currentBlocks: Block[], pId: string, newBlock: Block): Block[] => {
+    return currentBlocks.map(block => {
+      if (block.id === pId) {
+        return { ...block, children: [...(block.children || []), newBlock] };
+      }
+      if (block.children) {
+        return { ...block, children: addChildRecursive(block.children, pId, newBlock) };
+      }
+      return block;
+    });
+  };
+
+  const handleAddBlock = useCallback((type: BlockType, customSettings?: any, parentId?: string | null) => {
+    const config = BLOCK_CONFIGS[type];
+    if (!config) {
+      toast({ title: "Error", description: `Unknown block type: ${type}`, variant: "destructive" });
+      return;
+    }
+    const newBlock: Block = {
+      id: generateId(),
+      type,
+      settings: customSettings || { ...config.defaultSettings },
+      children: [],
+    };
+
+    if (parentId) {
+      setBlocks(prev => addChildRecursive(prev, parentId, newBlock));
+    } else {
+      setBlocks(prev => [...prev, newBlock]);
+    }
+    setSelectedBlockId(newBlock.id);
+    setParentIdForNewBlock(null); // Reset after use
+    setIsPaletteVisible(false); // Close palette after adding
+  }, [toast]);
+
+  const handleUpdateBlock = useCallback((id: string, updatedBlock: Block) => {
+    setBlocks(prev => updateBlockRecursive(prev, id, updatedBlock));
+  }, []);
+
+  const handleDeleteBlock = useCallback((id: string) => {
+    setBlocks(prev => deleteBlockRecursive(prev, id));
+    if (selectedBlockId === id) {
+      setSelectedBlockId(null);
+    }
+  }, [selectedBlockId]);
+
+  const handleOpenPaletteForChild = useCallback((pId: string) => {
+    setParentIdForNewBlock(pId);
+    setIsPaletteVisible(true);
+  }, []);
+
+  const selectedBlock = selectedBlockId ? findBlockRecursive(blocks, selectedBlockId) : null;
+
+  const handleShare = () => {
+    // Basic share: copy URL (more advanced would involve saving state)
+    navigator.clipboard.writeText(window.location.href)
+      .then(() => toast({ title: "Link Copied!", description: "Shareable link copied to clipboard." }))
+      .catch(() => toast({ title: "Error", description: "Failed to copy link.", variant: "destructive" }));
+  };
+
+  // Placeholder export/import
+  const handleExport = () => {
+     try {
+      const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+        JSON.stringify({ blocks, regexFlags, testText }, null, 2)
+      )}`;
+      const link = document.createElement("a");
+      link.href = jsonString;
+      link.download = "regexvision_config.json";
+      link.click();
+      toast({ title: "Exported!", description: "Configuration downloaded." });
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to export configuration.", variant: "destructive" });
+    }
+  };
+  const handleImport = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (event) => {
+      const file = (event.target as HTMLInputElement).files?.[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const imported = JSON.parse(e.target?.result as string);
+            if (imported.blocks && imported.regexFlags !== undefined && imported.testText !== undefined) {
+              setBlocks(imported.blocks);
+              setRegexFlags(imported.regexFlags);
+              setTestText(imported.testText);
+              toast({ title: "Imported!", description: "Configuration loaded." });
+            } else {
+              throw new Error("Invalid file format");
+            }
+          } catch (err) {
+            toast({ title: "Import Error", description: "Failed to parse or invalid file.", variant: "destructive" });
+          }
+        };
+        reader.readAsText(file);
+      }
+    };
+    input.click();
+  };
+
+  // CSS variables for dynamic heights, can be refined
+  const headerHeight = "60px"; // Approximate height of AppHeader
+  const outputPanelMinHeight = "250px"; // Min height for the output panel
+  const settingsHeaderHeight = "50px"; // Approximate height of SettingsPanel header
+
+  return (
+    <div className="flex flex-col h-screen bg-background text-foreground" style={{ "--header-height": headerHeight, "--output-panel-min-height": outputPanelMinHeight, "--settings-header-height": settingsHeaderHeight } as React.CSSProperties}>
+      <AppHeader onShare={handleShare} onExport={handleExport} onImport={handleImport} />
+      
+      <ResizablePanelGroup direction="vertical" className="flex-1 overflow-hidden">
+        <ResizablePanel defaultSize={65} minSize={30}>
+          <ResizablePanelGroup direction="horizontal" className="h-full">
+            <ResizablePanel defaultSize={selectedBlockId ? 60 : 100} minSize={30} className="flex flex-col overflow-hidden">
+              <Card className="m-2 flex-1 flex flex-col shadow-md border-primary/20">
+                <CardHeader className="py-2 px-3 border-b">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base flex items-center gap-2"><Edit3 size={18} className="text-primary"/> Expression Tree</CardTitle>
+                    <Button size="sm" onClick={() => { setParentIdForNewBlock(null); setIsPaletteVisible(true); }}>
+                      <Plus size={16} className="mr-1" /> Add Root Block
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-3 flex-1 overflow-hidden">
+                  <ScrollArea className="h-full pr-2">
+                    {blocks.length === 0 ? (
+                      <div className="text-center text-muted-foreground py-10 flex flex-col items-center justify-center h-full">
+                        <Layers size={48} className="mb-3 opacity-50" />
+                        <p className="font-medium">Start building your regex!</p>
+                        <p className="text-sm">Click "Add Root Block" or use the palette.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        {blocks.map(block => (
+                          <BlockNode
+                            key={block.id}
+                            block={block}
+                            onUpdate={handleUpdateBlock}
+                            onDelete={handleDeleteBlock}
+                            onAddChild={handleOpenPaletteForChild}
+                            selectedId={selectedBlockId}
+                            onSelect={setSelectedBlockId}
+                            level={0}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            </ResizablePanel>
+            {selectedBlockId && (
+              <>
+                <ResizableHandle withHandle />
+                <ResizablePanel defaultSize={40} minSize={25} maxSize={50} className="overflow-hidden">
+                   <div className="h-full m-2 ml-0 shadow-md border-primary/20 rounded-lg overflow-hidden bg-card">
+                     <SettingsPanel
+                        block={selectedBlock}
+                        onUpdate={handleUpdateBlock}
+                        onClose={() => setSelectedBlockId(null)}
+                      />
+                   </div>
+                </ResizablePanel>
+              </>
+            )}
+          </ResizablePanelGroup>
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel defaultSize={35} minSize={20} className="bg-card p-2 shadow-top">
+            <div className="h-full flex flex-col">
+              <div className="mb-3">
+                <RegexOutputDisplay generatedRegex={generatedRegex} regexFlags={regexFlags} onFlagsChange={setRegexFlags} />
+              </div>
+              <Tabs defaultValue="testing" className="flex-1 flex flex-col min-h-0">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="testing"><PlayCircle size={16} className="mr-1.5"/>Testing</TabsTrigger>
+                  <TabsTrigger value="codegen"><Code2 size={16} className="mr-1.5"/>Code Gen</TabsTrigger>
+                  <TabsTrigger value="debug"><Bug size={16} className="mr-1.5"/>Debug</TabsTrigger>
+                </TabsList>
+                <TabsContent value="testing" className="mt-2 flex-1 overflow-y-auto p-0.5">
+                  <TestArea testText={testText} onTestTextChange={setTestText} matches={matches} generatedRegex={generatedRegex} />
+                </TabsContent>
+                <TabsContent value="codegen" className="mt-2 flex-1 overflow-y-auto p-0.5">
+                  <CodeGenerationPanel generatedRegex={generatedRegex} regexFlags={regexFlags} testText={testText} />
+                </TabsContent>
+                <TabsContent value="debug" className="mt-2 flex-1 overflow-y-auto p-0.5">
+                  <DebugView />
+                </TabsContent>
+              </Tabs>
+            </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
+
+      <BlockPalette
+        onAddBlock={handleAddBlock}
+        isVisible={isPaletteVisible}
+        onToggle={() => setIsPaletteVisible(!isPaletteVisible)}
+        parentIdForNewBlock={parentIdForNewBlock}
+      />
+    </div>
+  );
+};
+
+export default RegexVisionWorkspace;
