@@ -17,7 +17,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onShare, onExport, onImport }) =>
           <Puzzle className="h-8 w-8 text-primary" />
           <h1 className="text-2xl font-bold text-primary">RegexVision</h1>
           <span className="text-sm text-muted-foreground hidden md:block">
-            Visual Regex Builder & Analyzer
+            Визуальный конструктор и анализатор Regex
           </span>
         </div>
         
@@ -25,19 +25,19 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onShare, onExport, onImport }) =>
           {onShare && (
             <Button variant="outline" size="sm" onClick={onShare}>
               <Share2 size={16} />
-              <span className="ml-2 hidden sm:inline">Share</span>
+              <span className="ml-2 hidden sm:inline">Поделиться</span>
             </Button>
           )}
           {onExport && (
             <Button variant="outline" size="sm" onClick={onExport}>
               <DownloadCloud size={16} />
-              <span className="ml-2 hidden sm:inline">Export</span>
+              <span className="ml-2 hidden sm:inline">Экспорт</span>
             </Button>
           )}
            {onImport && (
             <Button variant="outline" size="sm" onClick={onImport}>
               <UploadCloud size={16} />
-              <span className="ml-2 hidden sm:inline">Import</span>
+              <span className="ml-2 hidden sm:inline">Импорт</span>
             </Button>
           )}
         </div>

@@ -4,53 +4,53 @@ import { Group, Asterisk, CaseSensitive, AnchorIcon, SplitSquareHorizontal, Sear
 
 export const BLOCK_CONFIGS: BlockConfigs = {
   [BlockType.GROUP]: {
-    name: 'Group',
+    name: 'Группа',
     icon: <Group size={18}/>,
     defaultSettings: { type: 'capturing', name: '' },
     types: ['capturing', 'non-capturing', 'named'],
   },
   [BlockType.QUANTIFIER]: {
-    name: 'Quantifier',
+    name: 'Квантификатор',
     icon: <Asterisk size={18}/>,
     defaultSettings: { type: '*', min: 0, max: null, mode: 'greedy' },
     types: ['*', '+', '?', '{n}', '{n,}', '{n,m}'],
     modes: ['greedy', 'lazy', 'possessive'],
   },
   [BlockType.CHARACTER_CLASS]: {
-    name: 'Character Class',
+    name: 'Символьный класс',
     icon: <span className="font-mono text-sm">[ ]</span>,
     defaultSettings: { pattern: 'a-z', negated: false },
     presets: ['a-z', 'A-Z', '0-9', '\\d', '\\w', '\\s', '.'],
   },
   [BlockType.LITERAL]: {
-    name: 'Literal',
+    name: 'Литерал',
     icon: <CaseSensitive size={18}/>,
     defaultSettings: { text: '' },
   },
   [BlockType.ANCHOR]: {
-    name: 'Anchor',
+    name: 'Якорь',
     icon: <AnchorIcon size={18}/>,
     defaultSettings: { type: '^' },
     types: ['^', '$', '\\b', '\\B'],
   },
   [BlockType.ALTERNATION]: {
-    name: 'Alternation',
+    name: 'Чередование',
     icon: <SplitSquareHorizontal size={18}/>,
     defaultSettings: {},
   },
   [BlockType.LOOKAROUND]: {
-    name: 'Lookaround',
+    name: 'Просмотр',
     icon: <SearchCode size={18}/>,
     defaultSettings: { type: 'positive-lookahead' },
     types: ['positive-lookahead', 'negative-lookahead', 'positive-lookbehind', 'negative-lookbehind'],
   },
   [BlockType.BACKREFERENCE]: {
-    name: 'Backreference',
+    name: 'Обратная ссылка',
     icon: <Repeat size={18}/>,
     defaultSettings: { ref: '1' },
   },
   [BlockType.CONDITIONAL]: {
-    name: 'Conditional',
+    name: 'Условие',
     icon: <HelpCircleIcon size={18}/>,
     defaultSettings: { condition: '', yesPattern: '', noPattern: '' },
   }

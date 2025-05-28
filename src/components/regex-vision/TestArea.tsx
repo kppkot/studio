@@ -17,7 +17,7 @@ interface TestAreaProps {
 const TestArea: React.FC<TestAreaProps> = ({ testText, onTestTextChange, matches, generatedRegex }) => {
   const highlightMatches = () => {
     if (!testText || matches.length === 0) {
-      return <span className="whitespace-pre-wrap">{testText || "Enter text to test..."}</span>;
+      return <span className="whitespace-pre-wrap">{testText || "Введите текст для тестирования..."}</span>;
     }
 
     let lastIndex = 0;
@@ -45,18 +45,18 @@ const TestArea: React.FC<TestAreaProps> = ({ testText, onTestTextChange, matches
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
       <div className="flex flex-col gap-4">
         <div>
-          <Label htmlFor="testText" className="text-sm font-medium">Test Text</Label>
+          <Label htmlFor="testText" className="text-sm font-medium">Тестовый текст</Label>
           <Textarea
             id="testText"
             value={testText}
             onChange={(e) => onTestTextChange(e.target.value)}
             className="mt-1 min-h-[120px] max-h-[200px] resize-y font-mono text-sm"
-            placeholder="Enter text to test your regex..."
+            placeholder="Введите текст для проверки вашего regex..."
           />
         </div>
         <Card className="flex-1">
           <CardHeader className="py-2 px-3 border-b">
-            <CardTitle className="text-base">Highlighted Text</CardTitle>
+            <CardTitle className="text-base">Выделенный текст</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <ScrollArea className="h-[calc(100%_-_2.5rem)] max-h-[150px]">
@@ -70,7 +70,7 @@ const TestArea: React.FC<TestAreaProps> = ({ testText, onTestTextChange, matches
 
       <Card className="flex flex-col">
         <CardHeader className="py-2 px-3 border-b">
-          <CardTitle className="text-base">Matches ({matches.length})</CardTitle>
+          <CardTitle className="text-base">Совпадения ({matches.length})</CardTitle>
         </CardHeader>
         <CardContent className="p-0 flex-1">
           <ScrollArea className="h-full max-h-[calc(100%_-_2rem)]"> {/* Adjust based on parent height */}
@@ -79,19 +79,19 @@ const TestArea: React.FC<TestAreaProps> = ({ testText, onTestTextChange, matches
                 {matches.map((match, index) => (
                   <div key={index} className="p-2 bg-primary/5 border border-primary/20 rounded-md text-xs">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-semibold text-primary">Match #{index + 1}</span>
-                      <span className="text-muted-foreground">Index: {match.index}</span>
+                      <span className="font-semibold text-primary">Совпадение #{index + 1}</span>
+                      <span className="text-muted-foreground">Индекс: {match.index}</span>
                     </div>
                     <div className="font-mono bg-background p-1.5 rounded border break-all">
                       "{match.match}"
                     </div>
                     {match.groups.length > 0 && (
                       <div className="mt-1.5">
-                        <span className="text-muted-foreground">Groups:</span>
+                        <span className="text-muted-foreground">Группы:</span>
                         <ul className="list-disc list-inside ml-1 mt-0.5 space-y-0.5">
                           {match.groups.map((group, groupIndex) => (
                             <li key={groupIndex} className="font-mono">
-                              <span className="text-muted-foreground">{groupIndex + 1}:</span> "{group ?? <span className="italic">undefined</span>}"
+                              <span className="text-muted-foreground">{groupIndex + 1}:</span> "{group ?? <span className="italic">не определено</span>}"
                             </li>
                           ))}
                         </ul>
@@ -105,14 +105,14 @@ const TestArea: React.FC<TestAreaProps> = ({ testText, onTestTextChange, matches
                 {generatedRegex && testText ? (
                   <>
                     <AlertCircle size={32} className="mb-2 opacity-50" />
-                    <p className="font-medium">No Matches Found</p>
-                    <p className="text-xs">Try adjusting your regex or test text.</p>
+                    <p className="font-medium">Совпадений не найдено</p>
+                    <p className="text-xs">Попробуйте изменить regex или тестовый текст.</p>
                   </>
                 ) : (
                   <>
                     <Search size={32} className="mb-2 opacity-50" />
-                    <p className="font-medium">Ready to Test</p>
-                    <p className="text-xs">Enter a regex and test text to see matches.</p>
+                    <p className="font-medium">Готово к тестированию</p>
+                    <p className="text-xs">Введите regex и тестовый текст, чтобы увидеть совпадения.</p>
                   </>
                 )}
               </div>

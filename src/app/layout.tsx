@@ -6,7 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
   title: 'RegexVision',
-  description: 'Visually construct and analyze complex regular expressions with AI-powered assistance.',
+  description: 'Визуально создавайте и анализируйте сложные регулярные выражения с помощью ИИ.',
 };
 
 export default function RootLayout({
@@ -15,7 +15,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="ru" className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <body className={`font-sans antialiased`}>
         {children}
         <Toaster />

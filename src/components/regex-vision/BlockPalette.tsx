@@ -35,10 +35,10 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
       const result = await getRegexSuggestion({ query });
       setAiSuggestions(result.suggestions || []);
     } catch (error) {
-      console.error("Error fetching AI suggestions:", error);
+      console.error("Ошибка при получении AI подсказок:", error);
       toast({
-        title: "AI Suggestion Error",
-        description: "Could not fetch suggestions from AI.",
+        title: "Ошибка AI подсказок",
+        description: "Не удалось получить подсказки от AI.",
         variant: "destructive",
       });
       setAiSuggestions([]);
@@ -81,7 +81,7 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
       <Button
         onClick={onToggle}
         className="fixed bottom-6 right-6 bg-primary text-primary-foreground p-4 rounded-full shadow-lg hover:bg-primary/90 z-50 h-14 w-14"
-        aria-label="Open block palette"
+        aria-label="Открыть палитру блоков"
       >
         <Plus size={24} />
       </Button>
@@ -93,7 +93,7 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
       <div className="fixed inset-0 bg-black/30 z-40 backdrop-blur-sm" onClick={onToggle} aria-hidden="true" />
       <Card className="fixed bottom-6 right-6 w-80 max-h-[calc(100vh-6rem)] flex flex-col shadow-xl z-50 border-primary">
         <CardHeader className="py-3 px-4 border-b flex flex-row items-center justify-between">
-          <CardTitle className="text-lg">Add Block</CardTitle>
+          <CardTitle className="text-lg">Добавить блок</CardTitle>
           <Button variant="ghost" size="icon" onClick={onToggle} className="h-8 w-8">
             <X size={18} />
           </Button>
@@ -104,7 +104,7 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 type="text"
-                placeholder="Search or type / for AI..."
+                placeholder="Поиск или / для AI..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-8"
@@ -115,11 +115,11 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
 
           <ScrollArea className="flex-1 p-3">
             <div className="space-y-2">
-              {isLoadingAi && <p className="text-sm text-muted-foreground p-2 text-center">Loading AI suggestions...</p>}
+              {isLoadingAi && <p className="text-sm text-muted-foreground p-2 text-center">Загрузка AI подсказок...</p>}
               
               {aiSuggestions.length > 0 && (
                 <div className="mb-3">
-                  <h4 className="text-xs font-semibold text-muted-foreground mb-1 uppercase flex items-center gap-1.5"><Bot size={14} /> AI Suggestions</h4>
+                  <h4 className="text-xs font-semibold text-muted-foreground mb-1 uppercase flex items-center gap-1.5"><Bot size={14} /> AI Подсказки</h4>
                   {aiSuggestions.map((suggestion, index) => (
                     <Button
                       key={`ai-${index}`}
@@ -135,7 +135,7 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
               )}
 
               {(searchTerm && !searchTerm.startsWith('/') || !aiSuggestions.length && searchTerm.startsWith('/')) && filteredBlocks.length === 0 && !isLoadingAi && (
-                <p className="text-sm text-muted-foreground p-2 text-center">No blocks found.</p>
+                <p className="text-sm text-muted-foreground p-2 text-center">Блоки не найдены.</p>
               )}
 
               {!searchTerm.startsWith('/') && filteredBlocks.map(([type, config]) => (

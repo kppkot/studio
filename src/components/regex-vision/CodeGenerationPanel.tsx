@@ -33,7 +33,7 @@ while ((match = regex.exec(text)) !== null) {
   matches.push(match);
 }
 console.log(matches);
-// For all matches (alternative):
+// Для всех совпадений (альтернатива):
 // const allMatches = text.matchAll(regex);
 // for (const m of allMatches) { console.log(m); }`;
 
@@ -42,8 +42,8 @@ console.log(matches);
         if (regexFlags.includes('i')) pyFlags += 're.IGNORECASE';
         if (regexFlags.includes('m')) pyFlags = (pyFlags ? pyFlags + ' | ' : '') + 're.MULTILINE';
         if (regexFlags.includes('s')) pyFlags = (pyFlags ? pyFlags + ' | ' : '') + 're.DOTALL';
-        // Python does not have a direct equivalent for 'g' in finditer/findall
-        // 'g' is default for re.findall and re.finditer
+        // Python не имеет прямого эквивалента для 'g' в finditer/findall
+        // 'g' используется по умолчанию для re.findall и re.finditer
         return `# Python
 import re
 
@@ -51,13 +51,13 @@ pattern = r"${escapedRegex}"
 text = "${escapedTestText}"
 flags = ${pyFlags || 0}
 
-# Find all non-overlapping matches
+# Найти все непересекающиеся совпадения
 all_matches = re.findall(pattern, text, flags=flags)
-print("findall matches:", all_matches)
+print("Совпадения findall:", all_matches)
 
-# For more detailed match objects (including groups)
+# Для более подробных объектов совпадений (включая группы)
 for match_obj in re.finditer(pattern, text, flags=flags):
-    print("Match object:", match_obj.group(0), "Groups:", match_obj.groups())`;
+    print("Объект совпадения:", match_obj.group(0), "Группы:", match_obj.groups())`;
 
       case 'php':
         return `<?php
@@ -67,7 +67,7 @@ $text = "${escapedTestText}";
 if (preg_match_all($pattern, $text, $matches, PREG_SET_ORDER)) {
     print_r($matches);
 } else {
-    echo "No matches found.";
+    echo "Совпадений не найдено.";
 }`;
 
       case 'java':
@@ -75,7 +75,7 @@ if (preg_match_all($pattern, $text, $matches, PREG_SET_ORDER)) {
         if (regexFlags.includes('i')) javaFlags += "Pattern.CASE_INSENSITIVE";
         if (regexFlags.includes('m')) javaFlags = (javaFlags.length > 0 ? javaFlags + " | " : "") + "Pattern.MULTILINE";
         if (regexFlags.includes('s')) javaFlags = (javaFlags.length > 0 ? javaFlags + " | " : "") + "Pattern.DOTALL";
-        if (regexFlags.includes('u')) javaFlags = (javaFlags.length > 0 ? javaFlags + " | " : "") + "Pattern.UNICODE_CASE"; // Or UNICODE_CHARACTER_CLASS
+        if (regexFlags.includes('u')) javaFlags = (javaFlags.length > 0 ? javaFlags + " | " : "") + "Pattern.UNICODE_CASE"; // Или UNICODE_CHARACTER_CLASS
 
         return `// Java
 import java.util.regex.Matcher;
@@ -90,13 +90,13 @@ public class RegexTest {
         Pattern pattern = Pattern.compile(regex${javaFlags.length > 0 ? ", " + javaFlags : ""});
         Matcher matcher = pattern.matcher(text);
 
-        // Find all matches
+        // Найти все совпадения
         List<String> allMatches = new ArrayList<>();
         while (matcher.find()) {
-            allMatches.add(matcher.group(0)); // group(0) is the whole match
-            // For groups:
+            allMatches.add(matcher.group(0)); // group(0) - это все совпадение
+            // Для групп:
             // for (int i = 1; i <= matcher.groupCount(); i++) {
-            //     System.out.println("Group " + i + ": " + matcher.group(i));
+            //     System.out.println("Группа " + i + ": " + matcher.group(i));
             // }
         }
         System.out.println(allMatches);
@@ -117,25 +117,25 @@ public class Example
 {
     public static void Main(string[] args)
     {
-        string pattern = @"${generatedRegex.replace(/"/g, '""')}"; // Verbatim string, escape quotes by doubling
+        string pattern = @"${generatedRegex.replace(/"/g, '""')}"; // Дословная строка, кавычки экранируются удвоением
         string text = @"${testText.replace(/"/g, '""')}";
         RegexOptions options = ${csOptions};
         
         MatchCollection matches = Regex.Matches(text, pattern, options);
         
-        Console.WriteLine($"Found {matches.Count} matches:");
+        Console.WriteLine($"Найдено {matches.Count} совпадений:");
         foreach (Match match in matches)
         {
-            Console.WriteLine($"Match: {match.Value} at index {match.Index}");
-            // For groups:
-            // for (int i = 1; i < match.Groups.Count; i++) { // Group 0 is the whole match
-            //    Console.WriteLine($"  Group {i}: {match.Groups[i].Value}");
+            Console.WriteLine($"Совпадение: {match.Value} по индексу {match.Index}");
+            // Для групп:
+            // for (int i = 1; i < match.Groups.Count; i++) { // Группа 0 - это все совпадение
+            //    Console.WriteLine($"  Группа {i}: {match.Groups[i].Value}");
             // }
         }
     }
 }`;
       default:
-        return 'Select a language to see the code snippet.';
+        return 'Выберите язык, чтобы увидеть фрагмент кода.';
     }
   };
 
@@ -144,21 +144,21 @@ public class Example
   const handleCopyCode = () => {
     navigator.clipboard.writeText(codeSnippet)
       .then(() => {
-        toast({ title: "Success", description: "Code snippet copied!" });
+        toast({ title: "Успех", description: "Фрагмент кода скопирован!" });
       })
       .catch(err => {
-        toast({ title: "Error", description: "Failed to copy code.", variant: "destructive" });
-        console.error('Failed to copy code: ', err);
+        toast({ title: "Ошибка", description: "Не удалось скопировать код.", variant: "destructive" });
+        console.error('Не удалось скопировать код: ', err);
       });
   };
 
   return (
     <div className="space-y-4 h-full flex flex-col">
       <div className="flex items-center justify-between gap-2">
-        <Label htmlFor="languageSelect" className="text-sm font-medium">Language</Label>
+        <Label htmlFor="languageSelect" className="text-sm font-medium">Язык</Label>
         <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
           <SelectTrigger id="languageSelect" className="w-[180px] h-9">
-            <SelectValue placeholder="Select language" />
+            <SelectValue placeholder="Выберите язык" />
           </SelectTrigger>
           <SelectContent>
             {LANGUAGES.map(lang => (
@@ -178,7 +178,7 @@ public class Example
             variant="secondary"
             size="icon"
             onClick={handleCopyCode}
-            title="Copy Code"
+            title="Копировать код"
             className="absolute top-2 right-2 h-7 w-7"
             disabled={!generatedRegex}
           >

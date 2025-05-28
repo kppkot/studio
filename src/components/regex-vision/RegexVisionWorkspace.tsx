@@ -1,4 +1,3 @@
-
 "use client";
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Block, RegexMatch } from './types';
@@ -15,7 +14,7 @@ import RegexOutputDisplay from './RegexOutputDisplay';
 import TestArea from './TestArea';
 import CodeGenerationPanel from './CodeGenerationPanel';
 import DebugView from './DebugView';
-import { Button } from '@/components/ui/button'; // Added import
+import { Button } from '@/components/ui/button';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -29,7 +28,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const [parentIdForNewBlock, setParentIdForNewBlock] = useState<string | null>(null);
   const [isPaletteVisible, setIsPaletteVisible] = useState(false);
   
-  const [testText, setTestText] = useState<string>('The quick brown fox jumps over the lazy dog.');
+  const [testText, setTestText] = useState<string>('Быстрая коричневая лиса прыгает через ленивую собаку.');
   const [regexFlags, setRegexFlags] = useState<string>('g');
   const [matches, setMatches] = useState<RegexMatch[]>([]);
   const [generatedRegex, setGeneratedRegex] = useState<string>('');
@@ -108,7 +107,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const handleAddBlock = useCallback((type: BlockType, customSettings?: any, parentId?: string | null) => {
     const config = BLOCK_CONFIGS[type];
     if (!config) {
-      toast({ title: "Error", description: `Unknown block type: ${type}`, variant: "destructive" });
+      toast({ title: "Ошибка", description: `Неизвестный тип блока: ${type}`, variant: "destructive" });
       return;
     }
     const newBlock: Block = {
@@ -149,8 +148,8 @@ const RegexVisionWorkspace: React.FC = () => {
   const handleShare = () => {
     // Basic share: copy URL (more advanced would involve saving state)
     navigator.clipboard.writeText(window.location.href)
-      .then(() => toast({ title: "Link Copied!", description: "Shareable link copied to clipboard." }))
-      .catch(() => toast({ title: "Error", description: "Failed to copy link.", variant: "destructive" }));
+      .then(() => toast({ title: "Ссылка скопирована!", description: "Ссылка для обмена скопирована в буфер обмена." }))
+      .catch(() => toast({ title: "Ошибка", description: "Не удалось скопировать ссылку.", variant: "destructive" }));
   };
 
   // Placeholder export/import
@@ -163,9 +162,9 @@ const RegexVisionWorkspace: React.FC = () => {
       link.href = jsonString;
       link.download = "regexvision_config.json";
       link.click();
-      toast({ title: "Exported!", description: "Configuration downloaded." });
+      toast({ title: "Экспортировано!", description: "Конфигурация загружена." });
     } catch (error) {
-      toast({ title: "Error", description: "Failed to export configuration.", variant: "destructive" });
+      toast({ title: "Ошибка", description: "Не удалось экспортировать конфигурацию.", variant: "destructive" });
     }
   };
   const handleImport = () => {
@@ -183,12 +182,12 @@ const RegexVisionWorkspace: React.FC = () => {
               setBlocks(imported.blocks);
               setRegexFlags(imported.regexFlags);
               setTestText(imported.testText);
-              toast({ title: "Imported!", description: "Configuration loaded." });
+              toast({ title: "Импортировано!", description: "Конфигурация загружена." });
             } else {
-              throw new Error("Invalid file format");
+              throw new Error("Неверный формат файла");
             }
           } catch (err) {
-            toast({ title: "Import Error", description: "Failed to parse or invalid file.", variant: "destructive" });
+            toast({ title: "Ошибка импорта", description: "Не удалось разобрать или неверный файл.", variant: "destructive" });
           }
         };
         reader.readAsText(file);
@@ -213,9 +212,9 @@ const RegexVisionWorkspace: React.FC = () => {
               <Card className="m-2 flex-1 flex flex-col shadow-md border-primary/20">
                 <CardHeader className="py-2 px-3 border-b">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-base flex items-center gap-2"><Edit3 size={18} className="text-primary"/> Expression Tree</CardTitle>
+                    <CardTitle className="text-base flex items-center gap-2"><Edit3 size={18} className="text-primary"/> Дерево выражения</CardTitle>
                     <Button size="sm" onClick={() => { setParentIdForNewBlock(null); setIsPaletteVisible(true); }}>
-                      <Plus size={16} className="mr-1" /> Add Root Block
+                      <Plus size={16} className="mr-1" /> Добавить корневой блок
                     </Button>
                   </div>
                 </CardHeader>
@@ -224,8 +223,8 @@ const RegexVisionWorkspace: React.FC = () => {
                     {blocks.length === 0 ? (
                       <div className="text-center text-muted-foreground py-10 flex flex-col items-center justify-center h-full">
                         <Layers size={48} className="mb-3 opacity-50" />
-                        <p className="font-medium">Start building your regex!</p>
-                        <p className="text-sm">Click "Add Root Block" or use the palette.</p>
+                        <p className="font-medium">Начните строить свой regex!</p>
+                        <p className="text-sm">Нажмите "Добавить корневой блок" или используйте палитру.</p>
                       </div>
                     ) : (
                       <div className="space-y-1">
@@ -271,9 +270,9 @@ const RegexVisionWorkspace: React.FC = () => {
               </div>
               <Tabs defaultValue="testing" className="flex-1 flex flex-col min-h-0">
                 <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="testing"><PlayCircle size={16} className="mr-1.5"/>Testing</TabsTrigger>
-                  <TabsTrigger value="codegen"><Code2 size={16} className="mr-1.5"/>Code Gen</TabsTrigger>
-                  <TabsTrigger value="debug"><Bug size={16} className="mr-1.5"/>Debug</TabsTrigger>
+                  <TabsTrigger value="testing"><PlayCircle size={16} className="mr-1.5"/>Тестирование</TabsTrigger>
+                  <TabsTrigger value="codegen"><Code2 size={16} className="mr-1.5"/>Генерация кода</TabsTrigger>
+                  <TabsTrigger value="debug"><Bug size={16} className="mr-1.5"/>Отладка</TabsTrigger>
                 </TabsList>
                 <TabsContent value="testing" className="mt-2 flex-1 overflow-y-auto p-0.5">
                   <TestArea testText={testText} onTestTextChange={setTestText} matches={matches} generatedRegex={generatedRegex} />
@@ -300,5 +299,3 @@ const RegexVisionWorkspace: React.FC = () => {
 };
 
 export default RegexVisionWorkspace;
-
-    

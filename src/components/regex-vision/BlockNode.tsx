@@ -36,7 +36,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   const isSelected = selectedId === block.id;
 
   if (!config) {
-    return <div className="text-destructive p-2">Error: Unknown block type: {block.type}</div>;
+    return <div className="text-destructive p-2">Ошибка: Неизвестный тип блока: {block.type}</div>;
   }
 
   const handleToggleExpand = (e: React.MouseEvent) => {
@@ -76,7 +76,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
       case BlockType.BACKREFERENCE:
         return `\\${(block.settings as any).ref || '1'}`;
       case BlockType.CONDITIONAL:
-        return `(?(...)yes|no)`;
+        return `(?(...)да|нет)`;
       default:
         return config.name;
     }
@@ -115,11 +115,11 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
           <div className={cn("flex items-center gap-1 transition-opacity", isHovered || isSelected ? "opacity-100" : "opacity-0")}>
             {(block.type === BlockType.GROUP || block.type === BlockType.LOOKAROUND || block.type === BlockType.ALTERNATION || block.type === BlockType.CONDITIONAL) && (
-                 <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onAddChild(block.id);}} title="Add Child Element" className="h-7 w-7">
+                 <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onAddChild(block.id);}} title="Добавить дочерний элемент" className="h-7 w-7">
                     <PlusCircle size={14} className="text-green-600"/>
                  </Button>
             )}
-            <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onDelete(block.id); }} title="Delete" className="h-7 w-7">
+            <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onDelete(block.id); }} title="Удалить" className="h-7 w-7">
               <Trash2 size={14} className="text-destructive"/>
             </Button>
           </div>
