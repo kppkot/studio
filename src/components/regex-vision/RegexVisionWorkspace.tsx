@@ -1,3 +1,4 @@
+
 "use client";
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Block, RegexMatch } from './types';
@@ -14,11 +15,12 @@ import RegexOutputDisplay from './RegexOutputDisplay';
 import TestArea from './TestArea';
 import CodeGenerationPanel from './CodeGenerationPanel';
 import DebugView from './DebugView';
+import { Button } from '@/components/ui/button'; // Added import
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Layers, Puzzle, Edit3, Settings2, Code2, PlayCircle, Bug } from 'lucide-react';
+import { Layers, Puzzle, Edit3, Settings2, Code2, PlayCircle, Bug, Plus } from 'lucide-react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
 const RegexVisionWorkspace: React.FC = () => {
@@ -298,3 +300,5 @@ const RegexVisionWorkspace: React.FC = () => {
 };
 
 export default RegexVisionWorkspace;
+
+    
