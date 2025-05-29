@@ -1,23 +1,72 @@
+
 "use client";
 import React, { useState, useEffect, useCallback } from 'react';
 import type { BlockConfig } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { getRegexSuggestion } from '@/ai/flows/regex-suggestion'; // AI suggestion flow
+import { getRegexSuggestion } from '@/ai/flows/regex-suggestion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, X, Search, Bot } from 'lucide-react';
+import { Plus, X, Search, Bot, ChevronRight, Sparkles, AlignLeft, Milestone, Combine, GitFork } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 interface BlockPaletteProps {
   onAddBlock: (type: BlockType, settings?: any, parentId?: string | null) => void;
   isVisible: boolean;
   onToggle: () => void;
-  parentIdForNewBlock: string | null; // To add block as child
+  parentIdForNewBlock: string | null;
 }
+
+interface WizardAction {
+  label: string;
+  type: BlockType;
+  settings?: any;
+  description?: string;
+}
+
+interface WizardCategory {
+  name: string;
+  icon: React.ReactNode;
+  actions: WizardAction[];
+}
+
+const WIZARD_CATEGORIES: WizardCategory[] = [
+  {
+    name: "Простые элементы",
+    icon: <AlignLeft size={18} className="mr-2 text-primary" />,
+    actions: [
+      { label: "Конкретный текст", type: BlockType.LITERAL, description: "Найти точное совпадение с введенным текстом." },
+      { label: "Любая цифра (0-9)", type: BlockType.CHARACTER_CLASS, settings: { pattern: '\\d', negated: false }, description: "Соответствует одной цифровой символу." },
+      { label: "Любая буква (a-z, A-Z)", type: BlockType.CHARACTER_CLASS, settings: { pattern: 'a-zA-Z', negated: false }, description: "Соответствует одной букве латинского алфавита." },
+      { label: "Любой пробельный символ", type: BlockType.CHARACTER_CLASS, settings: { pattern: '\\s', negated: false }, description: "Пробел, таб, перенос строки и т.д." },
+      { label: "Любой символ (.)", type: BlockType.CHARACTER_CLASS, settings: { pattern: '.', negated: false }, description: "Соответствует любому символу, кроме новой строки." },
+      { label: "Пользовательский набор символов", type: BlockType.CHARACTER_CLASS, settings: { pattern: '', negated: false }, description: "Например, [aeiou] для гласных." },
+    ],
+  },
+  {
+    name: "Позиция в тексте",
+    icon: <Milestone size={18} className="mr-2 text-primary" />,
+    actions: [
+      { label: "Начало строки/текста (^)", type: BlockType.ANCHOR, settings: { type: '^' }, description: "Указывает на начало строки или всего текста." },
+      { label: "Конец строки/текста ($)", type: BlockType.ANCHOR, settings: { type: '$' }, description: "Указывает на конец строки или всего текста." },
+      { label: "Граница слова (\\b)", type: BlockType.ANCHOR, settings: { type: '\\b' }, description: "Место между словесным и несловесным символом." },
+      { label: "Не граница слова (\\B)", type: BlockType.ANCHOR, settings: { type: '\\B' }, description: "Любое место, не являющееся границей слова." },
+    ],
+  },
+  {
+    name: "Структура и логика",
+    icon: <Combine size={18} className="mr-2 text-primary" />,
+    actions: [
+      { label: "Сгруппировать вместе (...)", type: BlockType.GROUP, description: "Объединяет несколько частей в одну группу." },
+      { label: "Один из вариантов (или |)", type: BlockType.ALTERNATION, description: "Позволяет указать несколько альтернативных шаблонов." },
+    ],
+  },
+];
+
 
 const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onToggle, parentIdForNewBlock }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -48,33 +97,40 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
   }, [toast]);
 
   useEffect(() => {
-    if (searchTerm.startsWith('/')) {
+    if (searchTerm.startsWith('/') && searchTerm.length > 1) {
       const query = searchTerm.substring(1);
-      // Debounce AI call if needed, for now direct call
       fetchAiSuggestions(query);
     } else {
-      setAiSuggestions([]); // Clear AI suggestions if not a command
+      setAiSuggestions([]);
     }
   }, [searchTerm, fetchAiSuggestions]);
 
-  const handleAddPredefinedBlock = (type: BlockType) => {
-    onAddBlock(type, undefined, parentIdForNewBlock);
-    onToggle(); 
+  const handleAddBlockFromWizard = (type: BlockType, settings?: any) => {
+    onAddBlock(type, settings, parentIdForNewBlock);
+    onToggle();
     setSearchTerm('');
   };
 
+  const handleAddPredefinedBlock = (type: BlockType) => {
+    onAddBlock(type, undefined, parentIdForNewBlock);
+    // Не закрываем палитру и не сбрасываем поиск, если пользователь ищет
+  };
+
   const handleAddAiSuggestion = (suggestion: string) => {
-    // Add AI suggestion as a Literal block
     onAddBlock(BlockType.LITERAL, { text: suggestion }, parentIdForNewBlock);
     onToggle();
     setSearchTerm('');
   };
 
-  const filteredBlocks = Object.entries(BLOCK_CONFIGS)
+  const filteredRawBlocks = Object.entries(BLOCK_CONFIGS)
     .filter(([key, config]) =>
       config.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       key.toLowerCase().includes(searchTerm.toLowerCase())
     ) as [BlockType, BlockConfig][];
+
+  const showWizard = !searchTerm || searchTerm === '/';
+  const showAiSuggestions = searchTerm.startsWith('/') && searchTerm.length > 1 && aiSuggestions.length > 0;
+  const showFilteredBlocks = searchTerm && !searchTerm.startsWith('/');
 
   if (!isVisible) {
     return (
@@ -91,7 +147,7 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
   return (
     <>
       <div className="fixed inset-0 bg-black/30 z-40 backdrop-blur-sm" onClick={onToggle} aria-hidden="true" />
-      <Card className="fixed bottom-6 right-6 w-80 max-h-[calc(100vh-6rem)] flex flex-col shadow-xl z-50 border-primary">
+      <Card className="fixed bottom-6 right-6 w-96 max-h-[calc(100vh-6rem)] flex flex-col shadow-xl z-50 border-primary">
         <CardHeader className="py-3 px-4 border-b flex flex-row items-center justify-between">
           <CardTitle className="text-lg">Добавить блок</CardTitle>
           <Button variant="ghost" size="icon" onClick={onToggle} className="h-8 w-8">
@@ -117,7 +173,7 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
             <div className="space-y-2">
               {isLoadingAi && <p className="text-sm text-muted-foreground p-2 text-center">Загрузка AI подсказок...</p>}
               
-              {aiSuggestions.length > 0 && (
+              {showAiSuggestions && (
                 <div className="mb-3">
                   <h4 className="text-xs font-semibold text-muted-foreground mb-1 uppercase flex items-center gap-1.5"><Bot size={14} /> AI Подсказки</h4>
                   {aiSuggestions.map((suggestion, index) => (
@@ -134,11 +190,42 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
                 </div>
               )}
 
-              {(searchTerm && !searchTerm.startsWith('/') || !aiSuggestions.length && searchTerm.startsWith('/')) && filteredBlocks.length === 0 && !isLoadingAi && (
+              {showWizard && !showAiSuggestions && (
+                <Accordion type="multiple" className="w-full" defaultValue={WIZARD_CATEGORIES.map(cat => cat.name)}>
+                  {WIZARD_CATEGORIES.map(category => (
+                    <AccordionItem value={category.name} key={category.name}>
+                      <AccordionTrigger className="text-sm font-semibold hover:no-underline py-2 px-1">
+                        <div className="flex items-center">
+                           {category.icon}
+                           {category.name}
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="pb-1">
+                        {category.actions.map(action => (
+                          <Button
+                            key={action.label}
+                            variant="ghost"
+                            onClick={() => handleAddBlockFromWizard(action.type, action.settings)}
+                            className="w-full justify-start h-auto py-2.5 px-2 text-left mb-1 flex flex-col items-start"
+                          >
+                            <div className="flex items-center w-full">
+                              <ChevronRight size={14} className="mr-1.5 text-muted-foreground" />
+                              <span className="font-medium text-sm">{action.label}</span>
+                            </div>
+                            {action.description && <p className="text-xs text-muted-foreground ml-[22px] mt-0.5 text-left">{action.description}</p>}
+                          </Button>
+                        ))}
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              )}
+
+              {showFilteredBlocks && filteredRawBlocks.length === 0 && !isLoadingAi && (
                 <p className="text-sm text-muted-foreground p-2 text-center">Блоки не найдены.</p>
               )}
 
-              {!searchTerm.startsWith('/') && filteredBlocks.map(([type, config]) => (
+              {showFilteredBlocks && filteredRawBlocks.map(([type, config]) => (
                 <Button
                   key={type}
                   variant="ghost"
@@ -154,6 +241,23 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
                   <span className="font-medium text-sm">{config.name}</span>
                 </Button>
               ))}
+              
+              {/* Кнопка для добавления Квантификатора, если пользователь ищет его или хочет найти в "продвинутом" списке */}
+              {showFilteredBlocks && BLOCK_CONFIGS[BlockType.QUANTIFIER].name.toLowerCase().includes(searchTerm.toLowerCase()) && (
+                 <Button
+                    key={BlockType.QUANTIFIER}
+                    variant="ghost"
+                    onClick={() => handleAddPredefinedBlock(BlockType.QUANTIFIER)}
+                    className="w-full justify-start h-auto py-2 px-3 text-left"
+                  >
+                    <span className={cn("p-1.5 rounded-sm mr-2 flex items-center justify-center h-7 w-7", "bg-primary/10 text-primary")}>
+                       {BLOCK_CONFIGS[BlockType.QUANTIFIER].icon}
+                    </span>
+                    <span className="font-medium text-sm">{BLOCK_CONFIGS[BlockType.QUANTIFIER].name} (добавляется после элемента)</span>
+                </Button>
+              )}
+
+
             </div>
           </ScrollArea>
         </CardContent>
@@ -163,3 +267,5 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
 };
 
 export default BlockPalette;
+
+    
