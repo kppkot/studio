@@ -14,7 +14,7 @@ interface BlockNodeProps {
   onUpdate: (id: string, updatedBlock: Block) => void;
   onDelete: (id: string) => void;
   onAddChild: (parentId: string) => void;
-  onDuplicate: (id: string) => void; // Новое свойство
+  onDuplicate: (id: string) => void;
   selectedId: string | null;
   onSelect: (id: string) => void;
   level?: number;
@@ -23,19 +23,30 @@ interface BlockNodeProps {
 
 const BlockNode: React.FC<BlockNodeProps> = ({
   block,
+  onUpdate, // Used for toggling expansion
   onDelete,
   onAddChild,
-  onDuplicate, // Используем новое свойство
+  onDuplicate,
   selectedId,
   onSelect,
   level = 0,
   isDraggable = false,
 }) => {
-  const [isExpanded, setIsExpanded] = useState(true);
+  // Local hover state remains, expansion state is now from props
   const [isHovered, setIsHovered] = useState(false);
   
   const config: BlockConfig | undefined = BLOCK_CONFIGS[block.type];
-  const hasChildren = block.children && block.children.length > 0;
+  
+  // Determine if the block can be expanded/collapsed
+  const canHaveChildren = block.type === BlockType.GROUP || 
+                          block.type === BlockType.LOOKAROUND || 
+                          block.type === BlockType.ALTERNATION || 
+                          block.type === BlockType.CONDITIONAL;
+  
+  const hasVisibleChildren = block.children && block.children.length > 0;
+  const isCurrentlyExpanded = block.isExpanded ?? (canHaveChildren ? true : false); // Default to expanded for containers, false otherwise
+
+
   const isSelected = selectedId === block.id;
 
   if (!config) {
@@ -44,7 +55,9 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
   const handleToggleExpand = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsExpanded(!isExpanded);
+    if (canHaveChildren) {
+      onUpdate(block.id, { ...block, isExpanded: !isCurrentlyExpanded });
+    }
   };
 
   const handleSelect = (e: React.MouseEvent) => {
@@ -100,9 +113,9 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         <div className="flex items-center gap-2">
           {isDraggable && <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />}
           
-          {(hasChildren || block.type === BlockType.GROUP || block.type === BlockType.LOOKAROUND || block.type === BlockType.ALTERNATION || block.type === BlockType.CONDITIONAL) && (
+          {canHaveChildren && ( // Only show expand toggle if block type supports children that can be expanded/collapsed
             <Button variant="ghost" size="icon" onClick={handleToggleExpand} className="h-7 w-7">
-              {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
             </Button>
           )}
           
@@ -117,7 +130,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           </div>
 
           <div className={cn("flex items-center gap-1 transition-opacity", isHovered || isSelected ? "opacity-100" : "opacity-0")}>
-            {(block.type === BlockType.GROUP || block.type === BlockType.LOOKAROUND || block.type === BlockType.ALTERNATION || block.type === BlockType.CONDITIONAL) && (
+            {canHaveChildren && ( // Also only show AddChild for relevant types
                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onAddChild(block.id);}} title="Добавить дочерний элемент" className="h-7 w-7">
                     <PlusCircle size={14} className="text-green-600"/>
                  </Button>
@@ -131,7 +144,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           </div>
         </div>
         
-        {isExpanded && hasChildren && (
+        {isCurrentlyExpanded && hasVisibleChildren && ( // Use isCurrentlyExpanded and check for actual children
           <div className="mt-2 pl-4 border-l-2 border-dashed ml-3">
             {block.children.map(child => (
               <BlockNode
@@ -140,7 +153,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                 onUpdate={onUpdate}
                 onDelete={onDelete}
                 onAddChild={onAddChild}
-                onDuplicate={onDuplicate} // Передаем дальше
+                onDuplicate={onDuplicate}
                 selectedId={selectedId}
                 onSelect={onSelect}
                 level={0} 

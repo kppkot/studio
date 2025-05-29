@@ -1,3 +1,4 @@
+
 "use client";
 import React from 'react';
 import type { Block, BlockConfig, CharacterClassSettings, QuantifierSettings, GroupSettings, LiteralSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, ConditionalSettings } from './types';
@@ -309,15 +310,15 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
   };
 
   return (
-    <Card className="h-full shadow-none border-0 border-l rounded-none">
+    <Card className="h-full shadow-none border-0 border-l rounded-none flex flex-col">
       <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b">
         <CardTitle className="text-lg">Настройки: {config.name}</CardTitle>
         <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
           <X size={18} />
         </Button>
       </CardHeader>
-      <CardContent className="p-4">
-        <ScrollArea className="h-[calc(100vh_-_var(--header-height)_-_var(--output-panel-height)_-_var(--settings-header-height)_-_2rem)] pr-3"> {/* Adjust height as needed */}
+      <CardContent className="p-4 flex-1 min-h-0">
+        <ScrollArea className="h-full pr-3">
           <div className="space-y-4">
            {renderSettingsFields()}
           </div>
