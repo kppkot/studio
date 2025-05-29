@@ -15,43 +15,36 @@ import RegexOutputDisplay from './RegexOutputDisplay';
 import TestArea from './TestArea';
 import CodeGenerationPanel from './CodeGenerationPanel';
 import DebugView from './DebugView';
+import RegexWizardModal from './RegexWizardModal'; // Импортируем Мастер
 import { Button } from '@/components/ui/button';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical } from 'lucide-react';
+import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Zap } from 'lucide-react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
 const deepCloneBlock = (block: Block): Block => {
   const newBlock: Block = {
     ...block,
-    id: generateId(), // Always generate a new ID for a clone
+    id: generateId(), 
     settings: { ...block.settings },
     children: block.children ? block.children.map(child => deepCloneBlock(child)) : [],
     isExpanded: block.isExpanded,
   };
-  // Ensure children array exists for container types even if empty after cloning
-  if (newBlock.type === BlockType.GROUP || 
-      newBlock.type === BlockType.LOOKAROUND || 
-      newBlock.type === BlockType.ALTERNATION || 
-      newBlock.type === BlockType.CONDITIONAL) {
+  if ([BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(newBlock.type)) {
       newBlock.children = newBlock.children || [];
   }
   return newBlock;
 };
 
 const cloneBlockForState = (block: Block): Block => {
-  // Clones a block while preserving its ID, used for state updates
   const newBlock: Block = {
     ...block,
     settings: { ...block.settings },
     children: block.children ? block.children.map(child => cloneBlockForState(child)) : [],
   };
-  if (newBlock.type === BlockType.GROUP || 
-      newBlock.type === BlockType.LOOKAROUND || 
-      newBlock.type === BlockType.ALTERNATION || 
-      newBlock.type === BlockType.CONDITIONAL) {
+  if ([BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(newBlock.type)) {
       newBlock.children = newBlock.children || [];
   }
   return newBlock;
@@ -63,7 +56,7 @@ const duplicateAndInsertBlockRecursive = (currentBlocks: Block[], targetId: stri
     const block = currentBlocks[i];
     if (block.id === targetId) {
       const originalBlock = block;
-      const newBlock = deepCloneBlock(originalBlock); // This generates new IDs for the copy
+      const newBlock = deepCloneBlock(originalBlock); 
       const updatedBlocks = [...currentBlocks];
       updatedBlocks.splice(i + 1, 0, newBlock);
       return { updatedBlocks, success: true };
@@ -83,7 +76,6 @@ const duplicateAndInsertBlockRecursive = (currentBlocks: Block[], targetId: stri
 const processUngroupRecursive = (nodes: Block[], targetId: string): Block[] => {
   return nodes.flatMap(block => {
     if (block.id === targetId) {
-      // When ungrouping, children retain their original IDs
       return block.children ? block.children.map(child => cloneBlockForState(child)) : [];
     }
     if (block.children && block.children.length > 0) {
@@ -117,6 +109,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [parentIdForNewBlock, setParentIdForNewBlock] = useState<string | null>(null);
   const [isPaletteVisible, setIsPaletteVisible] = useState(false);
+  const [isWizardModalOpen, setIsWizardModalOpen] = useState(false); // Состояние для Мастера
   
   const [testText, setTestText] = useState<string>('Быстрая коричневая лиса прыгает через ленивую собаку.');
   const [regexFlags, setRegexFlags] = useState<string>('g');
@@ -183,7 +176,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const addChildRecursive = (currentBlocks: Block[], pId: string, newBlock: Block): Block[] => {
     return currentBlocks.map(block => {
       if (block.id === pId) {
-        const parentCanBeExpanded = block.type === BlockType.GROUP || block.type === BlockType.LOOKAROUND || block.type === BlockType.ALTERNATION || block.type === BlockType.CONDITIONAL;
+        const parentCanBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(block.type);
         return { ...block, children: [...(block.children || []), newBlock], isExpanded: parentCanBeExpanded ? true : block.isExpanded };
       }
       if (block.children) {
@@ -200,7 +193,7 @@ const RegexVisionWorkspace: React.FC = () => {
       return;
     }
     
-    const canBeExpanded = type === BlockType.GROUP || type === BlockType.LOOKAROUND || type === BlockType.ALTERNATION || type === BlockType.CONDITIONAL;
+    const canBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(type);
 
     const newBlock: Block = {
       id: generateId(),
@@ -218,6 +211,44 @@ const RegexVisionWorkspace: React.FC = () => {
     setSelectedBlockId(newBlock.id);
     setParentIdForNewBlock(null);
     setIsPaletteVisible(false);
+  }, [toast]);
+
+  const handleAddBlocks = useCallback((newBlocks: Block[], parentId?: string | null) => {
+    if (newBlocks.length === 0) return;
+
+    if (parentId) {
+      setBlocks(prev => {
+        return prev.map(block => {
+          if (block.id === parentId) {
+             const parentCanBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(block.type);
+            return { ...block, children: [...(block.children || []), ...newBlocks], isExpanded: parentCanBeExpanded ? true : block.isExpanded };
+          }
+          if (block.children) { // Need to recurse to find parent
+            const addInChildren = (children: Block[]): Block[] => {
+                return children.map(child => {
+                    if (child.id === parentId) {
+                        const parentCanBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(child.type);
+                        return { ...child, children: [...(child.children || []), ...newBlocks], isExpanded: parentCanBeExpanded ? true : child.isExpanded };
+                    }
+                    if(child.children) {
+                        return {...child, children: addInChildren(child.children)}
+                    }
+                    return child;
+                });
+            }
+            return {...block, children: addInChildren(block.children)};
+          }
+          return block;
+        });
+      });
+    } else {
+      setBlocks(prev => [...prev, ...newBlocks]);
+    }
+    // Potentially select the last added block
+    setSelectedBlockId(newBlocks[newBlocks.length - 1].id);
+    setParentIdForNewBlock(null); // Reset parent target
+    setIsWizardModalOpen(false); // Close wizard
+    toast({ title: "Блоки добавлены", description: "Блоки из Мастера успешно добавлены." });
   }, [toast]);
 
 
@@ -283,7 +314,7 @@ const RegexVisionWorkspace: React.FC = () => {
         if (node.children) {
           const childResult = wrapRecursively(node.children);
           if (childResult.success) {
-            success = true; // Propagate success
+            success = true; 
             return { ...node, children: childResult.wrappedNodes };
           }
         }
@@ -322,7 +353,7 @@ const RegexVisionWorkspace: React.FC = () => {
         if (found) return { updatedNodes: filteredNodes, foundBlock: found };
 
         for (let i = 0; i < nodes.length; i++) {
-          if (nodes[i].children && nodes[i].children.length > 0) { // Check if children exist
+          if (nodes[i].children && nodes[i].children.length > 0) {
             const childResult = removeDraggedRecursive(nodes[i].children, idToRemove);
             if (childResult.foundBlock) {
               const newParentNodes = [...nodes];
@@ -337,31 +368,28 @@ const RegexVisionWorkspace: React.FC = () => {
       const { updatedNodes: blocksWithoutDraggedOriginal, foundBlock } = removeDraggedRecursive(prevBlocks, draggedId);
       
       if (!foundBlock) {
-        // toast({ title: "Ошибка", description: "Перетаскиваемый блок не найден.", variant: "destructive" });
-        // console.warn("Dragged block not found for reorder:", draggedId);
-        return prevBlocks; // Early exit if dragged block isn't found
+        return prevBlocks; 
       }
-      // It's crucial to work with a deep copy of the tree when modifying, then set the new tree
-      let blocksWithoutDragged = cloneBlockForState({id: 'root', type: BlockType.LITERAL, settings: {text:''}, children: blocksWithoutDraggedOriginal}).children;
+      let blocksWithoutDragged = cloneBlockForState({id: 'root', type: BlockType.LITERAL, settings: {text:''}, children: blocksWithoutDraggedOriginal}).children || [];
 
 
-      draggedBlockInstance = cloneBlockForState(foundBlock); // Use a clone of the found block, preserving ID
+      draggedBlockInstance = cloneBlockForState(foundBlock); 
 
       const dropTargetNode = findBlockRecursive(blocksWithoutDragged, dropOnBlockId);
       if (!dropTargetNode) {
-        // toast({ title: "Ошибка", description: "Целевой блок для перетаскивания не найден.", variant: "destructive" });
-        // console.warn("Drop target block not found for reorder:", dropOnBlockId);
-        return prevBlocks; // Early exit if drop target isn't found
+        return prevBlocks; 
       }
 
       const canDropTargetBeParent = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(dropTargetNode.type);
       let finalBlocks: Block[];
 
-      if (canDropTargetBeParent && draggedId !== dropTargetNode.id) { // Ensure not dropping onto itself
+      const isDraggedBlockSameAsParentOfDropTarget = parentOfDropOnBlockId === draggedId;
+
+
+      if (canDropTargetBeParent && draggedId !== dropTargetNode.id && !isDraggedBlockSameAsParentOfDropTarget) { 
         const addAsChildRecursiveFn = (nodes: Block[], targetParentId: string, childToAdd: Block): Block[] => {
           return nodes.map(n => {
             if (n.id === targetParentId) {
-              // Ensure children array exists
               const existingChildren = n.children || [];
               return { ...n, children: [...existingChildren, childToAdd], isExpanded: true };
             }
@@ -373,37 +401,29 @@ const RegexVisionWorkspace: React.FC = () => {
         };
         finalBlocks = addAsChildRecursiveFn(blocksWithoutDragged, dropOnBlockId, draggedBlockInstance);
       } else {
-        // Insert as a sibling after dropTargetNode
         const addAsSiblingRecursiveFn = (nodes: Block[], currentLevelParentId: string | null, afterSiblingId: string, blockToAdd: Block): Block[] => {
-          if (currentLevelParentId === null) { // Root level
-            const targetIdx = nodes.findIndex(n => n.id === afterSiblingId);
-            if (targetIdx !== -1) {
-              const newRootNodes = [...nodes];
-              newRootNodes.splice(targetIdx + 1, 0, blockToAdd);
-              return newRootNodes;
-            }
-            // Fallback: if target sibling not found at root, or if dropping at the end of root
-            return [...nodes, blockToAdd]; 
-          }
+            const targetParentChildrenList = currentLevelParentId === null ? nodes : (findBlockRecursive(nodes, currentLevelParentId)?.children || []);
+            const targetIdx = targetParentChildrenList.findIndex(n => n.id === afterSiblingId);
 
-          return nodes.map(n => {
-            if (n.id === currentLevelParentId) {
-              const currentChildren = n.children || [];
-              const targetIdx = currentChildren.findIndex(child => child.id === afterSiblingId);
-              const newChildren = [...currentChildren];
-              if (targetIdx !== -1) {
-                newChildren.splice(targetIdx + 1, 0, blockToAdd);
-              } else {
-                 // If target sibling not found in this parent, or if dropping at end of children
-                newChildren.push(blockToAdd);
-              }
-              return { ...n, children: newChildren };
+            if (currentLevelParentId === null) { // Root level
+                const newRootNodes = [...nodes];
+                if (targetIdx !== -1) newRootNodes.splice(targetIdx + 1, 0, blockToAdd);
+                else newRootNodes.push(blockToAdd); // Add to end if sibling not found (e.g. dropping on last element)
+                return newRootNodes;
             }
-            if (n.children) {
-              return { ...n, children: addAsSiblingRecursiveFn(n.children, currentLevelParentId, afterSiblingId, blockToAdd) };
-            }
-            return n;
-          });
+
+            return nodes.map(n => {
+                if (n.id === currentLevelParentId) {
+                    const newChildren = [...(n.children || [])];
+                    if (targetIdx !== -1) newChildren.splice(targetIdx + 1, 0, blockToAdd);
+                    else newChildren.push(blockToAdd); // Add to end of children if sibling not found
+                    return { ...n, children: newChildren };
+                }
+                if (n.children) {
+                    return { ...n, children: addAsSiblingRecursiveFn(n.children, currentLevelParentId, afterSiblingId, blockToAdd) };
+                }
+                return n;
+            });
         };
         finalBlocks = addAsSiblingRecursiveFn(blocksWithoutDragged, parentOfDropOnBlockId, dropOnBlockId, draggedBlockInstance);
       }
@@ -422,7 +442,6 @@ const RegexVisionWorkspace: React.FC = () => {
   const selectedBlock = selectedBlockId ? findBlockRecursive(blocks, selectedBlockId) : null;
 
   const handleShare = () => {
-    // Basic share by copying current URL. Could be enhanced with URL params for state.
     navigator.clipboard.writeText(window.location.href)
       .then(() => toast({ title: "Ссылка скопирована!", description: "Ссылка для обмена скопирована в буфер обмена." }))
       .catch(() => toast({ title: "Ошибка", description: "Не удалось скопировать ссылку.", variant: "destructive" }));
@@ -456,7 +475,7 @@ const RegexVisionWorkspace: React.FC = () => {
             if (imported.blocks && imported.regexFlags !== undefined && imported.testText !== undefined) {
               const processImportedBlocks = (bs: Block[]): Block[] => {
                 return bs.map(b => {
-                  const canBeExpanded = b.type === BlockType.GROUP || b.type === BlockType.LOOKAROUND || b.type === BlockType.ALTERNATION || b.type === BlockType.CONDITIONAL;
+                  const canBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(b.type);
                   return {
                     ...b,
                     id: b.id || generateId(), 
@@ -486,7 +505,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const toggleAllBlocksExpansion = (expand: boolean) => {
     const toggleRecursively = (currentBlocks: Block[]): Block[] => {
       return currentBlocks.map(b => {
-        const canBeExpanded = b.type === BlockType.GROUP || b.type === BlockType.LOOKAROUND || b.type === BlockType.ALTERNATION || b.type === BlockType.CONDITIONAL;
+        const canBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(b.type);
         return {
           ...b,
           isExpanded: canBeExpanded ? expand : b.isExpanded,
@@ -531,18 +550,18 @@ const RegexVisionWorkspace: React.FC = () => {
         if (event.key === 'ArrowUp') {
           event.preventDefault();
           const siblings = parent ? parent.children : blocks;
-          if (indexInParent > 0) {
+          if (indexInParent > 0 && siblings) { // Ensure siblings exist
             setSelectedBlockId(siblings[indexInParent - 1].id);
           }
         } else if (event.key === 'ArrowDown') {
           event.preventDefault();
           const siblings = parent ? parent.children : blocks;
-          if (indexInParent < siblings.length - 1) {
+          if (siblings && indexInParent < siblings.length - 1) { // Ensure siblings exist and not last
             setSelectedBlockId(siblings[indexInParent + 1].id);
           }
         } else if (event.key === 'ArrowRight') {
           event.preventDefault();
-          if (canBeExpanded && !(currentBlock.isExpanded ?? true)) { // If undefined, assume expanded potential
+          if (canBeExpanded && !(currentBlock.isExpanded ?? true)) { 
             handleUpdateBlock(selectedBlockId, { ...currentBlock, isExpanded: true });
           } else if (currentBlock.children && currentBlock.children.length > 0) {
             setSelectedBlockId(currentBlock.children[0].id);
@@ -551,7 +570,7 @@ const RegexVisionWorkspace: React.FC = () => {
           event.preventDefault();
           if (parent) {
             setSelectedBlockId(parent.id);
-          } else if (canBeExpanded && (currentBlock.isExpanded ?? false)) { // If undefined, don't collapse
+          } else if (canBeExpanded && (currentBlock.isExpanded ?? false)) { 
             handleUpdateBlock(selectedBlockId, { ...currentBlock, isExpanded: false });
           }
         }
@@ -588,8 +607,11 @@ const RegexVisionWorkspace: React.FC = () => {
                       <Button variant="outline" size="iconSm" onClick={handleCollapseAll} title="Свернуть всё (Ctrl+Shift+Вверх)">
                         <FoldVertical size={14} />
                       </Button>
+                       <Button size="sm" variant="outline" onClick={() => setIsWizardModalOpen(true)}>
+                        <Zap size={16} className="mr-1 text-amber-500" /> Мастер Regex
+                      </Button>
                       <Button size="sm" onClick={() => { setParentIdForNewBlock(null); setIsPaletteVisible(true); }}>
-                        <Plus size={16} className="mr-1" /> Добавить корневой блок
+                        <Plus size={16} className="mr-1" /> Добавить блок
                       </Button>
                     </div>
                   </div>
@@ -600,7 +622,7 @@ const RegexVisionWorkspace: React.FC = () => {
                       <div className="text-center text-muted-foreground py-10 flex flex-col items-center justify-center h-full">
                         <Layers size={48} className="mb-3 opacity-50" />
                         <p className="font-medium">Начните строить свой regex!</p>
-                        <p className="text-sm">Нажмите "Добавить корневой блок" или используйте палитру.</p>
+                        <p className="text-sm">Нажмите "Добавить блок" или используйте "Мастер Regex".</p>
                       </div>
                     ) : (
                       <div className="space-y-1">
@@ -675,8 +697,22 @@ const RegexVisionWorkspace: React.FC = () => {
         onToggle={() => setIsPaletteVisible(!isPaletteVisible)}
         parentIdForNewBlock={parentIdForNewBlock}
       />
+      {isWizardModalOpen && (
+        <RegexWizardModal
+          isOpen={isWizardModalOpen}
+          onClose={() => setIsWizardModalOpen(false)}
+          onComplete={(wizardBlocks) => {
+            // Для простоты пока добавляем блоки в корень
+            // В будущем можно будет выбирать родителя или позицию
+            handleAddBlocks(wizardBlocks, parentIdForNewBlock); 
+            setIsWizardModalOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 };
 
 export default RegexVisionWorkspace;
+
+    
