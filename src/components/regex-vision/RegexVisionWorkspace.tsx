@@ -26,11 +26,12 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 const deepCloneBlock = (block: Block): Block => {
   const newBlock: Block = {
     ...block,
-    id: generateId(),
+    id: generateId(), // Always generate a new ID for a clone
     settings: { ...block.settings },
     children: block.children ? block.children.map(child => deepCloneBlock(child)) : [],
     isExpanded: block.isExpanded,
   };
+  // Ensure children array exists for container types even if empty after cloning
   if (newBlock.type === BlockType.GROUP || 
       newBlock.type === BlockType.LOOKAROUND || 
       newBlock.type === BlockType.ALTERNATION || 
@@ -40,12 +41,29 @@ const deepCloneBlock = (block: Block): Block => {
   return newBlock;
 };
 
+const cloneBlockForState = (block: Block): Block => {
+  // Clones a block while preserving its ID, used for state updates
+  const newBlock: Block = {
+    ...block,
+    settings: { ...block.settings },
+    children: block.children ? block.children.map(child => cloneBlockForState(child)) : [],
+  };
+  if (newBlock.type === BlockType.GROUP || 
+      newBlock.type === BlockType.LOOKAROUND || 
+      newBlock.type === BlockType.ALTERNATION || 
+      newBlock.type === BlockType.CONDITIONAL) {
+      newBlock.children = newBlock.children || [];
+  }
+  return newBlock;
+}
+
+
 const duplicateAndInsertBlockRecursive = (currentBlocks: Block[], targetId: string): { updatedBlocks: Block[], success: boolean } => {
   for (let i = 0; i < currentBlocks.length; i++) {
     const block = currentBlocks[i];
     if (block.id === targetId) {
       const originalBlock = block;
-      const newBlock = deepCloneBlock(originalBlock);
+      const newBlock = deepCloneBlock(originalBlock); // This generates new IDs for the copy
       const updatedBlocks = [...currentBlocks];
       updatedBlocks.splice(i + 1, 0, newBlock);
       return { updatedBlocks, success: true };
@@ -65,7 +83,8 @@ const duplicateAndInsertBlockRecursive = (currentBlocks: Block[], targetId: stri
 const processUngroupRecursive = (nodes: Block[], targetId: string): Block[] => {
   return nodes.flatMap(block => {
     if (block.id === targetId) {
-      return block.children ? block.children.map(child => ({...child})) : [];
+      // When ungrouping, children retain their original IDs
+      return block.children ? block.children.map(child => cloneBlockForState(child)) : [];
     }
     if (block.children && block.children.length > 0) {
       return [{ ...block, children: processUngroupRecursive(block.children, targetId) }];
@@ -140,15 +159,16 @@ const RegexVisionWorkspace: React.FC = () => {
     return null;
   };
 
-  const updateBlockRecursive = (currentBlocks: Block[], targetId: string, updatedBlock: Block): Block[] => {
+  const updateBlockRecursive = (currentBlocks: Block[], targetId: string, updatedBlockData: Partial<Block>): Block[] => {
     return currentBlocks.map(block => {
-      if (block.id === targetId) return updatedBlock;
+      if (block.id === targetId) return { ...block, ...updatedBlockData };
       if (block.children) {
-        return { ...block, children: updateBlockRecursive(block.children, targetId, updatedBlock) };
+        return { ...block, children: updateBlockRecursive(block.children, targetId, updatedBlockData) };
       }
       return block;
     });
   };
+  
 
   const deleteBlockRecursive = (currentBlocks: Block[], targetId: string): Block[] => {
     return currentBlocks.filter(block => {
@@ -201,9 +221,10 @@ const RegexVisionWorkspace: React.FC = () => {
   }, [toast]);
 
 
-  const handleUpdateBlock = useCallback((id: string, updatedBlock: Block) => {
-    setBlocks(prev => updateBlockRecursive(prev, id, updatedBlock));
+  const handleUpdateBlock = useCallback((id: string, updatedBlockSettings: Partial<Block>) => {
+    setBlocks(prev => updateBlockRecursive(prev, id, updatedBlockSettings));
   }, []);
+  
 
   const handleDeleteBlock = useCallback((id: string) => {
     setBlocks(prev => deleteBlockRecursive(prev, id));
@@ -246,84 +267,150 @@ const RegexVisionWorkspace: React.FC = () => {
       id: generateId(),
       type: BlockType.GROUP,
       settings: { ...config.defaultSettings },
-      children: [], // Will be populated
+      children: [], 
       isExpanded: true,
     };
 
-    const wrapRecursively = (currentNodes: Block[]): Block[] => {
-      return currentNodes.map(node => {
+    const wrapRecursively = (currentNodes: Block[]): {wrappedNodes: Block[], success: boolean} => {
+      let success = false;
+      const mappedNodes = currentNodes.map(node => {
         if (node.id === blockIdToWrap) {
-          const wrappedNode = deepCloneBlock(node); // Clone to avoid issues if node is already part of state
+          const wrappedNode = cloneBlockForState(node); 
           newGroupBlock.children = [wrappedNode];
+          success = true;
           return newGroupBlock;
         }
         if (node.children) {
-          return { ...node, children: wrapRecursively(node.children) };
+          const childResult = wrapRecursively(node.children);
+          if (childResult.success) {
+            success = true; // Propagate success
+            return { ...node, children: childResult.wrappedNodes };
+          }
         }
         return node;
       });
+      return {wrappedNodes: mappedNodes, success};
     };
-
-    setBlocks(prevBlocks => wrapRecursively(prevBlocks));
-    setSelectedBlockId(newGroupBlock.id); // Select the new group
-    toast({ title: "Блок обернут", description: "Выбранный блок был обернут в новую группу." });
+    
+    setBlocks(prevBlocks => {
+        const result = wrapRecursively(prevBlocks);
+        if(result.success){
+            setSelectedBlockId(newGroupBlock.id); 
+            toast({ title: "Блок обернут", description: "Выбранный блок был обернут в новую группу." });
+            return result.wrappedNodes;
+        }
+        toast({ title: "Ошибка", description: "Не удалось обернуть блок.", variant: "destructive" });
+        return prevBlocks;
+    });
   }, [toast]);
 
-  const handleReorderBlock = useCallback((draggedId: string, targetId: string, targetParentId: string | null) => {
+
+  const handleReorderBlock = useCallback((draggedId: string, dropOnBlockId: string, parentOfDropOnBlockId: string | null) => {
     setBlocks(prevBlocks => {
-      let draggedBlock: Block | null = null;
+      let draggedBlockInstance: Block | null = null;
       
-      // Function to remove block and return it
-      const removeBlock = (nodes: Block[], idToRemove: string): { newNodes: Block[], removed: Block | null } => {
-        let removedItem: Block | null = null;
-        const filteredNodes = nodes.filter(block => {
-          if (block.id === idToRemove) {
-            removedItem = block;
+      const removeDraggedRecursive = (nodes: Block[], idToRemove: string): { updatedNodes: Block[], foundBlock: Block | null } => {
+        let found: Block | null = null;
+        const filteredNodes = nodes.filter(b => {
+          if (b.id === idToRemove) {
+            found = b;
             return false;
           }
           return true;
         });
-        if (removedItem) return { newNodes: filteredNodes, removed: removedItem };
+
+        if (found) return { updatedNodes: filteredNodes, foundBlock: found };
 
         for (let i = 0; i < nodes.length; i++) {
-          if (nodes[i].children) {
-            const result = removeBlock(nodes[i].children, idToRemove);
-            if (result.removed) {
+          if (nodes[i].children && nodes[i].children.length > 0) { // Check if children exist
+            const childResult = removeDraggedRecursive(nodes[i].children, idToRemove);
+            if (childResult.foundBlock) {
               const newParentNodes = [...nodes];
-              newParentNodes[i] = { ...newParentNodes[i], children: result.newNodes };
-              return { newNodes: newParentNodes, removed: result.removed };
+              newParentNodes[i] = { ...newParentNodes[i], children: childResult.updatedNodes };
+              return { updatedNodes: newParentNodes, foundBlock: childResult.foundBlock };
             }
           }
         }
-        return { newNodes: nodes, removed: null };
+        return { updatedNodes: nodes, foundBlock: null };
       };
 
-      const { newNodes: blocksWithoutDragged, removed: foundDraggedBlock } = removeBlock(prevBlocks, draggedId);
-      if (!foundDraggedBlock) return prevBlocks; // Dragged block not found
-      draggedBlock = foundDraggedBlock;
-
-      // Function to insert block
-      const insertBlock = (nodes: Block[], currentParentId: string | null): Block[] => {
-        if (currentParentId === targetParentId) { // Target is a sibling or root
-          const targetIndex = nodes.findIndex(b => b.id === targetId);
-          if (targetIndex !== -1 && draggedBlock) {
-            const newSiblingNodes = [...nodes];
-            newSiblingNodes.splice(targetIndex + 1, 0, draggedBlock); // Insert after target
-            return newSiblingNodes;
-          }
-        }
-        // Recurse if not at the target parent level
-        return nodes.map(node => {
-          if (node.children) {
-            return { ...node, children: insertBlock(node.children, node.id) };
-          }
-          return node;
-        });
-      };
+      const { updatedNodes: blocksWithoutDraggedOriginal, foundBlock } = removeDraggedRecursive(prevBlocks, draggedId);
       
-      return insertBlock(blocksWithoutDragged, null);
+      if (!foundBlock) {
+        // toast({ title: "Ошибка", description: "Перетаскиваемый блок не найден.", variant: "destructive" });
+        // console.warn("Dragged block not found for reorder:", draggedId);
+        return prevBlocks; // Early exit if dragged block isn't found
+      }
+      // It's crucial to work with a deep copy of the tree when modifying, then set the new tree
+      let blocksWithoutDragged = cloneBlockForState({id: 'root', type: BlockType.LITERAL, settings: {text:''}, children: blocksWithoutDraggedOriginal}).children;
+
+
+      draggedBlockInstance = cloneBlockForState(foundBlock); // Use a clone of the found block, preserving ID
+
+      const dropTargetNode = findBlockRecursive(blocksWithoutDragged, dropOnBlockId);
+      if (!dropTargetNode) {
+        // toast({ title: "Ошибка", description: "Целевой блок для перетаскивания не найден.", variant: "destructive" });
+        // console.warn("Drop target block not found for reorder:", dropOnBlockId);
+        return prevBlocks; // Early exit if drop target isn't found
+      }
+
+      const canDropTargetBeParent = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(dropTargetNode.type);
+      let finalBlocks: Block[];
+
+      if (canDropTargetBeParent && draggedId !== dropTargetNode.id) { // Ensure not dropping onto itself
+        const addAsChildRecursiveFn = (nodes: Block[], targetParentId: string, childToAdd: Block): Block[] => {
+          return nodes.map(n => {
+            if (n.id === targetParentId) {
+              // Ensure children array exists
+              const existingChildren = n.children || [];
+              return { ...n, children: [...existingChildren, childToAdd], isExpanded: true };
+            }
+            if (n.children) {
+              return { ...n, children: addAsChildRecursiveFn(n.children, targetParentId, childToAdd) };
+            }
+            return n;
+          });
+        };
+        finalBlocks = addAsChildRecursiveFn(blocksWithoutDragged, dropOnBlockId, draggedBlockInstance);
+      } else {
+        // Insert as a sibling after dropTargetNode
+        const addAsSiblingRecursiveFn = (nodes: Block[], currentLevelParentId: string | null, afterSiblingId: string, blockToAdd: Block): Block[] => {
+          if (currentLevelParentId === null) { // Root level
+            const targetIdx = nodes.findIndex(n => n.id === afterSiblingId);
+            if (targetIdx !== -1) {
+              const newRootNodes = [...nodes];
+              newRootNodes.splice(targetIdx + 1, 0, blockToAdd);
+              return newRootNodes;
+            }
+            // Fallback: if target sibling not found at root, or if dropping at the end of root
+            return [...nodes, blockToAdd]; 
+          }
+
+          return nodes.map(n => {
+            if (n.id === currentLevelParentId) {
+              const currentChildren = n.children || [];
+              const targetIdx = currentChildren.findIndex(child => child.id === afterSiblingId);
+              const newChildren = [...currentChildren];
+              if (targetIdx !== -1) {
+                newChildren.splice(targetIdx + 1, 0, blockToAdd);
+              } else {
+                 // If target sibling not found in this parent, or if dropping at end of children
+                newChildren.push(blockToAdd);
+              }
+              return { ...n, children: newChildren };
+            }
+            if (n.children) {
+              return { ...n, children: addAsSiblingRecursiveFn(n.children, currentLevelParentId, afterSiblingId, blockToAdd) };
+            }
+            return n;
+          });
+        };
+        finalBlocks = addAsSiblingRecursiveFn(blocksWithoutDragged, parentOfDropOnBlockId, dropOnBlockId, draggedBlockInstance);
+      }
+      
+      toast({ title: "Блок перемещен", description: "Порядок блоков обновлен." });
+      return finalBlocks;
     });
-    toast({ title: "Блок перемещен", description: "Порядок блоков обновлен." });
   }, [toast]);
 
 
@@ -335,6 +422,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const selectedBlock = selectedBlockId ? findBlockRecursive(blocks, selectedBlockId) : null;
 
   const handleShare = () => {
+    // Basic share by copying current URL. Could be enhanced with URL params for state.
     navigator.clipboard.writeText(window.location.href)
       .then(() => toast({ title: "Ссылка скопирована!", description: "Ссылка для обмена скопирована в буфер обмена." }))
       .catch(() => toast({ title: "Ошибка", description: "Не удалось скопировать ссылку.", variant: "destructive" }));
@@ -371,7 +459,7 @@ const RegexVisionWorkspace: React.FC = () => {
                   const canBeExpanded = b.type === BlockType.GROUP || b.type === BlockType.LOOKAROUND || b.type === BlockType.ALTERNATION || b.type === BlockType.CONDITIONAL;
                   return {
                     ...b,
-                    id: b.id || generateId(), // Ensure imported blocks have IDs
+                    id: b.id || generateId(), 
                     isExpanded: b.isExpanded ?? (canBeExpanded ? true : undefined),
                     children: b.children ? processImportedBlocks(b.children) : []
                   };
@@ -417,7 +505,7 @@ const RegexVisionWorkspace: React.FC = () => {
       const activeElement = document.activeElement;
       const isTyping = activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' || activeElement.hasAttribute('contenteditable'));
 
-      if (isTyping) return; // Don't interfere with text input
+      if (isTyping) return; 
 
       if (selectedBlockId && (event.key === 'Delete' || event.key === 'Backspace')) {
         event.preventDefault(); 
@@ -434,22 +522,37 @@ const RegexVisionWorkspace: React.FC = () => {
         }
       }
 
-      if (selectedBlockId && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
-        event.preventDefault();
+      if (selectedBlockId) {
         const { block: currentBlock, parent, indexInParent } = findBlockAndParentRecursive(blocks, selectedBlockId);
-        
-        if (currentBlock) {
-          const siblings = parent ? parent.children : blocks;
-          let newIndex = indexInParent;
+        if (!currentBlock) return;
 
-          if (event.key === 'ArrowUp' && indexInParent > 0) {
-            newIndex = indexInParent - 1;
-          } else if (event.key === 'ArrowDown' && indexInParent < siblings.length - 1) {
-            newIndex = indexInParent + 1;
+        const canBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(currentBlock.type);
+
+        if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          const siblings = parent ? parent.children : blocks;
+          if (indexInParent > 0) {
+            setSelectedBlockId(siblings[indexInParent - 1].id);
           }
-          
-          if (newIndex !== indexInParent && siblings[newIndex]) {
-            setSelectedBlockId(siblings[newIndex].id);
+        } else if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          const siblings = parent ? parent.children : blocks;
+          if (indexInParent < siblings.length - 1) {
+            setSelectedBlockId(siblings[indexInParent + 1].id);
+          }
+        } else if (event.key === 'ArrowRight') {
+          event.preventDefault();
+          if (canBeExpanded && !(currentBlock.isExpanded ?? true)) { // If undefined, assume expanded potential
+            handleUpdateBlock(selectedBlockId, { ...currentBlock, isExpanded: true });
+          } else if (currentBlock.children && currentBlock.children.length > 0) {
+            setSelectedBlockId(currentBlock.children[0].id);
+          }
+        } else if (event.key === 'ArrowLeft') {
+          event.preventDefault();
+          if (parent) {
+            setSelectedBlockId(parent.id);
+          } else if (canBeExpanded && (currentBlock.isExpanded ?? false)) { // If undefined, don't collapse
+            handleUpdateBlock(selectedBlockId, { ...currentBlock, isExpanded: false });
           }
         }
       }
@@ -459,7 +562,7 @@ const RegexVisionWorkspace: React.FC = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedBlockId, handleDeleteBlock, handleExpandAll, handleCollapseAll, blocks]);
+  }, [selectedBlockId, blocks, handleDeleteBlock, handleExpandAll, handleCollapseAll, handleUpdateBlock]);
 
 
   const headerHeight = "60px"; 
@@ -514,7 +617,7 @@ const RegexVisionWorkspace: React.FC = () => {
                             onReorder={handleReorderBlock}
                             selectedId={selectedBlockId}
                             onSelect={setSelectedBlockId}
-                            parentId={null} // Root blocks have null parentId
+                            parentId={null} 
                             level={0}
                           />
                         ))}
@@ -531,7 +634,7 @@ const RegexVisionWorkspace: React.FC = () => {
                    <div className="h-full m-2 ml-0 shadow-md border-primary/20 rounded-lg overflow-hidden bg-card">
                      <SettingsPanel
                         block={selectedBlock}
-                        onUpdate={handleUpdateBlock}
+                        onUpdate={(id, data) => handleUpdateBlock(id, data as Partial<Block>)}
                         onClose={() => setSelectedBlockId(null)}
                       />
                    </div>
@@ -577,4 +680,3 @@ const RegexVisionWorkspace: React.FC = () => {
 };
 
 export default RegexVisionWorkspace;
-

@@ -16,11 +16,11 @@ interface BlockNodeProps {
   onAddChild: (parentId: string) => void;
   onDuplicate: (id: string) => void;
   onUngroup: (id: string) => void;
-  onWrapBlock: (id: string) => void; // New prop for wrapping
-  onReorder: (draggedId: string, targetId: string, parentId: string | null) => void; // New prop for reordering
+  onWrapBlock: (id: string) => void;
+  onReorder: (draggedId: string, targetId: string, parentId: string | null) => void;
   selectedId: string | null;
   onSelect: (id: string) => void;
-  parentId: string | null; // Pass parentId for reordering context
+  parentId: string | null;
   level?: number;
 }
 
@@ -40,6 +40,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [showAsParentDropTarget, setShowAsParentDropTarget] = useState(false);
   
   const config: BlockConfig | undefined = BLOCK_CONFIGS[block.type];
   
@@ -107,30 +108,39 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
   const canBeUngrouped = canHaveChildren && hasVisibleChildren;
 
-  // Drag and Drop Handlers
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
     e.stopPropagation();
     e.dataTransfer.setData('text/plain', block.id);
     e.dataTransfer.effectAllowed = 'move';
-    // Optionally set a class for dragging state
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault(); // Necessary to allow dropping
+    e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
     setIsDraggingOver(true);
+    
+    const canThisBlockAcceptChildren = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(block.type);
+    const draggedId = e.dataTransfer.types.includes('text/plain') ? e.dataTransfer.getData('text/plain') : null;
+    
+    if (draggedId && draggedId !== block.id && canThisBlockAcceptChildren) {
+      setShowAsParentDropTarget(true);
+    } else {
+      setShowAsParentDropTarget(false);
+    }
   };
 
   const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
     e.stopPropagation();
     setIsDraggingOver(false);
+    setShowAsParentDropTarget(false);
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDraggingOver(false);
+    setShowAsParentDropTarget(false);
     const draggedId = e.dataTransfer.getData('text/plain');
     if (draggedId && draggedId !== block.id) {
       onReorder(draggedId, block.id, parentId);
@@ -139,15 +149,16 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
   return (
     <Card 
-      draggable // Make the card draggable
+      draggable
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className={cn(
-        "mb-2 transition-all shadow-sm hover:shadow-md relative", // Added relative for potential D&D indicators
-        isSelected && "border-primary ring-2 ring-primary ring-offset-2 bg-primary/5", // Enhanced selected state
-        isDraggingOver && "bg-accent/20 border-accent", // Visual feedback for drag over
+        "mb-2 transition-all shadow-sm hover:shadow-md relative",
+        isSelected && "border-primary ring-2 ring-primary ring-offset-2 bg-primary/5",
+        isDraggingOver && !showAsParentDropTarget && "bg-accent/20 border-accent", // Sibling drop target
+        showAsParentDropTarget && "bg-green-100 dark:bg-green-800/30 border-green-500 ring-1 ring-green-500", // Parent drop target
       )}
       style={{ marginLeft: `${level * 24}px` }}
       onMouseEnter={() => setIsHovered(true)}
@@ -174,7 +185,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             </span>
           </div>
 
-          <div className={cn("flex items-center gap-1 transition-opacity", isHovered || isSelected ? "opacity-100" : "opacity-0")}>
+          <div className={cn("flex items-center gap-1 transition-opacity", isHovered || isSelected ? "opacity-100" : "opacity-0 focus-within:opacity-100")}>
             {canHaveChildren && (
                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onAddChild(block.id);}} title="Добавить дочерний элемент" className="h-7 w-7">
                     <PlusCircle size={14} className="text-green-600"/>
@@ -212,8 +223,8 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                 onReorder={onReorder}
                 selectedId={selectedId}
                 onSelect={onSelect}
-                parentId={block.id} // Pass current block's ID as parentId for children
-                level={0} 
+                parentId={block.id} 
+                level={level + 1} 
               />
             ))}
           </div>
@@ -224,4 +235,3 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 };
 
 export default BlockNode;
-
