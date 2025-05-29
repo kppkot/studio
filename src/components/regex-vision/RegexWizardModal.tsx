@@ -51,7 +51,7 @@ type WizardStepId =
   | 'extraction_quotedText_type'
   | 'extraction_specificWord_input'
   | 'replacement_whatToReplace'
-  | 'replacement_maskDigits_options' // New step for masking digits
+  | 'replacement_maskDigits_options'
   | 'splitting_delimiter_choice'
   | 'final_preview';
 
@@ -93,7 +93,7 @@ interface WizardFormData {
 
   // Replacement branch
   replacementChoice?: 'multipleSpaces' | 'tabsToSpaces' | 'removeHtml' | 'swapParts' | 'maskDigits' | 'otherReplace';
-  maskDigits_keepLast?: number; // New field for mask digits
+  maskDigits_keepLast?: number;
 
   // Splitting branch
   splittingChoice?: 'simpleChar' | 'comma' | 'space' | 'regex' | 'csv';
@@ -227,10 +227,10 @@ const wizardConfig = {
     type: 'radio',
     options: [
         { id: 'ipv4', label: "IPv4 (например, 192.168.0.1)" },
-        { id: 'ipv6', label: "IPv6 (например, 2001:0db8:...) (скоро)", disabled: true }, 
+        { id: 'ipv6', label: "IPv6 (например, 2001:0db8:...)" }, 
     ],
     next: (choice: string) => {
-        if (choice === 'ipv4') return 'final_preview';
+        if (choice === 'ipv4' || choice === 'ipv6') return 'final_preview';
         return 'validation_ip_type'; 
     }
   },
@@ -328,6 +328,7 @@ const wizardConfig = {
     inputs: [
         { id: 'specificWord', label: "Искомый текст:", inputType: 'text', defaultValue: '' },
     ],
+    autoFocusInputId: 'specificWord',
     nextStep: 'final_preview'
   },
   // --- REPLACEMENT BRANCH ---
@@ -356,6 +357,7 @@ const wizardConfig = {
     inputs: [
         { id: 'maskDigits_keepLast', label: "Количество видимых последних цифр:", inputType: 'number', defaultValue: 4 },
     ],
+    autoFocusInputId: 'maskDigits_keepLast',
     nextStep: 'final_preview'
   },
   // --- SPLITTING BRANCH ---
@@ -399,12 +401,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   const handleRadioChange = (value: string) => {
     const newFormData = { ...formData };
     
-    const resetSubsequentFields = (mainDecisionKey: keyof WizardFormData, secondaryDecisionKey?: keyof WizardFormData, tertiaryDecisionKey?: keyof WizardFormData) => {
-        const keysToKeep: (keyof WizardFormData)[] = ['mainCategory'];
-        if (mainDecisionKey !== 'mainCategory') keysToKeep.push(mainDecisionKey);
-        if (secondaryDecisionKey) keysToKeep.push(secondaryDecisionKey);
-        if (tertiaryDecisionKey) keysToKeep.push(tertiaryDecisionKey);
-
+    const resetSubsequentFields = (keysToKeep: (keyof WizardFormData)[]) => {
         Object.keys(newFormData).forEach(keyStr => {
             const key = keyStr as keyof WizardFormData;
             if (!keysToKeep.includes(key)) {
@@ -414,25 +411,25 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     };
     
     if (currentStepId === 'start') {
-        resetSubsequentFields('mainCategory');
+        resetSubsequentFields(['mainCategory']);
         newFormData.mainCategory = value as WizardFormData['mainCategory'];
     } else if (currentStepId === 'validation_type_choice') {
-        resetSubsequentFields('mainCategory', 'validationTypeChoice');
+        resetSubsequentFields(['mainCategory', 'validationTypeChoice']);
         newFormData.validationTypeChoice = value as WizardFormData['validationTypeChoice'];
     } else if (currentStepId === 'validation_standardFormats_what') {
-        resetSubsequentFields('validationTypeChoice', 'standardFormatChoice');
+        resetSubsequentFields(['mainCategory','validationTypeChoice', 'standardFormatChoice']);
         newFormData.standardFormatChoice = value as WizardFormData['standardFormatChoice'];
     } else if (currentStepId === 'validation_dateTime_dateFormat') {
-        resetSubsequentFields('validationTypeChoice', 'dateFormat');
+        resetSubsequentFields(['mainCategory','validationTypeChoice', 'dateFormat']);
         newFormData.dateFormat = value as WizardFormData['dateFormat'];
     } else if (currentStepId === 'extraction_whatToExtract') {
-        resetSubsequentFields('mainCategory', 'extractionChoice');
+        resetSubsequentFields(['mainCategory', 'extractionChoice']);
         newFormData.extractionChoice = value as WizardFormData['extractionChoice'];
     } else if (currentStepId === 'replacement_whatToReplace') {
-        resetSubsequentFields('mainCategory', 'replacementChoice');
+        resetSubsequentFields(['mainCategory', 'replacementChoice']);
         newFormData.replacementChoice = value as WizardFormData['replacementChoice'];
     } else if (currentStepId === 'splitting_delimiter_choice') {
-        resetSubsequentFields('mainCategory', 'splittingChoice');
+        resetSubsequentFields(['mainCategory', 'splittingChoice']);
         newFormData.splittingChoice = value as WizardFormData['splittingChoice'];
     }
      else {
@@ -565,13 +562,13 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
   const generateBlocksForEmail = useCallback((forExtraction: boolean = false): Block[] => {
     const emailBlocks: Block[] = [
-      createCharClass('[\\w._%+-]', false),
+      createCharClass('[\\w._%+-]', false), // Explicitly wrap in []
       createQuantifier('+'),
       createLiteral('@', false), 
-      createCharClass('[\\w.-]', false), 
+      createCharClass('[\\w.-]', false), // Explicitly wrap in []
       createQuantifier('+'),
       createLiteral('\\.', false), 
-      createCharClass('[A-Za-z]', false),
+      createCharClass('[A-Za-z]', false), // Explicitly wrap in []
       createQuantifier('{n,m}', 2, 6), 
     ];
     if(forExtraction) {
@@ -582,7 +579,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
   const generateBlocksForURL = useCallback((forExtraction: boolean = false): Block[] => {
     const blocks: Block[] = [];
-    let protocolIsRequiredForValidation = formData.url_requireProtocol === 'yes';
+    const protocolIsRequiredForValidation = formData.url_requireProtocol === 'yes';
 
     const protocolPart: Block[] = [
         createLiteral('http', false),
@@ -592,11 +589,11 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     ];
     
     if (forExtraction || !protocolIsRequiredForValidation) {
-        const optionalProtocolGroup = createSequenceGroup(protocolPart, 'non-capturing');
-        blocks.push(optionalProtocolGroup);
-        blocks.push(createQuantifier('?'));
+      // If extracting, or if protocol is not strictly required for validation, make the whole protocol part optional.
+      blocks.push(createSequenceGroup(protocolPart, 'non-capturing'));
+      blocks.push(createQuantifier('?')); 
     } else { 
-         blocks.push(...protocolPart);
+        blocks.push(...protocolPart); // Protocol is required
     }
     
     blocks.push(createSequenceGroup([createLiteral('www\\.', false)], 'non-capturing'));
@@ -633,25 +630,29 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         blocks.push(createQuantifier('?')); 
         blocks.push(createCharClass('\\d', false));
         blocks.push(createQuantifier('{n,m}', 1, 3));
+        if (formData.phone_allowSeparators === 'yes') {
+          blocks.push(createCharClass('[ -]', false));
+          blocks.push(createQuantifier('?'));
+        }
     }
     
     const digitPattern = '\\d';
     const separatorPattern = '[ -]'; 
     const minDigits = 7; 
-    const maxDigits = 15;
+    const maxDigits = 15; // Approximate, can be adjusted
 
     if (formData.phone_allowSeparators === 'yes') {
-        const digitWithOptionalSeparator = createSequenceGroup([
+        const digitGroupWithOptionalSeparator = createSequenceGroup([
             createCharClass(digitPattern, false),
-            createQuantifier('+'), // Match one or more digits
-            createSequenceGroup([ // Optional separator part
+            createQuantifier('{n,m}', 1, 4), // Match 1-4 digits
+             createSequenceGroup([ // Optional separator part
                 createCharClass(separatorPattern, false),
-                createQuantifier('?') // Separator is optional
+                createQuantifier('?'), 
             ], 'non-capturing'),
-            createQuantifier('?') // The entire separator part is optional
+            createQuantifier('?'),
         ]);
-        blocks.push(digitWithOptionalSeparator);
-        blocks.push(createQuantifier('{n,m}', Math.ceil(minDigits / 2), maxDigits)); // Heuristic for groups of digits + separators
+        blocks.push(digitGroupWithOptionalSeparator);
+        blocks.push(createQuantifier('{n,m}', 2, 4)); // Typically 2-4 such groups
     } else {
         blocks.push(createCharClass(digitPattern, false));
         blocks.push(createQuantifier('{n,m}', minDigits, maxDigits));
@@ -1244,7 +1245,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                       onChange={(e) => handleInputChange(input.id, input.inputType === 'number' ? parseInt(e.target.value) || 0 : e.target.value)}
                       className="mt-1 h-9"
                       min={input.inputType === 'number' ? "0" : undefined}
-                      autoFocus={currentStepId === 'extraction_specificWord_input' || currentStepId === 'replacement_maskDigits_options'}
+                      autoFocus={currentStepConfig.autoFocusInputId === input.id}
                     />
                   </div>
                 ))}
@@ -1393,5 +1394,3 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 };
 
 export default RegexWizardModal;
-
-    
