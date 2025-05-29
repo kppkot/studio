@@ -1,9 +1,10 @@
+
 "use client";
 import React, { useState } from 'react';
 import type { Block, BlockConfig } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { ChevronDown, ChevronRight, PlusCircle, Trash2, GripVertical } from 'lucide-react';
+import { ChevronDown, ChevronRight, PlusCircle, Trash2, GripVertical, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -13,6 +14,7 @@ interface BlockNodeProps {
   onUpdate: (id: string, updatedBlock: Block) => void;
   onDelete: (id: string) => void;
   onAddChild: (parentId: string) => void;
+  onDuplicate: (id: string) => void; // Новое свойство
   selectedId: string | null;
   onSelect: (id: string) => void;
   level?: number;
@@ -23,6 +25,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   block,
   onDelete,
   onAddChild,
+  onDuplicate, // Используем новое свойство
   selectedId,
   onSelect,
   level = 0,
@@ -119,6 +122,9 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                     <PlusCircle size={14} className="text-green-600"/>
                  </Button>
             )}
+            <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onDuplicate(block.id); }} title="Копировать" className="h-7 w-7">
+              <Copy size={14} className="text-blue-600"/>
+            </Button>
             <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onDelete(block.id); }} title="Удалить" className="h-7 w-7">
               <Trash2 size={14} className="text-destructive"/>
             </Button>
@@ -134,9 +140,10 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                 onUpdate={onUpdate}
                 onDelete={onDelete}
                 onAddChild={onAddChild}
+                onDuplicate={onDuplicate} // Передаем дальше
                 selectedId={selectedId}
                 onSelect={onSelect}
-                level={0} // Children are visually indented by the parent's styling and this container
+                level={0} 
                 isDraggable={isDraggable}
               />
             ))}

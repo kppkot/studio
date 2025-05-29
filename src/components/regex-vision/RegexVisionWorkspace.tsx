@@ -1,3 +1,4 @@
+
 "use client";
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Block, RegexMatch } from './types';
@@ -14,13 +15,56 @@ import RegexOutputDisplay from './RegexOutputDisplay';
 import TestArea from './TestArea';
 import CodeGenerationPanel from './CodeGenerationPanel';
 import DebugView from './DebugView';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/button'; // Already imported
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Layers, Puzzle, Edit3, Settings2, Code2, PlayCircle, Bug, Plus } from 'lucide-react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+
+// Вспомогательная функция для глубокого копирования блока и его дочерних элементов с новыми ID
+const deepCloneBlock = (block: Block): Block => {
+  const newBlock: Block = {
+    ...block,
+    id: generateId(), // Новый ID для дублированного блока
+    settings: { ...block.settings }, // Поверхностное копирование настроек обычно достаточно
+    children: block.children ? block.children.map(child => deepCloneBlock(child)) : [], // Рекурсивно клонируем дочерние элементы
+  };
+   // Убедимся, что массив children существует для контейнерных типов
+  if (newBlock.type === BlockType.GROUP || 
+      newBlock.type === BlockType.LOOKAROUND || 
+      newBlock.type === BlockType.ALTERNATION || 
+      newBlock.type === BlockType.CONDITIONAL) {
+      newBlock.children = newBlock.children || [];
+  }
+  return newBlock;
+};
+
+// Рекурсивная функция для поиска блока, его дублирования и вставки
+const duplicateAndInsertBlockRecursive = (currentBlocks: Block[], targetId: string): { updatedBlocks: Block[], success: boolean } => {
+  for (let i = 0; i < currentBlocks.length; i++) {
+    const block = currentBlocks[i];
+    if (block.id === targetId) {
+      const originalBlock = block;
+      const newBlock = deepCloneBlock(originalBlock);
+      // Создаем новый массив, чтобы избежать прямой мутации состояния
+      const updatedBlocks = [...currentBlocks];
+      updatedBlocks.splice(i + 1, 0, newBlock); // Вставляем новый блок после оригинала
+      return { updatedBlocks, success: true };
+    }
+    if (block.children && block.children.length > 0) {
+      const result = duplicateAndInsertBlockRecursive(block.children, targetId);
+      if (result.success) {
+        const updatedBlocks = [...currentBlocks];
+        updatedBlocks[i] = { ...block, children: result.updatedBlocks };
+        return { updatedBlocks, success: true };
+      }
+    }
+  }
+  return { updatedBlocks: currentBlocks, success: false }; // Блок не найден на этом уровне
+};
+
 
 const RegexVisionWorkspace: React.FC = () => {
   const [blocks, setBlocks] = useState<Block[]>([]);
@@ -35,7 +79,6 @@ const RegexVisionWorkspace: React.FC = () => {
 
   const { toast } = useToast();
 
-  // Regenerate regex and test on changes
   useEffect(() => {
     const newRegex = generateRegexString(blocks);
     setGeneratedRegex(newRegex);
@@ -52,9 +95,7 @@ const RegexVisionWorkspace: React.FC = () => {
         }));
         setMatches(formattedMatches);
       } catch (error) {
-        // console.error("Regex testing error:", error);
-        setMatches([]); // Clear matches on error
-        // Optionally, show a toast or error message for invalid regex
+        setMatches([]); 
       }
     } else {
       setMatches([]);
@@ -123,8 +164,8 @@ const RegexVisionWorkspace: React.FC = () => {
       setBlocks(prev => [...prev, newBlock]);
     }
     setSelectedBlockId(newBlock.id);
-    setParentIdForNewBlock(null); // Reset after use
-    setIsPaletteVisible(false); // Close palette after adding
+    setParentIdForNewBlock(null);
+    setIsPaletteVisible(false);
   }, [toast]);
 
   const handleUpdateBlock = useCallback((id: string, updatedBlock: Block) => {
@@ -137,6 +178,21 @@ const RegexVisionWorkspace: React.FC = () => {
       setSelectedBlockId(null);
     }
   }, [selectedBlockId]);
+  
+  const handleDuplicateBlock = useCallback((id: string) => {
+    setBlocks(prevBlocks => {
+      const result = duplicateAndInsertBlockRecursive(prevBlocks, id);
+      if (result.success) {
+        toast({ title: "Блок скопирован", description: "Копия блока добавлена в дерево." });
+        // Можно выбрать новый блок, но для этого нужно получить его ID из deepCloneBlock.
+        // Пока просто обновляем.
+        return result.updatedBlocks;
+      }
+      // Если блок не найден (чего не должно произойти, если ID корректен)
+      toast({ title: "Ошибка копирования", description: "Не удалось найти блок для копирования.", variant: "destructive"});
+      return prevBlocks; 
+    });
+  }, [toast]);
 
   const handleOpenPaletteForChild = useCallback((pId: string) => {
     setParentIdForNewBlock(pId);
@@ -146,13 +202,11 @@ const RegexVisionWorkspace: React.FC = () => {
   const selectedBlock = selectedBlockId ? findBlockRecursive(blocks, selectedBlockId) : null;
 
   const handleShare = () => {
-    // Basic share: copy URL (more advanced would involve saving state)
     navigator.clipboard.writeText(window.location.href)
       .then(() => toast({ title: "Ссылка скопирована!", description: "Ссылка для обмена скопирована в буфер обмена." }))
       .catch(() => toast({ title: "Ошибка", description: "Не удалось скопировать ссылку.", variant: "destructive" }));
   };
 
-  // Placeholder export/import
   const handleExport = () => {
      try {
       const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
@@ -182,6 +236,7 @@ const RegexVisionWorkspace: React.FC = () => {
               setBlocks(imported.blocks);
               setRegexFlags(imported.regexFlags);
               setTestText(imported.testText);
+              setSelectedBlockId(null); // Сбросить выделение после импорта
               toast({ title: "Импортировано!", description: "Конфигурация загружена." });
             } else {
               throw new Error("Неверный формат файла");
@@ -196,10 +251,9 @@ const RegexVisionWorkspace: React.FC = () => {
     input.click();
   };
 
-  // CSS variables for dynamic heights, can be refined
-  const headerHeight = "60px"; // Approximate height of AppHeader
-  const outputPanelMinHeight = "250px"; // Min height for the output panel
-  const settingsHeaderHeight = "50px"; // Approximate height of SettingsPanel header
+  const headerHeight = "60px"; 
+  const outputPanelMinHeight = "250px"; 
+  const settingsHeaderHeight = "50px"; 
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground" style={{ "--header-height": headerHeight, "--output-panel-min-height": outputPanelMinHeight, "--settings-header-height": settingsHeaderHeight } as React.CSSProperties}>
@@ -235,6 +289,7 @@ const RegexVisionWorkspace: React.FC = () => {
                             onUpdate={handleUpdateBlock}
                             onDelete={handleDeleteBlock}
                             onAddChild={handleOpenPaletteForChild}
+                            onDuplicate={handleDuplicateBlock} // Передаем новую функцию
                             selectedId={selectedBlockId}
                             onSelect={setSelectedBlockId}
                             level={0}
@@ -246,7 +301,7 @@ const RegexVisionWorkspace: React.FC = () => {
                 </CardContent>
               </Card>
             </ResizablePanel>
-            {selectedBlockId && (
+            {selectedBlockId && selectedBlock && ( // Убедимся, что selectedBlock тоже существует
               <>
                 <ResizableHandle withHandle />
                 <ResizablePanel defaultSize={40} minSize={25} maxSize={50} className="overflow-hidden">
