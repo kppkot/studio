@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Block, RegexMatch } from './types';
 import { BlockType } from './types';
-import { BLOCK_CONFIGS } from './constants';
+import { BLOCK_CONFIGS } from './constants.tsx';
 import { generateId, generateRegexString } from './utils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -15,7 +15,7 @@ import RegexOutputDisplay from './RegexOutputDisplay';
 import TestArea from './TestArea';
 import CodeGenerationPanel from './CodeGenerationPanel';
 import DebugView from './DebugView';
-import RegexWizardModal from './RegexWizardModal'; // Импортируем Мастер
+import RegexWizardModal from './RegexWizardModal'; 
 import { Button } from '@/components/ui/button';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -109,7 +109,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [parentIdForNewBlock, setParentIdForNewBlock] = useState<string | null>(null);
   const [isPaletteVisible, setIsPaletteVisible] = useState(false);
-  const [isWizardModalOpen, setIsWizardModalOpen] = useState(false); // Состояние для Мастера
+  const [isWizardModalOpen, setIsWizardModalOpen] = useState(false); 
   
   const [testText, setTestText] = useState<string>('Быстрая коричневая лиса прыгает через ленивую собаку.');
   const [regexFlags, setRegexFlags] = useState<string>('g');
@@ -216,40 +216,39 @@ const RegexVisionWorkspace: React.FC = () => {
   const handleAddBlocks = useCallback((newBlocks: Block[], parentId?: string | null) => {
     if (newBlocks.length === 0) return;
 
-    if (parentId) {
+    let targetParentId = parentId;
+    if (!targetParentId && selectedBlockId) { // If no explicit parent, try to add to selected block if it's a container
+      const selBlock = findBlockRecursive(blocks, selectedBlockId);
+      if (selBlock && [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(selBlock.type)) {
+        targetParentId = selectedBlockId;
+      }
+    }
+
+
+    if (targetParentId) {
       setBlocks(prev => {
-        return prev.map(block => {
-          if (block.id === parentId) {
-             const parentCanBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(block.type);
-            return { ...block, children: [...(block.children || []), ...newBlocks], isExpanded: parentCanBeExpanded ? true : block.isExpanded };
-          }
-          if (block.children) { // Need to recurse to find parent
-            const addInChildren = (children: Block[]): Block[] => {
-                return children.map(child => {
-                    if (child.id === parentId) {
-                        const parentCanBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(child.type);
-                        return { ...child, children: [...(child.children || []), ...newBlocks], isExpanded: parentCanBeExpanded ? true : child.isExpanded };
-                    }
-                    if(child.children) {
-                        return {...child, children: addInChildren(child.children)}
-                    }
-                    return child;
-                });
+        const addRec = (currentNodes: Block[], pId: string, blocksToAdd: Block[]): Block[] => {
+          return currentNodes.map(node => {
+            if (node.id === pId) {
+              const parentCanBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(node.type);
+              return { ...node, children: [...(node.children || []), ...blocksToAdd], isExpanded: parentCanBeExpanded ? true : node.isExpanded };
             }
-            return {...block, children: addInChildren(block.children)};
-          }
-          return block;
-        });
+            if (node.children) {
+              return { ...node, children: addRec(node.children, pId, blocksToAdd) };
+            }
+            return node;
+          });
+        };
+        return addRec(prev, targetParentId, newBlocks);
       });
     } else {
       setBlocks(prev => [...prev, ...newBlocks]);
     }
-    // Potentially select the last added block
     setSelectedBlockId(newBlocks[newBlocks.length - 1].id);
-    setParentIdForNewBlock(null); // Reset parent target
-    setIsWizardModalOpen(false); // Close wizard
+    setParentIdForNewBlock(null); 
+    setIsWizardModalOpen(false); 
     toast({ title: "Блоки добавлены", description: "Блоки из Мастера успешно добавлены." });
-  }, [toast]);
+  }, [toast, blocks, selectedBlockId]);
 
 
   const handleUpdateBlock = useCallback((id: string, updatedBlockSettings: Partial<Block>) => {
@@ -370,23 +369,50 @@ const RegexVisionWorkspace: React.FC = () => {
       if (!foundBlock) {
         return prevBlocks; 
       }
-      let blocksWithoutDragged = cloneBlockForState({id: 'root', type: BlockType.LITERAL, settings: {text:''}, children: blocksWithoutDraggedOriginal}).children || [];
+      // Ensure we're working with a fresh copy for manipulation to avoid direct state mutation issues
+      let blocksWithoutDragged = cloneBlockForState({id: 'root', type: BlockType.LITERAL, settings: {text:''}, children: blocksWithoutDraggedOriginal, isExpanded: true}).children || [];
 
 
       draggedBlockInstance = cloneBlockForState(foundBlock); 
 
-      const dropTargetNode = findBlockRecursive(blocksWithoutDragged, dropOnBlockId);
-      if (!dropTargetNode) {
-        return prevBlocks; 
+      const dropTargetNodeInfo = findBlockAndParentRecursive(blocksWithoutDragged, dropOnBlockId);
+      if (!dropTargetNodeInfo.block) {
+        return prevBlocks; // Drop target not found in the modified tree
       }
+      const dropTargetNode = dropTargetNodeInfo.block;
+
 
       const canDropTargetBeParent = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(dropTargetNode.type);
       let finalBlocks: Block[];
+      
+      // Prevent dropping a block onto one of its own descendants or itself
+      const isDescendantOrSelf = (checkNodes: Block[], parentId: string, childIdToFind: string): boolean => {
+        for (const node of checkNodes) {
+          if (node.id === parentId) { // Found the potential parent
+            const findChild = (nodesToSearch: Block[], id: string): boolean => {
+              for (const n of nodesToSearch) {
+                if (n.id === id) return true;
+                if (n.children && findChild(n.children, id)) return true;
+              }
+              return false;
+            };
+            return findChild(node.children || [], childIdToFind);
+          }
+          if (node.children && isDescendantOrSelf(node.children, parentId, childIdToFind)) {
+            return true;
+          }
+        }
+        return false;
+      };
 
-      const isDraggedBlockSameAsParentOfDropTarget = parentOfDropOnBlockId === draggedId;
+      if (draggedId === dropTargetNode.id || isDescendantOrSelf(prevBlocks, draggedId, dropTargetNode.id)) {
+          // console.warn("Cannot drop a block onto itself or its descendants.");
+          return prevBlocks; // Revert to original state if drop is invalid
+      }
 
 
-      if (canDropTargetBeParent && draggedId !== dropTargetNode.id && !isDraggedBlockSameAsParentOfDropTarget) { 
+      // If dropping onto a container block (and not itself or its descendant)
+      if (canDropTargetBeParent && document.body.getAttribute('data-drag-target-role') === 'parent') { 
         const addAsChildRecursiveFn = (nodes: Block[], targetParentId: string, childToAdd: Block): Block[] => {
           return nodes.map(n => {
             if (n.id === targetParentId) {
@@ -400,27 +426,31 @@ const RegexVisionWorkspace: React.FC = () => {
           });
         };
         finalBlocks = addAsChildRecursiveFn(blocksWithoutDragged, dropOnBlockId, draggedBlockInstance);
-      } else {
-        const addAsSiblingRecursiveFn = (nodes: Block[], currentLevelParentId: string | null, afterSiblingId: string, blockToAdd: Block): Block[] => {
-            const targetParentChildrenList = currentLevelParentId === null ? nodes : (findBlockRecursive(nodes, currentLevelParentId)?.children || []);
-            const targetIdx = targetParentChildrenList.findIndex(n => n.id === afterSiblingId);
-
-            if (currentLevelParentId === null) { // Root level
+      } else { // Drop as sibling
+        const addAsSiblingRecursiveFn = (
+            nodes: Block[], 
+            parentToSearchInId: string | null, 
+            afterSiblingId: string, 
+            blockToAdd: Block
+        ): Block[] => {
+            if (parentToSearchInId === null) { // Root level
+                const targetIdx = nodes.findIndex(n => n.id === afterSiblingId);
                 const newRootNodes = [...nodes];
                 if (targetIdx !== -1) newRootNodes.splice(targetIdx + 1, 0, blockToAdd);
-                else newRootNodes.push(blockToAdd); // Add to end if sibling not found (e.g. dropping on last element)
+                else newRootNodes.push(blockToAdd); // Fallback: add to end
                 return newRootNodes;
             }
 
             return nodes.map(n => {
-                if (n.id === currentLevelParentId) {
+                if (n.id === parentToSearchInId) {
+                    const targetIdx = (n.children || []).findIndex(child => child.id === afterSiblingId);
                     const newChildren = [...(n.children || [])];
                     if (targetIdx !== -1) newChildren.splice(targetIdx + 1, 0, blockToAdd);
-                    else newChildren.push(blockToAdd); // Add to end of children if sibling not found
-                    return { ...n, children: newChildren };
+                    else newChildren.push(blockToAdd); // Fallback: add to end of children
+                    return { ...n, children: newChildren, isExpanded: true };
                 }
                 if (n.children) {
-                    return { ...n, children: addAsSiblingRecursiveFn(n.children, currentLevelParentId, afterSiblingId, blockToAdd) };
+                    return { ...n, children: addAsSiblingRecursiveFn(n.children, parentToSearchInId, afterSiblingId, blockToAdd) };
                 }
                 return n;
             });
@@ -550,28 +580,35 @@ const RegexVisionWorkspace: React.FC = () => {
         if (event.key === 'ArrowUp') {
           event.preventDefault();
           const siblings = parent ? parent.children : blocks;
-          if (indexInParent > 0 && siblings) { // Ensure siblings exist
+          if (indexInParent > 0 && siblings) { 
             setSelectedBlockId(siblings[indexInParent - 1].id);
           }
         } else if (event.key === 'ArrowDown') {
           event.preventDefault();
           const siblings = parent ? parent.children : blocks;
-          if (siblings && indexInParent < siblings.length - 1) { // Ensure siblings exist and not last
+          if (siblings && indexInParent < siblings.length - 1) { 
             setSelectedBlockId(siblings[indexInParent + 1].id);
           }
         } else if (event.key === 'ArrowRight') {
           event.preventDefault();
-          if (canBeExpanded && !(currentBlock.isExpanded ?? true)) { 
+          if (canBeExpanded && !(currentBlock.isExpanded ?? (currentBlock.children && currentBlock.children.length > 0))) { 
             handleUpdateBlock(selectedBlockId, { ...currentBlock, isExpanded: true });
           } else if (currentBlock.children && currentBlock.children.length > 0) {
             setSelectedBlockId(currentBlock.children[0].id);
           }
         } else if (event.key === 'ArrowLeft') {
           event.preventDefault();
-          if (parent) {
-            setSelectedBlockId(parent.id);
+          if (parent && (currentBlock.isExpanded ?? (currentBlock.children && currentBlock.children.length > 0))) {
+             // If expanded or has children and is not root, try to collapse first if it makes sense
+            if (canBeExpanded && (currentBlock.isExpanded ?? false)) {
+               handleUpdateBlock(selectedBlockId, { ...currentBlock, isExpanded: false });
+            } else {
+                 setSelectedBlockId(parent.id);
+            }
           } else if (canBeExpanded && (currentBlock.isExpanded ?? false)) { 
             handleUpdateBlock(selectedBlockId, { ...currentBlock, isExpanded: false });
+          } else if (parent) { // Already collapsed or not expandable, move to parent
+            setSelectedBlockId(parent.id);
           }
         }
       }
@@ -669,7 +706,7 @@ const RegexVisionWorkspace: React.FC = () => {
         <ResizablePanel defaultSize={35} minSize={20} className="bg-card p-2 shadow-top">
             <div className="h-full flex flex-col">
               <div className="mb-3">
-                <RegexOutputDisplay generatedRegex={generatedRegex} regexFlags={regexFlags} onFlagsChange={setRegexFlags} />
+                <RegexOutputDisplay blocks={blocks} generatedRegex={generatedRegex} regexFlags={regexFlags} onFlagsChange={setRegexFlags} />
               </div>
               <Tabs defaultValue="testing" className="flex-1 flex flex-col min-h-0">
                 <TabsList className="grid w-full grid-cols-3">
@@ -700,13 +737,16 @@ const RegexVisionWorkspace: React.FC = () => {
       {isWizardModalOpen && (
         <RegexWizardModal
           isOpen={isWizardModalOpen}
-          onClose={() => setIsWizardModalOpen(false)}
+          onClose={() => {
+            setIsWizardModalOpen(false);
+            setParentIdForNewBlock(null); // Reset parent target when closing wizard
+          }}
           onComplete={(wizardBlocks) => {
-            // Для простоты пока добавляем блоки в корень
-            // В будущем можно будет выбирать родителя или позицию
             handleAddBlocks(wizardBlocks, parentIdForNewBlock); 
             setIsWizardModalOpen(false);
+            setParentIdForNewBlock(null); // Reset parent target
           }}
+          initialParentId={parentIdForNewBlock}
         />
       )}
     </div>
@@ -714,5 +754,3 @@ const RegexVisionWorkspace: React.FC = () => {
 };
 
 export default RegexVisionWorkspace;
-
-    
