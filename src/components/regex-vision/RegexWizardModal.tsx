@@ -1,7 +1,7 @@
 
 "use client";
 import React, { useState, useCallback, useEffect } from 'react';
-import type { Block, QuantifierSettings, CharacterClassSettings } from './types';
+import type { Block, QuantifierSettings, CharacterClassSettings, GroupSettings } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants.tsx';
 import { generateId } from './utils';
@@ -42,7 +42,9 @@ type WizardStepId =
   | 'validation_dateTime_separators'
   | 'validation_dateTime_validateTime'
   | 'validation_dateTime_timeFormat'
-  | 'extraction_whatToExtract' // New for Data Extraction
+  | 'extraction_whatToExtract'
+  | 'extraction_quotedText_type' // New
+  | 'extraction_specificWord_input' // New
   | 'final_preview';
 
 interface WizardFormData {
@@ -70,6 +72,8 @@ interface WizardFormData {
 
   // Extraction branch
   extractionChoice?: 'emails' | 'urls' | 'numbers' | 'quotedText' | 'specificWord' | 'duplicateWords';
+  quoteType?: 'single' | 'double'; // New
+  specificWord?: string; // New
 }
 
 
@@ -95,7 +99,7 @@ const wizardConfig = {
     type: 'radio',
     options: [
       { id: 'basic', label: "Простые шаблоны (цифры, буквы, длина и т.д.)" },
-      { id: 'standard', label: "Стандартные форматы (Email, URL и т.д.)" },
+      { id: 'standard', label: "Стандартные форматы (Email, URL и т.д., кроме даты/времени)" },
       { id: 'datetime', label: "Дата и время (ДД/ММ/ГГГГ, ЧЧ:ММ и т.д.)" },
     ],
     next: (choice: string) => {
@@ -218,17 +222,35 @@ const wizardConfig = {
       { id: 'emails', label: "Все email-адреса" },
       { id: 'urls', label: "Все URL-адреса" },
       { id: 'numbers', label: "Все числа (целые/десятичные)" },
-      { id: 'quotedText', label: "Текст в кавычках", disabled: true },
-      { id: 'specificWord', label: "Слово/фразу (ввести)", disabled: true },
+      { id: 'quotedText', label: "Текст в кавычках" }, // Enabled
+      { id: 'specificWord', label: "Слово/фразу (ввести)" }, // Enabled
       { id: 'duplicateWords', label: "Повторяющиеся слова", disabled: true },
     ],
     next: (choice: string) => {
-      // All current extraction options lead directly to final_preview
       if (['emails', 'urls', 'numbers'].includes(choice)) {
         return 'final_preview';
       }
+      if (choice === 'quotedText') return 'extraction_quotedText_type';
+      if (choice === 'specificWord') return 'extraction_specificWord_input';
       return 'extraction_whatToExtract';
     }
+  },
+  extraction_quotedText_type: { // New step
+    title: "Извлечение текста в кавычках: Какой тип кавычек?",
+    type: 'radio',
+    options: [
+        { id: 'double', label: 'Двойные кавычки ("...")' },
+        { id: 'single', label: "Одинарные кавычки ('...')" }
+    ],
+    nextStep: 'final_preview'
+  },
+  extraction_specificWord_input: { // New step
+    title: "Извлечение слова/фразы: Введите слово или фразу",
+    type: 'inputs',
+    inputs: [
+        { id: 'specificWord', label: "Искомый текст:", inputType: 'text', defaultValue: '' },
+    ],
+    nextStep: 'final_preview'
   },
   final_preview: {
     title: "Предпросмотр и добавление",
@@ -242,40 +264,47 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   const [formData, setFormData] = useState<WizardFormData>({});
   const [generatedBlocks, setGeneratedBlocks] = useState<Block[]>([]);
 
-  // Reset state when dialog opens or closes, or when formData.mainCategory changes
   useEffect(() => {
     if (isOpen) {
-        // When dialog opens, if mainCategory is already set (e.g. from a previous unfinished session)
-        // we might want to reset sub-choices. For now, a full reset on open is simpler.
         setCurrentStepId('start');
         setFormData({});
         setGeneratedBlocks([]);
     }
   }, [isOpen]);
 
-
   const currentStepConfig = wizardConfig[currentStepId as keyof typeof wizardConfig];
 
   const handleRadioChange = (value: string) => {
     const newFormData = { ...formData };
+    
+    // Clear subsequent choices if a major category/type choice changes
     if (currentStepId === 'start') {
-        // Reset all sub-choices when main category changes
         Object.keys(newFormData).forEach(key => {
-            if (key !== 'mainCategory') {
-                delete newFormData[key as keyof WizardFormData];
-            }
+            if (key !== 'mainCategory') delete newFormData[key as keyof WizardFormData];
         });
         newFormData.mainCategory = value as WizardFormData['mainCategory'];
+    } else if (currentStepId === 'validation_type_choice') {
+        Object.keys(newFormData).forEach(key => {
+            if (!['mainCategory', 'validationTypeChoice'].includes(key)) delete newFormData[key as keyof WizardFormData];
+        });
+        newFormData.validationTypeChoice = value as WizardFormData['validationTypeChoice'];
+    } else if (currentStepId === 'extraction_whatToExtract') {
+        Object.keys(newFormData).forEach(key => {
+            if (!['mainCategory', 'extractionChoice'].includes(key)) delete newFormData[key as keyof WizardFormData];
+        });
+        newFormData.extractionChoice = value as WizardFormData['extractionChoice'];
+    } else {
+       newFormData[currentStepId as keyof WizardFormData] = value as any;
     }
-    else if (currentStepId === 'validation_type_choice') newFormData.validationTypeChoice = value as WizardFormData['validationTypeChoice'];
-    else if (currentStepId === 'validation_standardFormats_what') newFormData.standardFormatChoice = value as WizardFormData['standardFormatChoice'];
+    
+    if (currentStepId === 'validation_standardFormats_what') newFormData.standardFormatChoice = value as WizardFormData['standardFormatChoice'];
     else if (currentStepId === 'validation_standardFormats_url_protocol') newFormData.url_requireProtocol = value as WizardFormData['url_requireProtocol'];
     else if (currentStepId === 'validation_basicPatterns_length') newFormData.basicPattern_restrictLength = value as WizardFormData['basicPattern_restrictLength'];
     else if (currentStepId === 'validation_dateTime_dateFormat') newFormData.dateFormat = value as WizardFormData['dateFormat'];
     else if (currentStepId === 'validation_dateTime_validateTime') newFormData.validateTime = value as WizardFormData['validateTime'];
     else if (currentStepId === 'validation_dateTime_timeFormat') newFormData.timeFormat = value as WizardFormData['timeFormat'];
-    else if (currentStepId === 'extraction_whatToExtract') newFormData.extractionChoice = value as WizardFormData['extractionChoice'];
-    else newFormData[currentStepId as keyof WizardFormData] = value as any;
+    else if (currentStepId === 'extraction_quotedText_type') newFormData.quoteType = value as WizardFormData['quoteType'];
+    
     setFormData(newFormData);
   };
 
@@ -289,6 +318,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     if (currentStepId === 'validation_dateTime_validateTime') return formData.validateTime;
     if (currentStepId === 'validation_dateTime_timeFormat') return formData.timeFormat;
     if (currentStepId === 'extraction_whatToExtract') return formData.extractionChoice;
+    if (currentStepId === 'extraction_quotedText_type') return formData.quoteType;
     return formData[currentStepId as keyof WizardFormData] as string || '';
   }
 
@@ -374,13 +404,11 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   }, [formData]);
 
   const generateBlocksForEmail = useCallback((forExtraction: boolean = false): Block[] => {
-    // Regex: [\w._%+-]+@[\w.-]+\.[A-Za-z]{2,}
-    // For extraction, wrap with \b
     const emailBlocks: Block[] = [
       createCharClass('\\w._%+-'),
       createQuantifier('+'),
       createLiteral('@'),
-      createCharClass('[\\w.-]'), // Updated to be a character class
+      createCharClass('[\\w.-]'), 
       createQuantifier('+'),
       createLiteral('\\.'), 
       createCharClass('A-Za-z'),
@@ -393,47 +421,42 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   }, []);
 
   const generateBlocksForURL = useCallback((forExtraction: boolean = false): Block[] => {
-    // Regex (example): (https?:\/\/)?(www\.)?[A-Za-z0-9._%+-]+\.[A-Za-z]{2,6}(\/[\w.-]*)*\/?
     const blocks: Block[] = [];
+    let protocolIsRequiredForValidation = formData.url_requireProtocol === 'yes';
 
-    if (formData.url_requireProtocol === 'yes' || forExtraction) { // For extraction, we often want to match with or without protocol
-      const protocolPart = [
+    if (protocolIsRequiredForValidation || forExtraction) { 
+      const protocolPart: Block[] = [
         createLiteral('http'),
-        createSequenceGroup([createLiteral('s')]),
+        createSequenceGroup([createLiteral('s')], 'non-capturing'), // group for 's'
         createQuantifier('?'), // 's' is optional
         createLiteral('://')
       ];
-      if (formData.url_requireProtocol === 'no' && forExtraction) { // if not required for validation, make it optional for extraction
-         blocks.push(createSequenceGroup(protocolPart, 'non-capturing'));
-         blocks.push(createQuantifier('?'));
-      } else {
+      if (!protocolIsRequiredForValidation && forExtraction) { // if not required for validation, make it optional for extraction
+         blocks.push(createSequenceGroup(protocolPart, 'non-capturing')); // Wrap entire http(s):// part
+         blocks.push(createQuantifier('?')); // Make the entire protocol optional
+      } else { // Protocol is required (either for validation or because forExtraction is true and we include it)
          blocks.push(...protocolPart);
       }
     }
     
-    // (www.)?
     blocks.push(createSequenceGroup([createLiteral('www\\.')], 'non-capturing'));
     blocks.push(createQuantifier('?'));
 
-    // Domain name: [A-Za-z0-9._%+-]+\.
     blocks.push(createCharClass('A-Za-z0-9._%+-'));
     blocks.push(createQuantifier('+'));
     blocks.push(createLiteral('\\.'));
 
-    // TLD: [A-Za-z]{2,6}
     blocks.push(createCharClass('A-Za-z'));
     blocks.push(createQuantifier('{n,m}', 2, 6));
 
-    // Optional path: (/[\w.-]*)*
     const pathSegment = createSequenceGroup([
         createLiteral('/'),
-        createCharClass('[\\w.-]'), // Updated to be a character class
+        createCharClass('[\\w.-]'), 
         createQuantifier('*')
     ], 'non-capturing');
     blocks.push(pathSegment);
     blocks.push(createQuantifier('*'));
     
-    // Optional trailing slash: \/?
     blocks.push(createLiteral('/'));
     blocks.push(createQuantifier('?'));
     
@@ -444,7 +467,6 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   }, [formData.url_requireProtocol]);
 
   const generateBlocksForNumbers = useCallback((): Block[] => {
-    // Regex for integers and decimals: \b\d+(\.\d+)?\b
     return [
         createAnchor('\\b'),
         createCharClass('\\d'),
@@ -454,11 +476,36 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
             createCharClass('\\d'),
             createQuantifier('+')
         ], 'non-capturing'),
-        createQuantifier('?'), // Makes the decimal part optional
+        createQuantifier('?'), 
         createAnchor('\\b')
     ];
   }, []);
 
+  const generateBlocksForQuotedText = useCallback((): Block[] => {
+    const quoteChar = formData.quoteType === 'single' ? "'" : '"';
+    const escapedQuoteChar = formData.quoteType === 'single' ? "\\'" : '\\"';
+    const nonQuotePattern = formData.quoteType === 'single' ? "[^']" : '[^"]';
+
+    return [
+        createLiteral(escapedQuoteChar),
+        createSequenceGroup([ // Capturing group for the content
+            createCharClass(nonQuotePattern),
+            createQuantifier('*')
+        ], 'capturing'),
+        createLiteral(escapedQuoteChar)
+    ];
+  }, [formData.quoteType]);
+
+  const generateBlocksForSpecificWord = useCallback((): Block[] => {
+    if (!formData.specificWord?.trim()) return [];
+    // Basic escaping for the literal text to avoid issues if user types regex metacharacters
+    const escapedWord = formData.specificWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return [
+        createAnchor('\\b'),
+        createLiteral(escapedWord),
+        createAnchor('\\b')
+    ];
+  }, [formData.specificWord]);
 
   const generateBlocksForDateTime = useCallback((): Block[] => {
     const blocks: Block[] = [];
@@ -535,7 +582,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
             blocks.push(createSequenceGroup([createAlternation([
                 [createLiteral("AM")],
                 [createLiteral("PM")]
-            ])], 'non-capturing')); // AM/PM non-capturing, case-insensitivity via flag 'i' later
+            ])], 'non-capturing')); 
         }
     }
     
@@ -569,7 +616,6 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
       if (choice) {
         nextStepTargetId = currentStepConfig.next(choice) as WizardStepId;
       } else {
-        // If no choice is made on a radio step, don't proceed (handled by isNextDisabled)
         return; 
       }
     } else if ('nextStep' in currentStepConfig) {
@@ -598,14 +644,15 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
             if (formData.extractionChoice === 'emails') {
                 setGeneratedBlocks(generateBlocksForEmail(true));
             } else if (formData.extractionChoice === 'urls') {
-                // For URL extraction, we often don't require a protocol by default,
-                // so we can call generateBlocksForURL with default settings or allow user to specify later.
-                // For simplicity, let's assume we don't force protocol for extraction by default.
-                const tempFormData = {...formData}; // Create a temp copy to not alter main form data for validation path
+                const tempFormData = {...formData}; 
                 if(tempFormData.url_requireProtocol === undefined) tempFormData.url_requireProtocol = 'no';
                 setGeneratedBlocks(generateBlocksForURL(true));
             } else if (formData.extractionChoice === 'numbers') {
                 setGeneratedBlocks(generateBlocksForNumbers());
+            } else if (formData.extractionChoice === 'quotedText') {
+                setGeneratedBlocks(generateBlocksForQuotedText());
+            } else if (formData.extractionChoice === 'specificWord') {
+                setGeneratedBlocks(generateBlocksForSpecificWord());
             } else {
                 setGeneratedBlocks([]);
             }
@@ -617,9 +664,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     if (nextStepTargetId) {
       setCurrentStepId(nextStepTargetId);
     } else {
-      // This case should ideally not be reached if logic is correct
       console.warn("Wizard: No next step defined for", currentStepId, "with choice", choice);
-      // onClose(); 
     }
   };
 
@@ -646,6 +691,9 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
             break;
         case 'validation_dateTime_timeFormat': prevStep = 'validation_dateTime_validateTime'; break;
 
+        case 'extraction_quotedText_type': prevStep = 'extraction_whatToExtract'; break;
+        case 'extraction_specificWord_input': prevStep = 'extraction_whatToExtract'; break;
+
         case 'final_preview':
             if (formData.mainCategory === 'validation') {
                 if (formData.validationTypeChoice === 'basic') {
@@ -662,7 +710,9 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                     prevStep = 'validation_type_choice'; 
                 }
             } else if (formData.mainCategory === 'extraction') {
-                prevStep = 'extraction_whatToExtract';
+                 if (formData.extractionChoice === 'quotedText') prevStep = 'extraction_quotedText_type';
+                 else if (formData.extractionChoice === 'specificWord') prevStep = 'extraction_specificWord_input';
+                 else prevStep = 'extraction_whatToExtract';
             }
             else {
                 prevStep = 'start'; 
@@ -695,8 +745,10 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     if (currentStepId === 'validation_dateTime_separators' && (!formData.dateSeparators || formData.dateSeparators.length === 0)) {
         return true; 
     }
+    if (currentStepId === 'extraction_specificWord_input' && !formData.specificWord?.trim()) {
+        return true;
+    }
     if (currentStepId === 'final_preview' && generatedBlocks.length === 0) {
-        // Check if a disabled option was chosen that doesn't generate blocks yet
         if(formData.mainCategory === 'validation'){
             if(formData.validationTypeChoice === 'standard' && (formData.standardFormatChoice === 'phone' || formData.standardFormatChoice === 'ip' || formData.standardFormatChoice === 'password')){
                 return true; 
@@ -705,14 +757,17 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                 return true;
             }
         } else if (formData.mainCategory === 'extraction') {
-            if (['quotedText', 'specificWord', 'duplicateWords'].includes(formData.extractionChoice || '')) {
+            if (['duplicateWords'].includes(formData.extractionChoice || '')) {
+                return true;
+            }
+            // If specific word was chosen but not entered, disable next on preview
+            if (formData.extractionChoice === 'specificWord' && !formData.specificWord?.trim()) {
                 return true;
             }
         }
     }
     return false;
   }
-
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) resetWizardAndClose(); }}>
@@ -803,6 +858,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                       onChange={(e) => handleInputChange(input.id, input.inputType === 'number' ? parseInt(e.target.value) || 0 : e.target.value)}
                       className="mt-1 h-9"
                       min={input.inputType === 'number' ? "0" : undefined}
+                      autoFocus={currentStepId === 'extraction_specificWord_input'}
                     />
                   </div>
                 ))}
@@ -847,7 +903,10 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                                             if (qs.max !== undefined && qs.max !== null) childDisplay += `, max: ${qs.max}`;
                                             if (qs.min !== undefined) childDisplay += `)`;
                                         }
-                                        else if (child.type === BlockType.GROUP) childDisplay += `: (${(child.settings as any).type || 'capturing'})`;
+                                        else if (child.type === BlockType.GROUP) {
+                                            childDisplay += `: (${(child.settings as GroupSettings).type || 'capturing'})`;
+                                            if((child.settings as GroupSettings).name) childDisplay += ` ?<${(child.settings as GroupSettings).name}>`;
+                                        }
 
                                         let nestedChildrenStr = "";
                                         if(child.children && child.children.length > 0) {
@@ -901,6 +960,3 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 };
 
 export default RegexWizardModal;
-
-
-    
