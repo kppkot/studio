@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import type { Block, BlockConfig } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { ChevronDown, ChevronRight, PlusCircle, Trash2, GripVertical, Copy, Ungroup } from 'lucide-react';
+import { ChevronDown, ChevronRight, PlusCircle, Trash2, GripVertical, Copy, Ungroup, PackagePlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -15,11 +15,13 @@ interface BlockNodeProps {
   onDelete: (id: string) => void;
   onAddChild: (parentId: string) => void;
   onDuplicate: (id: string) => void;
-  onUngroup: (id: string) => void; // New prop for ungrouping
+  onUngroup: (id: string) => void;
+  onWrapBlock: (id: string) => void; // New prop for wrapping
+  onReorder: (draggedId: string, targetId: string, parentId: string | null) => void; // New prop for reordering
   selectedId: string | null;
   onSelect: (id: string) => void;
+  parentId: string | null; // Pass parentId for reordering context
   level?: number;
-  isDraggable?: boolean; // Placeholder for future drag and drop
 }
 
 const BlockNode: React.FC<BlockNodeProps> = ({
@@ -29,12 +31,15 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   onAddChild,
   onDuplicate,
   onUngroup,
+  onWrapBlock,
+  onReorder,
   selectedId,
   onSelect,
+  parentId,
   level = 0,
-  isDraggable = false,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
   
   const config: BlockConfig | undefined = BLOCK_CONFIGS[block.type];
   
@@ -94,7 +99,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
       case BlockType.CONDITIONAL:
         return `(?(...)да|нет)`;
       case BlockType.ALTERNATION:
-        return `(...|...)`; // Improved preview for Alternation
+        return `(...|...)`;
       default:
         return config.name;
     }
@@ -102,11 +107,47 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
   const canBeUngrouped = canHaveChildren && hasVisibleChildren;
 
+  // Drag and Drop Handlers
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    e.dataTransfer.setData('text/plain', block.id);
+    e.dataTransfer.effectAllowed = 'move';
+    // Optionally set a class for dragging state
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault(); // Necessary to allow dropping
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+    const draggedId = e.dataTransfer.getData('text/plain');
+    if (draggedId && draggedId !== block.id) {
+      onReorder(draggedId, block.id, parentId);
+    }
+  };
+
   return (
     <Card 
+      draggable // Make the card draggable
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
       className={cn(
-        "mb-2 transition-all shadow-sm hover:shadow-md",
-        isSelected && "border-primary ring-2 ring-primary ring-offset-2",
+        "mb-2 transition-all shadow-sm hover:shadow-md relative", // Added relative for potential D&D indicators
+        isSelected && "border-primary ring-2 ring-primary ring-offset-2 bg-primary/5", // Enhanced selected state
+        isDraggingOver && "bg-accent/20 border-accent", // Visual feedback for drag over
       )}
       style={{ marginLeft: `${level * 24}px` }}
       onMouseEnter={() => setIsHovered(true)}
@@ -115,7 +156,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     >
       <CardContent className="p-2">
         <div className="flex items-center gap-2">
-          {isDraggable && <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />}
+          <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />
           
           {canHaveChildren && ( 
             <Button variant="ghost" size="icon" onClick={handleToggleExpand} className="h-7 w-7">
@@ -123,7 +164,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             </Button>
           )}
           
-          <div className="flex items-center gap-2 flex-1 min-w-0"> {/* Added min-w-0 for better truncation */}
+          <div className="flex items-center gap-2 flex-1 min-w-0">
             <span className="text-primary p-1 bg-primary/10 rounded-sm flex items-center justify-center h-7 w-7 flex-shrink-0">
               {typeof config.icon === 'string' ? <span className="font-mono text-xs">{config.icon}</span> : config.icon}
             </span>
@@ -139,6 +180,9 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                     <PlusCircle size={14} className="text-green-600"/>
                  </Button>
             )}
+            <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onWrapBlock(block.id); }} title="Обернуть в группу" className="h-7 w-7">
+              <PackagePlus size={14} className="text-indigo-600"/>
+            </Button>
             {canBeUngrouped && (
               <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onUngroup(block.id);}} title="Разгруппировать" className="h-7 w-7">
                 <Ungroup size={14} className="text-purple-600"/>
@@ -154,7 +198,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         </div>
         
         {isCurrentlyExpanded && hasVisibleChildren && (
-          <div className="mt-2 pl-4 border-l-2 border-dashed ml-[14px]"> {/* Adjusted ml for better alignment */}
+          <div className="mt-2 pl-4 border-l-2 border-dashed ml-[14px]">
             {block.children.map(child => (
               <BlockNode
                 key={child.id}
@@ -164,10 +208,12 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                 onAddChild={onAddChild}
                 onDuplicate={onDuplicate}
                 onUngroup={onUngroup}
+                onWrapBlock={onWrapBlock}
+                onReorder={onReorder}
                 selectedId={selectedId}
                 onSelect={onSelect}
+                parentId={block.id} // Pass current block's ID as parentId for children
                 level={0} 
-                isDraggable={isDraggable}
               />
             ))}
           </div>
@@ -178,3 +224,4 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 };
 
 export default BlockNode;
+

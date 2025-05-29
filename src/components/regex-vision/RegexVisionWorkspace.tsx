@@ -65,17 +65,31 @@ const duplicateAndInsertBlockRecursive = (currentBlocks: Block[], targetId: stri
 const processUngroupRecursive = (nodes: Block[], targetId: string): Block[] => {
   return nodes.flatMap(block => {
     if (block.id === targetId) {
-      // If this is the block to ungroup, return its children
-      // Ensure children maintain their properties (like isExpanded if relevant)
       return block.children ? block.children.map(child => ({...child})) : [];
     }
     if (block.children && block.children.length > 0) {
-      // Otherwise, if the block has children, process them recursively
       return [{ ...block, children: processUngroupRecursive(block.children, targetId) }];
     }
-    // If it's not the target and has no children, return the block as is
     return [block];
   });
+};
+
+const findBlockAndParentRecursive = (
+  nodes: Block[],
+  targetId: string,
+  currentParent: Block | null = null
+): { block: Block | null; parent: Block | null; indexInParent: number } => {
+  for (let i = 0; i < nodes.length; i++) {
+    const block = nodes[i];
+    if (block.id === targetId) {
+      return { block, parent: currentParent, indexInParent: i };
+    }
+    if (block.children) {
+      const found = findBlockAndParentRecursive(block.children, targetId, block);
+      if (found.block) return found;
+    }
+  }
+  return { block: null, parent: null, indexInParent: -1 };
 };
 
 
@@ -220,13 +234,98 @@ const RegexVisionWorkspace: React.FC = () => {
 
     setBlocks(prevBlocks => processUngroupRecursive(prevBlocks, id));
     
-    // If the ungrouped block was selected, deselect it as it no longer exists in the same way.
-    // Its children are now at a different level. A more sophisticated approach might select the first child.
     if (selectedBlockId === id) {
       setSelectedBlockId(null);
     }
     toast({ title: "Блок разгруппирован", description: "Дочерние элементы блока были подняты на уровень выше." });
   }, [blocks, selectedBlockId, toast]);
+
+  const handleWrapBlock = useCallback((blockIdToWrap: string) => {
+    const config = BLOCK_CONFIGS[BlockType.GROUP];
+    const newGroupBlock: Block = {
+      id: generateId(),
+      type: BlockType.GROUP,
+      settings: { ...config.defaultSettings },
+      children: [], // Will be populated
+      isExpanded: true,
+    };
+
+    const wrapRecursively = (currentNodes: Block[]): Block[] => {
+      return currentNodes.map(node => {
+        if (node.id === blockIdToWrap) {
+          const wrappedNode = deepCloneBlock(node); // Clone to avoid issues if node is already part of state
+          newGroupBlock.children = [wrappedNode];
+          return newGroupBlock;
+        }
+        if (node.children) {
+          return { ...node, children: wrapRecursively(node.children) };
+        }
+        return node;
+      });
+    };
+
+    setBlocks(prevBlocks => wrapRecursively(prevBlocks));
+    setSelectedBlockId(newGroupBlock.id); // Select the new group
+    toast({ title: "Блок обернут", description: "Выбранный блок был обернут в новую группу." });
+  }, [toast]);
+
+  const handleReorderBlock = useCallback((draggedId: string, targetId: string, targetParentId: string | null) => {
+    setBlocks(prevBlocks => {
+      let draggedBlock: Block | null = null;
+      
+      // Function to remove block and return it
+      const removeBlock = (nodes: Block[], idToRemove: string): { newNodes: Block[], removed: Block | null } => {
+        let removedItem: Block | null = null;
+        const filteredNodes = nodes.filter(block => {
+          if (block.id === idToRemove) {
+            removedItem = block;
+            return false;
+          }
+          return true;
+        });
+        if (removedItem) return { newNodes: filteredNodes, removed: removedItem };
+
+        for (let i = 0; i < nodes.length; i++) {
+          if (nodes[i].children) {
+            const result = removeBlock(nodes[i].children, idToRemove);
+            if (result.removed) {
+              const newParentNodes = [...nodes];
+              newParentNodes[i] = { ...newParentNodes[i], children: result.newNodes };
+              return { newNodes: newParentNodes, removed: result.removed };
+            }
+          }
+        }
+        return { newNodes: nodes, removed: null };
+      };
+
+      const { newNodes: blocksWithoutDragged, removed: foundDraggedBlock } = removeBlock(prevBlocks, draggedId);
+      if (!foundDraggedBlock) return prevBlocks; // Dragged block not found
+      draggedBlock = foundDraggedBlock;
+
+      // Function to insert block
+      const insertBlock = (nodes: Block[], currentParentId: string | null): Block[] => {
+        if (currentParentId === targetParentId) { // Target is a sibling or root
+          const targetIndex = nodes.findIndex(b => b.id === targetId);
+          if (targetIndex !== -1 && draggedBlock) {
+            const newSiblingNodes = [...nodes];
+            newSiblingNodes.splice(targetIndex + 1, 0, draggedBlock); // Insert after target
+            return newSiblingNodes;
+          }
+        }
+        // Recurse if not at the target parent level
+        return nodes.map(node => {
+          if (node.children) {
+            return { ...node, children: insertBlock(node.children, node.id) };
+          }
+          return node;
+        });
+      };
+      
+      return insertBlock(blocksWithoutDragged, null);
+    });
+    toast({ title: "Блок перемещен", description: "Порядок блоков обновлен." });
+  }, [toast]);
+
 
   const handleOpenPaletteForChild = useCallback((pId: string) => {
     setParentIdForNewBlock(pId);
@@ -272,6 +371,7 @@ const RegexVisionWorkspace: React.FC = () => {
                   const canBeExpanded = b.type === BlockType.GROUP || b.type === BlockType.LOOKAROUND || b.type === BlockType.ALTERNATION || b.type === BlockType.CONDITIONAL;
                   return {
                     ...b,
+                    id: b.id || generateId(), // Ensure imported blocks have IDs
                     isExpanded: b.isExpanded ?? (canBeExpanded ? true : undefined),
                     children: b.children ? processImportedBlocks(b.children) : []
                   };
@@ -317,18 +417,40 @@ const RegexVisionWorkspace: React.FC = () => {
       const activeElement = document.activeElement;
       const isTyping = activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' || activeElement.hasAttribute('contenteditable'));
 
-      if (selectedBlockId && (event.key === 'Delete' || event.key === 'Backspace') && !isTyping) {
+      if (isTyping) return; // Don't interfere with text input
+
+      if (selectedBlockId && (event.key === 'Delete' || event.key === 'Backspace')) {
         event.preventDefault(); 
         handleDeleteBlock(selectedBlockId);
       }
 
       if (event.ctrlKey && event.shiftKey) {
-        if (event.key === 'ArrowDown' && !isTyping) {
+        if (event.key === 'ArrowDown') {
           event.preventDefault();
           handleExpandAll();
-        } else if (event.key === 'ArrowUp' && !isTyping) {
+        } else if (event.key === 'ArrowUp') {
           event.preventDefault();
           handleCollapseAll();
+        }
+      }
+
+      if (selectedBlockId && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+        event.preventDefault();
+        const { block: currentBlock, parent, indexInParent } = findBlockAndParentRecursive(blocks, selectedBlockId);
+        
+        if (currentBlock) {
+          const siblings = parent ? parent.children : blocks;
+          let newIndex = indexInParent;
+
+          if (event.key === 'ArrowUp' && indexInParent > 0) {
+            newIndex = indexInParent - 1;
+          } else if (event.key === 'ArrowDown' && indexInParent < siblings.length - 1) {
+            newIndex = indexInParent + 1;
+          }
+          
+          if (newIndex !== indexInParent && siblings[newIndex]) {
+            setSelectedBlockId(siblings[newIndex].id);
+          }
         }
       }
     };
@@ -337,7 +459,7 @@ const RegexVisionWorkspace: React.FC = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedBlockId, handleDeleteBlock, handleExpandAll, handleCollapseAll]);
+  }, [selectedBlockId, handleDeleteBlock, handleExpandAll, handleCollapseAll, blocks]);
 
 
   const headerHeight = "60px"; 
@@ -388,8 +510,11 @@ const RegexVisionWorkspace: React.FC = () => {
                             onAddChild={handleOpenPaletteForChild}
                             onDuplicate={handleDuplicateBlock}
                             onUngroup={handleUngroupBlock}
+                            onWrapBlock={handleWrapBlock}
+                            onReorder={handleReorderBlock}
                             selectedId={selectedBlockId}
                             onSelect={setSelectedBlockId}
+                            parentId={null} // Root blocks have null parentId
                             level={0}
                           />
                         ))}
@@ -452,3 +577,4 @@ const RegexVisionWorkspace: React.FC = () => {
 };
 
 export default RegexVisionWorkspace;
+
