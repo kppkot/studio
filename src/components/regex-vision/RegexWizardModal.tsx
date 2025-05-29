@@ -22,6 +22,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Card } from "@/components/ui/card"; // Added import
 import { Lightbulb } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -604,8 +605,9 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     ];
     
     if (forExtraction || !protocolIsRequiredForValidation) {
-      blocks.push(createSequenceGroup(protocolPart, 'non-capturing'));
-      blocks.push(createQuantifier('?')); 
+      const optionalProtocolGroup = createSequenceGroup(protocolPart, 'non-capturing')
+      optionalProtocolGroup.children.push(createQuantifier('?')); // Make the whole group optional
+      blocks.push(optionalProtocolGroup);
     } else { 
         blocks.push(...protocolPart); 
     }
