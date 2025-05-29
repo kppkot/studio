@@ -29,7 +29,7 @@ const deepCloneBlock = (block: Block): Block => {
     id: generateId(),
     settings: { ...block.settings },
     children: block.children ? block.children.map(child => deepCloneBlock(child)) : [],
-    isExpanded: block.isExpanded, // Preserve expanded state
+    isExpanded: block.isExpanded,
   };
   if (newBlock.type === BlockType.GROUP || 
       newBlock.type === BlockType.LOOKAROUND || 
@@ -60,6 +60,22 @@ const duplicateAndInsertBlockRecursive = (currentBlocks: Block[], targetId: stri
     }
   }
   return { updatedBlocks: currentBlocks, success: false };
+};
+
+const processUngroupRecursive = (nodes: Block[], targetId: string): Block[] => {
+  return nodes.flatMap(block => {
+    if (block.id === targetId) {
+      // If this is the block to ungroup, return its children
+      // Ensure children maintain their properties (like isExpanded if relevant)
+      return block.children ? block.children.map(child => ({...child})) : [];
+    }
+    if (block.children && block.children.length > 0) {
+      // Otherwise, if the block has children, process them recursively
+      return [{ ...block, children: processUngroupRecursive(block.children, targetId) }];
+    }
+    // If it's not the target and has no children, return the block as is
+    return [block];
+  });
 };
 
 
@@ -133,7 +149,6 @@ const RegexVisionWorkspace: React.FC = () => {
   const addChildRecursive = (currentBlocks: Block[], pId: string, newBlock: Block): Block[] => {
     return currentBlocks.map(block => {
       if (block.id === pId) {
-        // Ensure parent is expanded when a child is added
         const parentCanBeExpanded = block.type === BlockType.GROUP || block.type === BlockType.LOOKAROUND || block.type === BlockType.ALTERNATION || block.type === BlockType.CONDITIONAL;
         return { ...block, children: [...(block.children || []), newBlock], isExpanded: parentCanBeExpanded ? true : block.isExpanded };
       }
@@ -167,8 +182,8 @@ const RegexVisionWorkspace: React.FC = () => {
       setBlocks(prev => [...prev, newBlock]);
     }
     setSelectedBlockId(newBlock.id);
-    setParentIdForNewBlock(null); // Reset parent ID for next direct add
-    setIsPaletteVisible(false); // Close palette
+    setParentIdForNewBlock(null);
+    setIsPaletteVisible(false);
   }, [toast]);
 
 
@@ -181,7 +196,8 @@ const RegexVisionWorkspace: React.FC = () => {
     if (selectedBlockId === id) {
       setSelectedBlockId(null);
     }
-  }, [selectedBlockId]);
+    toast({ title: "Блок удален", description: "Блок был успешно удален из дерева." });
+  }, [selectedBlockId, toast]);
   
   const handleDuplicateBlock = useCallback((id: string) => {
     setBlocks(prevBlocks => {
@@ -194,6 +210,23 @@ const RegexVisionWorkspace: React.FC = () => {
       return prevBlocks; 
     });
   }, [toast]);
+
+  const handleUngroupBlock = useCallback((id: string) => {
+    const blockToUngroup = findBlockRecursive(blocks, id);
+    if (!blockToUngroup || !blockToUngroup.children || blockToUngroup.children.length === 0) {
+      toast({ title: "Ошибка", description: "Блок не может быть разгруппирован или не имеет дочерних элементов.", variant: "destructive" });
+      return;
+    }
+
+    setBlocks(prevBlocks => processUngroupRecursive(prevBlocks, id));
+    
+    // If the ungrouped block was selected, deselect it as it no longer exists in the same way.
+    // Its children are now at a different level. A more sophisticated approach might select the first child.
+    if (selectedBlockId === id) {
+      setSelectedBlockId(null);
+    }
+    toast({ title: "Блок разгруппирован", description: "Дочерние элементы блока были подняты на уровень выше." });
+  }, [blocks, selectedBlockId, toast]);
 
   const handleOpenPaletteForChild = useCallback((pId: string) => {
     setParentIdForNewBlock(pId);
@@ -234,7 +267,6 @@ const RegexVisionWorkspace: React.FC = () => {
           try {
             const imported = JSON.parse(e.target?.result as string);
             if (imported.blocks && imported.regexFlags !== undefined && imported.testText !== undefined) {
-              // Ensure isExpanded is set for imported blocks (default to true for containers)
               const processImportedBlocks = (bs: Block[]): Block[] => {
                 return bs.map(b => {
                   const canBeExpanded = b.type === BlockType.GROUP || b.type === BlockType.LOOKAROUND || b.type === BlockType.ALTERNATION || b.type === BlockType.CONDITIONAL;
@@ -277,19 +309,27 @@ const RegexVisionWorkspace: React.FC = () => {
     setBlocks(prev => toggleRecursively(prev));
   };
 
-  const handleExpandAll = () => toggleAllBlocksExpansion(true);
-  const handleCollapseAll = () => toggleAllBlocksExpansion(false);
+  const handleExpandAll = useCallback(() => toggleAllBlocksExpansion(true), []);
+  const handleCollapseAll = useCallback(() => toggleAllBlocksExpansion(false), []);
 
-  // Keyboard listener for Delete/Backspace
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (selectedBlockId && (event.key === 'Delete' || event.key === 'Backspace')) {
-        const activeElement = document.activeElement;
-        if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' || activeElement.hasAttribute('contenteditable'))) {
-          return; // Don't delete if user is typing in an input
-        }
-        event.preventDefault(); // Prevent browser back navigation on Backspace
+      const activeElement = document.activeElement;
+      const isTyping = activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' || activeElement.hasAttribute('contenteditable'));
+
+      if (selectedBlockId && (event.key === 'Delete' || event.key === 'Backspace') && !isTyping) {
+        event.preventDefault(); 
         handleDeleteBlock(selectedBlockId);
+      }
+
+      if (event.ctrlKey && event.shiftKey) {
+        if (event.key === 'ArrowDown' && !isTyping) {
+          event.preventDefault();
+          handleExpandAll();
+        } else if (event.key === 'ArrowUp' && !isTyping) {
+          event.preventDefault();
+          handleCollapseAll();
+        }
       }
     };
 
@@ -297,7 +337,7 @@ const RegexVisionWorkspace: React.FC = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedBlockId, handleDeleteBlock]);
+  }, [selectedBlockId, handleDeleteBlock, handleExpandAll, handleCollapseAll]);
 
 
   const headerHeight = "60px"; 
@@ -317,10 +357,10 @@ const RegexVisionWorkspace: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base flex items-center gap-2"><Edit3 size={18} className="text-primary"/> Дерево выражения</CardTitle>
                     <div className="flex items-center gap-1">
-                      <Button variant="outline" size="iconSm" onClick={handleExpandAll} title="Развернуть всё" className="h-7 w-7">
+                      <Button variant="outline" size="iconSm" onClick={handleExpandAll} title="Развернуть всё (Ctrl+Shift+Вниз)">
                         <UnfoldVertical size={14} />
                       </Button>
-                      <Button variant="outline" size="iconSm" onClick={handleCollapseAll} title="Свернуть всё" className="h-7 w-7">
+                      <Button variant="outline" size="iconSm" onClick={handleCollapseAll} title="Свернуть всё (Ctrl+Shift+Вверх)">
                         <FoldVertical size={14} />
                       </Button>
                       <Button size="sm" onClick={() => { setParentIdForNewBlock(null); setIsPaletteVisible(true); }}>
@@ -347,6 +387,7 @@ const RegexVisionWorkspace: React.FC = () => {
                             onDelete={handleDeleteBlock}
                             onAddChild={handleOpenPaletteForChild}
                             onDuplicate={handleDuplicateBlock}
+                            onUngroup={handleUngroupBlock}
                             selectedId={selectedBlockId}
                             onSelect={setSelectedBlockId}
                             level={0}
