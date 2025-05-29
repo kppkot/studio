@@ -1,6 +1,7 @@
+
 "use client";
 import React, { useState, useCallback, useEffect } from 'react';
-import type { Block, QuantifierSettings, CharacterClassSettings, GroupSettings, LookaroundSettings, LiteralSettings, AnchorSettings } from './types';
+import type { Block, QuantifierSettings, CharacterClassSettings, GroupSettings, LookaroundSettings, LiteralSettings, AnchorSettings, BackreferenceSettings } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants.tsx';
 import { generateId } from './utils';
@@ -48,7 +49,7 @@ type WizardStepId =
   | 'extraction_whatToExtract'
   | 'extraction_quotedText_type'
   | 'extraction_specificWord_input'
-  | 'replacement_whatToReplace' // New
+  | 'replacement_whatToReplace'
   | 'final_preview';
 
 interface WizardFormData {
@@ -116,7 +117,7 @@ const wizardConfig = {
     type: 'radio',
     options: [
       { id: 'basic', label: "Простые шаблоны (цифры, буквы, длина и т.д.)" },
-      { id: 'standard', label: "Стандартные форматы (Email, URL, Телефон, IP, Пароль и т.д.)" },
+      { id: 'standard', label: "Стандартные форматы (Email, URL, Телефон, IP, Пароль)" },
       { id: 'datetime', label: "Дата и время (ДД/ММ/ГГГГ, ЧЧ:ММ и т.д.)" },
     ],
     next: (choice: string) => {
@@ -215,7 +216,7 @@ const wizardConfig = {
     ],
     next: (choice: string) => {
         if (choice === 'ipv4') return 'final_preview';
-        return 'validation_ip_type';
+        return 'validation_ip_type'; // Stay on this step if ipv6 (disabled) is somehow selected
     }
   },
   validation_password_requirements: { 
@@ -286,10 +287,10 @@ const wizardConfig = {
       { id: 'numbers', label: "Все числа (целые/десятичные)" },
       { id: 'quotedText', label: "Текст в кавычках" },
       { id: 'specificWord', label: "Слово/фразу (ввести)" },
-      { id: 'duplicateWords', label: "Повторяющиеся слова", disabled: true },
+      { id: 'duplicateWords', label: "Повторяющиеся слова" },
     ],
     next: (choice: string) => {
-      if (['emails', 'urls', 'numbers'].includes(choice)) {
+      if (['emails', 'urls', 'numbers', 'duplicateWords'].includes(choice)) {
         return 'final_preview';
       }
       if (choice === 'quotedText') return 'extraction_quotedText_type';
@@ -363,15 +364,17 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     
     const resetSubsequentFields = (currentKey: keyof WizardFormData) => {
         const keysToKeep: (keyof WizardFormData)[] = ['mainCategory'];
-        if (currentKey.startsWith('validationTypeChoice')) keysToKeep.push('validationTypeChoice');
-        else if (currentKey.startsWith('standardFormatChoice')) keysToKeep.push('validationTypeChoice', 'standardFormatChoice');
-        else if (currentKey.startsWith('extractionChoice')) keysToKeep.push('extractionChoice');
-        else if (currentKey.startsWith('replacementChoice')) keysToKeep.push('replacementChoice');
+        if (currentKey === 'validationTypeChoice') keysToKeep.push('validationTypeChoice');
+        else if (currentKey === 'standardFormatChoice') keysToKeep.push('validationTypeChoice', 'standardFormatChoice');
+        else if (currentKey === 'extractionChoice') keysToKeep.push('extractionChoice');
+        else if (currentKey === 'replacementChoice') keysToKeep.push('replacementChoice');
+        else if (currentKey === 'dateFormat') keysToKeep.push('validationTypeChoice', 'dateFormat');
 
 
-        Object.keys(newFormData).forEach(key => {
-            if (!keysToKeep.includes(key as keyof WizardFormData) && key !== currentKey) {
-                 delete newFormData[key as keyof WizardFormData];
+        Object.keys(newFormData).forEach(keyStr => {
+            const key = keyStr as keyof WizardFormData;
+            if (!keysToKeep.includes(key) && key !== currentKey) {
+                 delete newFormData[key];
             }
         });
     };
@@ -391,16 +394,15 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     } else if (currentStepId === 'replacement_whatToReplace') {
         resetSubsequentFields('replacementChoice');
         newFormData.replacementChoice = value as WizardFormData['replacementChoice'];
-    }
-     else {
-       // For other radio steps, just update the current field
+    } else if (currentStepId === 'validation_dateTime_dateFormat') {
+        resetSubsequentFields('dateFormat');
+        newFormData.dateFormat = value as WizardFormData['dateFormat'];
+    } else {
        newFormData[currentStepId as keyof WizardFormData] = value as any;
     }
     
-    // Specific fields that are part of composite steps or leaf nodes in radio branches
     if (currentStepId === 'validation_standardFormats_url_protocol') newFormData.url_requireProtocol = value as WizardFormData['url_requireProtocol'];
     else if (currentStepId === 'validation_basicPatterns_length') newFormData.basicPattern_restrictLength = value as WizardFormData['basicPattern_restrictLength'];
-    else if (currentStepId === 'validation_dateTime_dateFormat') newFormData.dateFormat = value as WizardFormData['dateFormat'];
     else if (currentStepId === 'validation_dateTime_validateTime') newFormData.validateTime = value as WizardFormData['validateTime'];
     else if (currentStepId === 'validation_dateTime_timeFormat') newFormData.timeFormat = value as WizardFormData['timeFormat'];
     else if (currentStepId === 'extraction_quotedText_type') newFormData.quoteType = value as WizardFormData['quoteType'];
@@ -476,6 +478,10 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   const createLookaround = (type: LookaroundSettings['type'], children: Block[]): Block => ({
     id: generateId(), type: BlockType.LOOKAROUND, settings: {type} as LookaroundSettings, children, isExpanded: true
   });
+  
+  const createBackreference = (ref: string | number): Block => ({
+    id: generateId(), type: BlockType.BACKREFERENCE, settings: { ref } as BackreferenceSettings, children: [],
+  });
 
 
   const generateBlocksForBasicPattern = useCallback((): Block[] => {
@@ -516,14 +522,14 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
   const generateBlocksForEmail = useCallback((forExtraction: boolean = false): Block[] => {
     const emailBlocks: Block[] = [
-      createCharClass('\\w._%+-'),
+      createCharClass('[\\w._%+-]'), // Updated to be a proper char class string
       createQuantifier('+'),
       createLiteral('@'),
       createCharClass('[\\w.-]'), 
       createQuantifier('+'),
       createLiteral('\\.'), 
       createCharClass('A-Za-z'),
-      createQuantifier('{n,}', 2, null),
+      createQuantifier('{n,m}', 2, 6), // TLD length can be 2-6
     ];
     if(forExtraction) {
         return [createAnchor('\\b'), ...emailBlocks, createAnchor('\\b')];
@@ -535,40 +541,40 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     const blocks: Block[] = [];
     let protocolIsRequiredForValidation = formData.url_requireProtocol === 'yes';
 
-    if (protocolIsRequiredForValidation || forExtraction) { 
-      const protocolPart: Block[] = [
+    const protocolPart: Block[] = [
         createLiteral('http'),
         createSequenceGroup([createLiteral('s')], 'non-capturing'), 
         createQuantifier('?'), 
         createLiteral('://')
-      ];
-      if (!protocolIsRequiredForValidation && forExtraction) { // Extraction, protocol optional
-         blocks.push(createSequenceGroup(protocolPart, 'non-capturing')); 
-         blocks.push(createQuantifier('?')); 
-      } else { // Validation with required protocol OR extraction where protocol implicitly part of what's found
+    ];
+
+    if (protocolIsRequiredForValidation && !forExtraction) { 
          blocks.push(...protocolPart);
-      }
+    } else if (forExtraction) { // For extraction, protocol is optional unless specifically required (which isn't a common extraction scenario)
+         const optionalProtocolGroup = createSequenceGroup(protocolPart, 'non-capturing');
+         blocks.push(optionalProtocolGroup);
+         blocks.push(createQuantifier('?'));
     }
     
     blocks.push(createSequenceGroup([createLiteral('www\\.')], 'non-capturing'));
-    blocks.push(createQuantifier('?')); // www. is optional
+    blocks.push(createQuantifier('?'));
 
-    blocks.push(createCharClass('A-Za-z0-9._%+-')); // Domain name part 1
-    blocks.push(createQuantifier('+'));
-    blocks.push(createLiteral('\\.')); // Dot before TLD
+    blocks.push(createCharClass('[A-Za-z0-9._%+-]+')); // Domain name part 1 - simplified to one char class
+    // createQuantifier('+') - removed, as + is part of char class now
 
-    blocks.push(createCharClass('A-Za-z')); // TLD
-    blocks.push(createQuantifier('{n,m}', 2, 6));
+    blocks.push(createLiteral('\\.')); 
 
-    const pathSegment = createSequenceGroup([ // Optional path
+    blocks.push(createCharClass('A-Za-z')); 
+    blocks.push(createQuantifier('{n,m}', 2, 6)); // TLD
+
+    const pathSegment = createSequenceGroup([
         createLiteral('/'),
-        createCharClass('[\\w.-]'), // Allowed chars in path
-        createQuantifier('*')
+        createCharClass('[\\w.-]*'), // Allowed chars in path, * for zero or more
     ], 'non-capturing');
     blocks.push(pathSegment);
-    blocks.push(createQuantifier('*')); // Path can have multiple segments
+    blocks.push(createQuantifier('*')); 
     
-    blocks.push(createLiteral('/')); // Optional trailing slash
+    blocks.push(createLiteral('/')); 
     blocks.push(createQuantifier('?'));
     
     if (forExtraction) {
@@ -587,37 +593,53 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     }
     if (formData.phone_allowSeparators === 'yes') {
         const separatorGroup = createSequenceGroup([
-            createCharClass(' -') // space or hyphen
+            createCharClass('[ -]') 
         ], 'non-capturing');
         blocks.push(separatorGroup);
         blocks.push(createQuantifier('?'));
     }
-    // Main number part: example 7-15 digits, can be multiple groups separated by optional separators
+    
     const digitBlock = createCharClass('\\d');
-    const mainNumGroup = createSequenceGroup([
-        digitBlock,
-        createQuantifier('{n,m}', 3, 4), // e.g. first part of number
-        ...(formData.phone_allowSeparators === 'yes' ? [createSequenceGroup([createCharClass(' -')], 'non-capturing'), createQuantifier('?')] : []),
-        digitBlock,
-        createQuantifier('{n,m}', 3, 4), // e.g. second part
-        ...(formData.phone_allowSeparators === 'yes' ? [createSequenceGroup([createCharClass(' -')], 'non-capturing'), createQuantifier('?')] : []),
-        digitBlock,
-        createQuantifier('{n,m}', 0, 4) // e.g. third part if any
-    ], 'non-capturing');
-    blocks.push(mainNumGroup);
+    const mainNumParts: Block[] = [];
+
+    // Example: (ddd)-(ddd)-(dddd) or ddd ddd dddd etc.
+    // More flexible: sequence of digit groups, optionally separated
+    mainNumParts.push(digitBlock);
+    mainNumParts.push(createQuantifier('{n,m}', 7, 15)); // Typical range for local numbers, adjust as needed
+
+    // To allow separators *within* the number if allowed:
+    if (formData.phone_allowSeparators === 'yes') {
+        const numberContent: Block[] = [
+            createCharClass('\\d'),
+            createQuantifier('{n,m}', 1, 15) // Allow a range for numbers
+        ];
+        const withSeparators = createSequenceGroup([
+            createCharClass('[\\d -]'), // Digits, spaces, or hyphens
+            createQuantifier('{n,m}', 7, 20) // Overall length including separators
+        ], 'non-capturing');
+         blocks.push(withSeparators);
+
+    } else {
+        blocks.push(digitBlock);
+        blocks.push(createQuantifier('{n,m}', 7, 15)); // Just digits
+    }
+
 
     blocks.push(createAnchor('$'));
     return blocks;
   }, [formData.phone_hasCountryCode, formData.phone_allowSeparators]);
 
   const generateBlocksForIPv4 = useCallback((): Block[] => {
-    const ipv4Regex = "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$";
-    return [createLiteral(ipv4Regex)];
+    // For simplicity and accuracy, using a single literal block for IPv4 as per common practice.
+    // Deconstructing it into many smaller blocks for the wizard can be overly complex for this standard.
+    const ipv4Regex = "(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)";
+    return [createAnchor('^'), createLiteral(ipv4Regex), createAnchor('$')];
   }, []);
   
   const generateBlocksForIPv6 = useCallback((): Block[] => {
-    const ipv6Regex = "^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$";
-    return [createLiteral(ipv6Regex)];
+    // IPv6 regex is extremely complex. A literal is the most practical approach for a wizard.
+    const ipv6Regex = "(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))";
+    return [createAnchor('^'), createLiteral(ipv6Regex), createAnchor('$')];
   }, []);
 
   const generateBlocksForPassword = useCallback((): Block[] => {
@@ -632,55 +654,14 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         blocks.push(createLookaround('positive-lookahead', [createCharClass('.*[A-Z]')]));
     }
     if (formData.password_req_specialChars) {
-        blocks.push(createLookaround('positive-lookahead', [createCharClass('.*[\\W_]')])); 
+        blocks.push(createLookaround('positive-lookahead', [createCharClass('.*[\\W_]')])); // \W is non-word, _ is often included
     }
     const minLength = formData.password_minLength !== undefined ? Math.max(1, formData.password_minLength) : 8;
-    blocks.push(createCharClass('.'));
+    blocks.push(createCharClass('.')); // Any character
     blocks.push(createQuantifier('{n,}', minLength, null));
     blocks.push(createAnchor('$'));
     return blocks;
   }, [formData.password_req_digits, formData.password_req_lowercase, formData.password_req_uppercase, formData.password_req_specialChars, formData.password_minLength]);
-
-
-  const generateBlocksForExtractNumbers = useCallback((): Block[] => {
-    return [
-        createAnchor('\\b'),
-        createCharClass('\\d'),
-        createQuantifier('+'),
-        createSequenceGroup([
-            createLiteral('\\.'),
-            createCharClass('\\d'),
-            createQuantifier('+')
-        ], 'non-capturing'),
-        createQuantifier('?'), 
-        createAnchor('\\b')
-    ];
-  }, []);
-
-  const generateBlocksForQuotedText = useCallback((): Block[] => {
-    const quoteChar = formData.quoteType === 'single' ? "'" : '"';
-    const escapedQuoteChar = formData.quoteType === 'single' ? "\\'" : '\\"';
-    const nonQuotePattern = `[^${formData.quoteType === 'single' ? "'" : '"'}]`;
-
-    return [
-        createLiteral(escapedQuoteChar),
-        createSequenceGroup([ 
-            createCharClass(nonQuotePattern),
-            createQuantifier('*', undefined, undefined, 'greedy')
-        ], 'capturing'),
-        createLiteral(escapedQuoteChar)
-    ];
-  }, [formData.quoteType]);
-
-  const generateBlocksForSpecificWord = useCallback((): Block[] => {
-    if (!formData.specificWord?.trim()) return [];
-    const escapedWord = formData.specificWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return [
-        createAnchor('\\b'),
-        createLiteral(escapedWord),
-        createAnchor('\\b')
-    ];
-  }, [formData.specificWord]);
 
   const generateBlocksForDateTime = useCallback((): Block[] => {
     const blocks: Block[] = [];
@@ -691,7 +672,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         separatorPattern = formData.dateSeparators.map(s => {
             if (s === 'slash') return '/';
             if (s === 'hyphen') return '-';
-            if (s === 'dot') return '\\.';
+            if (s === 'dot') return '\\.'; // Correctly escape dot
             return '';
         }).join('');
     } else if (formData.dateFormat === 'yyyymmdd') {
@@ -701,16 +682,16 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
 
     if (formData.dateFormat === 'ddmmyyyy') {
-        blocks.push(createSequenceGroup([createAlternation([
+        blocks.push(createSequenceGroup([createAlternation([ // Day
             [createLiteral("0"), createCharClass("1-9")],
             [createCharClass("12"), createCharClass("0-9")],
             [createLiteral("3"), createCharClass("01")]
-        ])])); // Day
+        ])])); 
         if (separatorClassBlock) blocks.push(separatorClassBlock);
-        blocks.push(createSequenceGroup([createAlternation([
+        blocks.push(createSequenceGroup([createAlternation([ // Month
             [createLiteral("0"), createCharClass("1-9")],
             [createLiteral("1"), createCharClass("012")]
-        ])])); // Month
+        ])])); 
         if (separatorClassBlock) blocks.push(separatorClassBlock);
         blocks.push(createSequenceGroup([ // Year
             createAlternation([[createLiteral("19")], [createLiteral("20")]]),
@@ -765,10 +746,77 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     return blocks;
   }, [formData]);
 
+  const generateBlocksForExtractNumbers = useCallback((): Block[] => {
+    return [
+        createAnchor('\\b'),
+        createCharClass('\\d'),
+        createQuantifier('+'),
+        createSequenceGroup([
+            createLiteral('\\.'),
+            createCharClass('\\d'),
+            createQuantifier('+')
+        ], 'non-capturing'),
+        createQuantifier('?'), 
+        createAnchor('\\b')
+    ];
+  }, []);
+
+  const generateBlocksForQuotedText = useCallback((): Block[] => {
+    const quoteChar = formData.quoteType === 'single' ? "'" : '"';
+    const escapedQuoteChar = formData.quoteType === 'single' ? "\\'" : '\\"';
+    const nonQuotePattern = `[^${formData.quoteType === 'single' ? "'" : '"'}]`;
+
+    return [
+        createLiteral(escapedQuoteChar),
+        createSequenceGroup([ 
+            createCharClass(nonQuotePattern),
+            createQuantifier('*', undefined, undefined, 'greedy')
+        ], 'capturing'), // Capturing group for the content
+        createLiteral(escapedQuoteChar)
+    ];
+  }, [formData.quoteType]);
+
+  const generateBlocksForSpecificWord = useCallback((): Block[] => {
+    if (!formData.specificWord?.trim()) return [];
+    // Escape regex special characters in user input
+    const escapedWord = formData.specificWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return [
+        createAnchor('\\b'),
+        createLiteral(escapedWord),
+        createAnchor('\\b')
+    ];
+  }, [formData.specificWord]);
+
+  const generateBlocksForDuplicateWords = useCallback((): Block[] => {
+    // Pattern: \b(\w+)\b(?=.*\b\1\b)
+    const wordCaptureGroup: Block = createSequenceGroup( 
+        [
+            createCharClass('\\w'),
+            createQuantifier('+')
+        ],
+        'capturing' // This will be group 1
+    );
+
+    const lookaheadContent: Block[] = [
+        createCharClass('.'), 
+        createQuantifier('*'), 
+        createAnchor('\\b'),   
+        createBackreference(1), // Backreference to the first capturing group (\1)
+        createAnchor('\\b')    
+    ];
+
+    return [
+        createAnchor('\\b'),
+        wordCaptureGroup,
+        createAnchor('\\b'),
+        createLookaround('positive-lookahead', lookaheadContent)
+    ];
+  }, []);
+
   const generateBlocksForMultipleSpaces = useCallback((): Block[] => {
     return [
         createCharClass('\\s'),
-        createQuantifier('{n,}', 2, null)
+        createQuantifier('{n,}', 2, null) // {2,} means 2 or more
     ];
   }, []);
   
@@ -789,7 +837,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
   const handleNext = () => {
     if (!currentStepConfig) return;
-    setReplacementString(null); // Reset replacement string when moving to next step
+    setReplacementString(null); 
 
     if (currentStepId === 'final_preview') {
         if (generatedBlocks.length > 0) {
@@ -822,7 +870,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                 else if (formData.standardFormatChoice === 'phone') setGeneratedBlocks(generateBlocksForPhone());
                 else if (formData.standardFormatChoice === 'ip') {
                     if (formData.ip_type === 'ipv4') setGeneratedBlocks(generateBlocksForIPv4());
-                    else if (formData.ip_type === 'ipv6') setGeneratedBlocks(generateBlocksForIPv6());
+                    // else if (formData.ip_type === 'ipv6') setGeneratedBlocks(generateBlocksForIPv6()); // IPv6 still disabled in options
                     else setGeneratedBlocks([]);
                 } else if (formData.standardFormatChoice === 'password') setGeneratedBlocks(generateBlocksForPassword());
                 else setGeneratedBlocks([]); 
@@ -836,6 +884,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
             else if (formData.extractionChoice === 'numbers') setGeneratedBlocks(generateBlocksForExtractNumbers());
             else if (formData.extractionChoice === 'quotedText') setGeneratedBlocks(generateBlocksForQuotedText());
             else if (formData.extractionChoice === 'specificWord') setGeneratedBlocks(generateBlocksForSpecificWord());
+            else if (formData.extractionChoice === 'duplicateWords') setGeneratedBlocks(generateBlocksForDuplicateWords());
             else setGeneratedBlocks([]);
         } else if (formData.mainCategory === 'replacement') {
             if (formData.replacementChoice === 'multipleSpaces') {
@@ -915,6 +964,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
             } else if (formData.mainCategory === 'extraction') {
                  if (formData.extractionChoice === 'quotedText') prevStep = 'extraction_quotedText_type';
                  else if (formData.extractionChoice === 'specificWord') prevStep = 'extraction_specificWord_input';
+                 else if (formData.extractionChoice === 'duplicateWords') prevStep = 'extraction_whatToExtract';
                  else prevStep = 'extraction_whatToExtract';
             } else if (formData.mainCategory === 'replacement') {
                 prevStep = 'replacement_whatToReplace';
@@ -957,11 +1007,11 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     }
     
     if (currentStepId === 'final_preview') {
-        if (generatedBlocks.length === 0 && formData.mainCategory !== 'replacement') { // For replacement, blocks might be empty if only replacement string is given by other means
+        if (generatedBlocks.length === 0 && formData.mainCategory !== 'replacement') { 
             return true;
         }
         if (formData.mainCategory === 'replacement' && generatedBlocks.length === 0 && !replacementString) {
-            return true; // No pattern and no replacement string hint
+            return true; 
         }
     }
     return false;
@@ -1119,6 +1169,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                                     }
                                     else if (b.type === BlockType.ALTERNATION) display += `: ( | )`;
                                     else if (b.type === BlockType.LOOKAROUND) display += `: (${(b.settings as LookaroundSettings).type})`;
+                                    else if (b.type === BlockType.BACKREFERENCE) display += `: \\${(b.settings as BackreferenceSettings).ref}`;
 
 
                                     const renderChildren = (children: Block[], level: number): string => {
@@ -1139,6 +1190,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                                             if((child.settings as GroupSettings).name) childDisplay += ` ?<${(child.settings as GroupSettings).name}>`;
                                         }
                                          else if (child.type === BlockType.LOOKAROUND) childDisplay += `: (${(child.settings as LookaroundSettings).type})`;
+                                         else if (child.type === BlockType.BACKREFERENCE) childDisplay += `: \\${(child.settings as BackreferenceSettings).ref}`;
 
 
                                         let nestedChildrenStr = "";
@@ -1199,3 +1251,4 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 };
 
 export default RegexWizardModal;
+
