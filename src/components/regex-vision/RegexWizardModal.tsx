@@ -1,7 +1,7 @@
 
 "use client";
 import React, { useState, useCallback } from 'react';
-import type { Block } from './types';
+import type { Block, QuantifierSettings } from './types'; // Added QuantifierSettings
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
 import { generateId } from './utils';
@@ -21,7 +21,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Lightbulb } from 'lucide-react';
 
@@ -33,15 +32,18 @@ interface RegexWizardModalProps {
 
 type WizardStepId = 
   | 'start'
+  | 'validation_type_choice' // New step
   | 'validation_basicPatterns_what'
   | 'validation_basicPatterns_length'
   | 'validation_basicPatterns_length_specify'
-  | 'validation_standardFormats_what' // Placeholder for future
+  | 'validation_standardFormats_what' // New step
+  | 'validation_standardFormats_url_protocol' // New step for URL
   // ... more steps for other scenarios
-  | 'final_preview'; // A step to show generated regex/blocks before adding
+  | 'final_preview';
 
 interface WizardFormData {
   mainCategory?: 'validation' | 'extraction' | 'replacement' | 'splitting';
+  validationTypeChoice?: 'basic' | 'standard'; // New form data
   
   // For Basic Patterns (Scenario 3.1)
   basicPattern_contains_digits?: boolean;
@@ -53,23 +55,37 @@ interface WizardFormData {
   basicPattern_minLength?: number;
   basicPattern_maxLength?: number;
 
-  // ... more form data fields for other scenarios
+  // For Standard Formats (Scenario 3.2)
+  standardFormatChoice?: 'email' | 'url' | 'phone' | 'ip' | 'password'; // New
+  url_requireProtocol?: 'yes' | 'no'; // New
 }
 
-// --- Configuration for Wizard Steps (based on spec 3.1) ---
+
 const wizardConfig = {
   start: {
     title: "Мастер Regex: Какова ваша основная цель?",
     options: [
-      { id: 'validation', label: "Валидация: проверить формат строки, соответствие шаблону (email, номер, дата и т.п.)." },
-      { id: 'extraction', label: "Извлечение/Поиск: найти или выделить данные из текста по шаблону." , disabled: true},
+      { id: 'validation', label: "Валидация: проверить формат строки, соответствие шаблону." },
+      { id: 'extraction', label: "Извлечение/Поиск: найти или выделить данные из текста." , disabled: true},
       { id: 'replacement', label: "Замена/Трансформация: заменить или форматировать части строки.", disabled: true },
-      { id: 'splitting', label: "Разделение: разбить текст по разделителю (CSV, пробелы, и т.д.).", disabled: true },
+      { id: 'splitting', label: "Разделение: разбить текст по разделителю.", disabled: true },
     ],
     next: (choice: string) => {
-      if (choice === 'validation') return 'validation_basicPatterns_what'; // Start with basic patterns for now
-      // Later, add a step for validation type choice: validation_standardFormats_what or validation_basicPatterns_what
-      return 'start'; // fallback
+      if (choice === 'validation') return 'validation_type_choice'; 
+      return 'start'; 
+    }
+  },
+  validation_type_choice: {
+    title: "Валидация: Какой тип проверки вам нужен?",
+    type: 'radio',
+    options: [
+      { id: 'basic', label: "Простые шаблоны (цифры, буквы, длина и т.д.)" },
+      { id: 'standard', label: "Стандартные форматы (Email, URL, дата и т.д.)" },
+    ],
+    next: (choice: string) => {
+      if (choice === 'basic') return 'validation_basicPatterns_what';
+      if (choice === 'standard') return 'validation_standardFormats_what';
+      return 'validation_type_choice';
     }
   },
   validation_basicPatterns_what: {
@@ -94,7 +110,7 @@ const wizardConfig = {
     ],
     next: (choice: string) => {
       if (choice === 'yes') return 'validation_basicPatterns_length_specify';
-      return 'final_preview'; // If no length restriction, go to preview/generate
+      return 'final_preview'; 
     }
   },
   validation_basicPatterns_length_specify: {
@@ -106,13 +122,36 @@ const wizardConfig = {
     ],
     nextStep: 'final_preview'
   },
+  validation_standardFormats_what: {
+    title: "Проверка стандартных форматов: Что вы хотите проверить?",
+    type: 'radio',
+    options: [
+      { id: 'email', label: "Email (электронная почта)" },
+      { id: 'url', label: "URL (веб-адрес)" },
+      { id: 'phone', label: "Телефон", disabled: true },
+      { id: 'ip', label: "IP-адрес (IPv4/IPv6)", disabled: true },
+      { id: 'password', label: "Пароль (проверка сложности)", disabled: true },
+    ],
+    next: (choice: string) => {
+      if (choice === 'email') return 'final_preview';
+      if (choice === 'url') return 'validation_standardFormats_url_protocol';
+      return 'validation_standardFormats_what'; // fallback
+    }
+  },
+  validation_standardFormats_url_protocol: {
+    title: "Проверка URL: Требуется протокол http(s)?",
+    type: 'radio',
+    options: [
+      { id: 'yes', label: "Да, http или https обязателен" },
+      { id: 'no', label: "Нет, протокол не обязателен" },
+    ],
+    nextStep: 'final_preview'
+  },
   final_preview: {
     title: "Предпросмотр и добавление",
-    type: 'preview', // Special type to show generated blocks/regex and 'Add' button
+    type: 'preview',
   }
-  // ... more step configurations
 };
-// --- End Wizard Configuration ---
 
 
 const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, onComplete }) => {
@@ -123,8 +162,23 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   const currentStepConfig = wizardConfig[currentStepId as keyof typeof wizardConfig];
 
   const handleRadioChange = (value: string) => {
-    setFormData(prev => ({ ...prev, [currentStepId]: value })); // Store selection for current step
+    // For mainCategory, validationTypeChoice, standardFormatChoice, url_requireProtocol
+    if (currentStepId === 'start') setFormData(prev => ({ ...prev, mainCategory: value as WizardFormData['mainCategory']}));
+    else if (currentStepId === 'validation_type_choice') setFormData(prev => ({ ...prev, validationTypeChoice: value as WizardFormData['validationTypeChoice']}));
+    else if (currentStepId === 'validation_standardFormats_what') setFormData(prev => ({...prev, standardFormatChoice: value as WizardFormData['standardFormatChoice']}));
+    else if (currentStepId === 'validation_standardFormats_url_protocol') setFormData(prev => ({...prev, url_requireProtocol: value as WizardFormData['url_requireProtocol']}));
+    else if (currentStepId === 'validation_basicPatterns_length') setFormData(prev => ({...prev, basicPattern_restrictLength: value as WizardFormData['basicPattern_restrictLength']}));
+    else setFormData(prev => ({ ...prev, [currentStepId]: value }));
   };
+
+  const getRadioValue = () => {
+    if (currentStepId === 'start') return formData.mainCategory;
+    if (currentStepId === 'validation_type_choice') return formData.validationTypeChoice;
+    if (currentStepId === 'validation_standardFormats_what') return formData.standardFormatChoice;
+    if (currentStepId === 'validation_standardFormats_url_protocol') return formData.url_requireProtocol;
+    if (currentStepId === 'validation_basicPatterns_length') return formData.basicPattern_restrictLength;
+    return formData[currentStepId as keyof WizardFormData] as string || '';
+  }
 
   const handleCheckboxChange = (checkboxId: string, checked: boolean) => {
     setFormData(prev => ({ ...prev, [checkboxId]: checked }));
@@ -142,81 +196,99 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     if (formData.basicPattern_contains_letters_AZ) patternChars += 'A-Z';
     if (formData.basicPattern_contains_space) patternChars += '\\s';
     if (formData.basicPattern_contains_otherChars) {
-      // Basic escaping for chars in custom set. More robust escaping might be needed.
       patternChars += formData.basicPattern_contains_otherChars.replace(/[\]\-\^]/g, '\\$&');
     }
 
-    if (!patternChars) return []; // Nothing selected to match
+    if (!patternChars) return [];
 
-    // Start Anchor
-    blocks.push({
-      id: generateId(),
-      type: BlockType.ANCHOR,
-      settings: { type: '^' },
-      children: [],
-      isExpanded: false
-    });
+    blocks.push({ id: generateId(), type: BlockType.ANCHOR, settings: { type: '^' }, children: [], isExpanded: false });
     
     const charClassBlock: Block = {
-      id: generateId(),
-      type: BlockType.CHARACTER_CLASS,
-      settings: { pattern: patternChars, negated: false },
-      children: [],
-      isExpanded: false
+      id: generateId(), type: BlockType.CHARACTER_CLASS,
+      settings: { pattern: patternChars, negated: false }, children: [], isExpanded: false
     };
 
-    let quantifierType: QuantifierSettings['type'] = '+'; // Default to one or more
+    let quantifierType: QuantifierSettings['type'] = '+';
     let min: number | undefined = undefined;
     let max: number | null | undefined = undefined;
 
-    if (formData.basicPattern_restrictLength === 'no') {
-      // Stays as '+' (one or more of the class)
-    } else if (formData.basicPattern_restrictLength === 'yes') {
+    if (formData.basicPattern_restrictLength === 'yes') {
       min = typeof formData.basicPattern_minLength === 'number' ? formData.basicPattern_minLength : 1;
       max = typeof formData.basicPattern_maxLength === 'number' ? formData.basicPattern_maxLength : null;
 
-      if (min !== undefined && max === null) {
-        quantifierType = '{n,}';
-      } else if (min !== undefined && max !== undefined && min === max) {
-        quantifierType = '{n}';
-      } else if (min !== undefined && max !== undefined) {
-        quantifierType = '{n,m}';
-      }
+      if (min !== undefined && max === null) quantifierType = '{n,}';
+      else if (min !== undefined && max !== undefined && min === max) quantifierType = '{n}';
+      else if (min !== undefined && max !== undefined) quantifierType = '{n,m}';
     }
     
-    // If there's a specific quantifier from length restrictions, group the char class and apply quantifier
-    if (formData.basicPattern_restrictLength === 'yes') {
-        blocks.push(charClassBlock); // Add char class first
-        blocks.push({ // Then the quantifier
-            id: generateId(),
-            type: BlockType.QUANTIFIER,
-            settings: { type: quantifierType, min, max, mode: 'greedy' },
-            children: [],
-            isExpanded: false
-        });
-    } else { // No specific length, just "one or more" of the class
-        blocks.push(charClassBlock);
-        blocks.push({
-            id: generateId(),
-            type: BlockType.QUANTIFIER,
-            settings: { type: '+', mode: 'greedy' }, // Default to one or more
-            children: [],
-            isExpanded: false
-        });
-    }
-
-
-    // End Anchor
+    blocks.push(charClassBlock);
     blocks.push({
-      id: generateId(),
-      type: BlockType.ANCHOR,
-      settings: { type: '$' },
-      children: [],
-      isExpanded: false
+      id: generateId(), type: BlockType.QUANTIFIER,
+      settings: { type: quantifierType, min, max, mode: 'greedy' } as QuantifierSettings,
+      children: [], isExpanded: false
     });
 
+    blocks.push({ id: generateId(), type: BlockType.ANCHOR, settings: { type: '$' }, children: [], isExpanded: false });
     return blocks;
   }, [formData]);
+
+  const generateBlocksForEmail = useCallback((): Block[] => {
+    // /^[\w._%+-]+@[\w.-]+\.[A-Za-z]{2,}$/
+    // Blocks: ANCHOR ^, CHARACTER_CLASS [\w._%+-], QUANTIFIER +, LITERAL @, CHARACTER_CLASS [\w.-], QUANTIFIER +, LITERAL \., CHARACTER_CLASS [A-Za-z], QUANTIFIER {min:2, max:null}, ANCHOR $
+    return [
+      { id: generateId(), type: BlockType.ANCHOR, settings: { type: '^' }, children: [], isExpanded: false },
+      { id: generateId(), type: BlockType.CHARACTER_CLASS, settings: { pattern: '\\w._%+-', negated: false }, children: [], isExpanded: false },
+      { id: generateId(), type: BlockType.QUANTIFIER, settings: { type: '+', mode: 'greedy' } as QuantifierSettings, children: [], isExpanded: false },
+      { id: generateId(), type: BlockType.LITERAL, settings: { text: '@' }, children: [], isExpanded: false },
+      { id: generateId(), type: BlockType.CHARACTER_CLASS, settings: { pattern: '\\w.-', negated: false }, children: [], isExpanded: false },
+      { id: generateId(), type: BlockType.QUANTIFIER, settings: { type: '+', mode: 'greedy' } as QuantifierSettings, children: [], isExpanded: false },
+      { id: generateId(), type: BlockType.LITERAL, settings: { text: '\\.' }, children: [], isExpanded: false }, // Escaped dot
+      { id: generateId(), type: BlockType.CHARACTER_CLASS, settings: { pattern: 'A-Za-z', negated: false }, children: [], isExpanded: false },
+      { id: generateId(), type: BlockType.QUANTIFIER, settings: { type: '{n,}', min: 2, max: null, mode: 'greedy'} as QuantifierSettings, children: [], isExpanded: false },
+      { id: generateId(), type: BlockType.ANCHOR, settings: { type: '$' }, children: [], isExpanded: false },
+    ];
+  }, []);
+
+  const generateBlocksForURL = useCallback((): Block[] => {
+    // /^https?:\/\/(www\.)?[A-Za-z0-9._%+-]+\.[A-Za-z]{2,6}\/?$/ (if protocol yes)
+    // /^(www\.)?[A-Za-z0-9._%+-]+\.[A-Za-z]{2,6}\/?$/ (if protocol no)
+    const blocks: Block[] = [];
+    blocks.push({ id: generateId(), type: BlockType.ANCHOR, settings: { type: '^' }, children: [], isExpanded: false });
+
+    if (formData.url_requireProtocol === 'yes') {
+      blocks.push({ id: generateId(), type: BlockType.LITERAL, settings: { text: 'http' }, children: [], isExpanded: false });
+      blocks.push({ id: generateId(), type: BlockType.LITERAL, settings: { text: 's' }, children: [], isExpanded: false });
+      blocks.push({ id: generateId(), type: BlockType.QUANTIFIER, settings: { type: '?', mode: 'greedy' } as QuantifierSettings, children: [], isExpanded: false });
+      blocks.push({ id: generateId(), type: BlockType.LITERAL, settings: { text: '://' }, children: [], isExpanded: false });
+    }
+
+    // (www\.)? -> GROUP (non-capturing) containing LITERAL 'www.' and QUANTIFIER '?'
+    // The structure for (?:www\.)? : GROUP(non-capturing, children: [LITERAL 'www.', QUANTIFIER '?'])
+    // Actually, the '?' should apply to the group itself if it's (www\.)?
+    // (?:www\.)? -> non-capturing group with "www." inside, and a quantifier '?' applied to the group.
+    // So, a group block followed by a quantifier block.
+     blocks.push({ 
+      id: generateId(), 
+      type: BlockType.GROUP, 
+      settings: { type: 'non-capturing'}, 
+      children: [
+        { id: generateId(), type: BlockType.LITERAL, settings: { text: 'www\\.' }, children: [], isExpanded: false } // Escaped dot
+      ], 
+      isExpanded: false 
+    });
+    blocks.push({ id: generateId(), type: BlockType.QUANTIFIER, settings: { type: '?', mode: 'greedy' } as QuantifierSettings, children: [], isExpanded: false });
+
+
+    blocks.push({ id: generateId(), type: BlockType.CHARACTER_CLASS, settings: { pattern: 'A-Za-z0-9._%+-', negated: false }, children: [], isExpanded: false });
+    blocks.push({ id: generateId(), type: BlockType.QUANTIFIER, settings: { type: '+', mode: 'greedy' } as QuantifierSettings, children: [], isExpanded: false });
+    blocks.push({ id: generateId(), type: BlockType.LITERAL, settings: { text: '\\.' }, children: [], isExpanded: false }); // Escaped dot
+    blocks.push({ id: generateId(), type: BlockType.CHARACTER_CLASS, settings: { pattern: 'A-Za-z', negated: false }, children: [], isExpanded: false });
+    blocks.push({ id: generateId(), type: BlockType.QUANTIFIER, settings: { type: '{n,m}', min: 2, max: 6, mode: 'greedy' } as QuantifierSettings, children: [], isExpanded: false });
+    blocks.push({ id: generateId(), type: BlockType.LITERAL, settings: { text: '/' }, children: [], isExpanded: false });
+    blocks.push({ id: generateId(), type: BlockType.QUANTIFIER, settings: { type: '?', mode: 'greedy' } as QuantifierSettings, children: [], isExpanded: false });
+    blocks.push({ id: generateId(), type: BlockType.ANCHOR, settings: { type: '$' }, children: [], isExpanded: false });
+    return blocks;
+  }, [formData.url_requireProtocol]);
 
 
   const handleNext = () => {
@@ -225,29 +297,63 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     if (currentStepId === 'final_preview') {
         if (generatedBlocks.length > 0) {
           onComplete(generatedBlocks);
-        } else {
-          // Maybe show a toast? Or disable "Add" if no blocks
         }
         return;
     }
     
     let nextStepTargetId: WizardStepId | undefined = undefined;
+    let choice: string | undefined = undefined;
 
     if ('next' in currentStepConfig && typeof currentStepConfig.next === 'function') {
-      const choice = formData[currentStepId as keyof WizardFormData] as string; // Assuming radio choice stored by stepId
-      nextStepTargetId = currentStepConfig.next(choice) as WizardStepId;
+      if (currentStepId === 'start') choice = formData.mainCategory;
+      else if (currentStepId === 'validation_type_choice') choice = formData.validationTypeChoice;
+      else if (currentStepId === 'validation_basicPatterns_length') choice = formData.basicPattern_restrictLength;
+      else if (currentStepId === 'validation_standardFormats_what') choice = formData.standardFormatChoice;
+      
+      if (choice) {
+        nextStepTargetId = currentStepConfig.next(choice) as WizardStepId;
+      } else {
+         // If no choice is made for a radio group, stay on the current step or handle as error
+        return; 
+      }
     } else if ('nextStep' in currentStepConfig) {
       nextStepTargetId = currentStepConfig.nextStep as WizardStepId;
     }
     
     if (nextStepTargetId === 'final_preview') {
-        // Determine which generator function to call based on path taken
-        // For now, only basicPattern
-        if(formData.mainCategory === 'validation' && wizardConfig[currentStepId as keyof typeof wizardConfig]?.title?.startsWith("Проверка простых шаблонов")){
-            const blocks = generateBlocksForBasicPattern();
-            setGeneratedBlocks(blocks);
+        if(formData.mainCategory === 'validation'){
+            if(formData.validationTypeChoice === 'basic'){
+                 const blocks = generateBlocksForBasicPattern();
+                 setGeneratedBlocks(blocks);
+            } else if (formData.validationTypeChoice === 'standard') {
+                if(formData.standardFormatChoice === 'email') {
+                    const blocks = generateBlocksForEmail();
+                    setGeneratedBlocks(blocks);
+                } else if (formData.standardFormatChoice === 'url') {
+                    // Make sure url_requireProtocol is set before generating
+                    if (formData.url_requireProtocol) {
+                       const blocks = generateBlocksForURL();
+                       setGeneratedBlocks(blocks);
+                    } else {
+                        // This case implies that the next step (validation_standardFormats_url_protocol)
+                        // was supposed to set url_requireProtocol, but we landed in final_preview too soon.
+                        // This should not happen if flow is correct.
+                        // For now, if url_requireProtocol is not set, we'll generate URL without protocol as a fallback
+                        // or we ensure that the flow requires that step.
+                        // The current config correctly leads to validation_standardFormats_url_protocol first.
+                        // So, this 'else' block for generating URL in final_preview directly from standardFormatChoice === 'url'
+                        // and an undefined url_requireProtocol is mostly defensive / shouldn't be hit.
+                         const blocks = generateBlocksForURL(); // Will use undefined url_requireProtocol which might be handled by generateBlocksForURL
+                         setGeneratedBlocks(blocks);
+                    }
+                } else {
+                     setGeneratedBlocks([]); // Placeholder for other standard formats
+                }
+            } else {
+                 setGeneratedBlocks([]);
+            }
         } else {
-            setGeneratedBlocks([]); // Clear if no generator for this path yet
+            setGeneratedBlocks([]); 
         }
     }
 
@@ -255,26 +361,45 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     if (nextStepTargetId) {
       setCurrentStepId(nextStepTargetId);
     } else {
-      // This case should ideally not happen if wizard is configured correctly
       console.warn("Wizard: No next step defined for", currentStepId);
       onClose(); 
     }
   };
 
   const handleBack = () => {
-    // Basic back logic - needs to be smarter for complex paths
-    // For now, a simple stack or hardcoded paths might work for linear flows
-    if (currentStepId === 'validation_basicPatterns_length_specify') setCurrentStepId('validation_basicPatterns_length');
-    else if (currentStepId === 'validation_basicPatterns_length') setCurrentStepId('validation_basicPatterns_what');
-    else if (currentStepId === 'validation_basicPatterns_what') setCurrentStepId('start');
-    else if (currentStepId === 'final_preview') {
-        // Determine previous step before final_preview based on formData or path
-        // This is a simplification, real back logic would need to trace the path
-        if(formData.basicPattern_restrictLength === 'yes') setCurrentStepId('validation_basicPatterns_length_specify');
-        else setCurrentStepId('validation_basicPatterns_length');
+    let prevStep: WizardStepId | null = null;
+    // This logic needs to be robust for all paths.
+    switch (currentStepId) {
+        case 'validation_type_choice': prevStep = 'start'; break;
+        case 'validation_basicPatterns_what': prevStep = 'validation_type_choice'; break;
+        case 'validation_basicPatterns_length': prevStep = 'validation_basicPatterns_what'; break;
+        case 'validation_basicPatterns_length_specify': prevStep = 'validation_basicPatterns_length'; break;
+        case 'validation_standardFormats_what': prevStep = 'validation_type_choice'; break;
+        case 'validation_standardFormats_url_protocol': prevStep = 'validation_standardFormats_what'; break;
+        case 'final_preview':
+            if (formData.mainCategory === 'validation') {
+                if (formData.validationTypeChoice === 'basic') {
+                    prevStep = formData.basicPattern_restrictLength === 'yes' ? 'validation_basicPatterns_length_specify' : 'validation_basicPatterns_length';
+                } else if (formData.validationTypeChoice === 'standard') {
+                    if (formData.standardFormatChoice === 'email') prevStep = 'validation_standardFormats_what';
+                    else if (formData.standardFormatChoice === 'url') prevStep = 'validation_standardFormats_url_protocol';
+                    else prevStep = 'validation_standardFormats_what'; // fallback
+                } else {
+                    prevStep = 'validation_type_choice'; // fallback
+                }
+            } else {
+                prevStep = 'start'; // General fallback
+            }
+            break;
+        default: prevStep = 'start';
     }
-    else setCurrentStepId('start'); // Default back to start
-    setGeneratedBlocks([]); // Clear preview on back
+    
+    if (prevStep) {
+        setCurrentStepId(prevStep);
+    } else {
+        setCurrentStepId('start'); // Default back to start if logic fails
+    }
+    setGeneratedBlocks([]); 
   };
 
   const resetWizard = () => {
@@ -285,6 +410,24 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   }
 
   if (!isOpen || !currentStepConfig) return null;
+
+  const isNextDisabled = () => {
+    if (currentStepConfig.type === 'radio' && !getRadioValue()) {
+      return true;
+    }
+    if (currentStepId === 'final_preview' && generatedBlocks.length === 0) {
+        // Disable if on final_preview and no blocks could be generated (e.g. bad path or incomplete form for current preview logic)
+        // This can happen if a path to final_preview doesn't have a corresponding block generator implemented yet.
+        if(formData.mainCategory === 'validation' && formData.validationTypeChoice === 'standard'){
+            if(formData.standardFormatChoice === 'phone' || formData.standardFormatChoice === 'ip' || formData.standardFormatChoice === 'password'){
+                return true; // These are not implemented yet
+            }
+        }
+    }
+    // Add other conditions for disabling next if needed
+    return false;
+  }
+
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) resetWizard(); }}>
@@ -300,13 +443,13 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
           <div className="space-y-6">
             {currentStepConfig.type === 'radio' && currentStepConfig.options && (
               <RadioGroup 
-                value={formData[currentStepId as keyof WizardFormData] as string || ''} 
+                value={getRadioValue()} 
                 onValueChange={handleRadioChange}
               >
                 {currentStepConfig.options.map(opt => (
-                  <div key={opt.id} className="flex items-center space-x-2 p-2 border rounded-md hover:bg-muted/50 has-[:checked]:bg-accent/20 has-[:checked]:border-accent">
+                  <div key={opt.id} className="flex items-center space-x-2 p-2 border rounded-md hover:bg-muted/50 has-[:checked]:bg-accent/20 has-[:checked]:border-accent data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed" data-disabled={opt.disabled}>
                     <RadioGroupItem value={opt.id} id={`${currentStepId}-${opt.id}`} disabled={opt.disabled}/>
-                    <Label htmlFor={`${currentStepId}-${opt.id}`} className="flex-1 cursor-pointer py-1 text-sm">
+                    <Label htmlFor={`${currentStepId}-${opt.id}`} className={`flex-1 py-1 text-sm ${opt.disabled ? 'cursor-not-allowed text-muted-foreground' : 'cursor-pointer'}`}>
                       {opt.label}
                       {opt.disabled && <span className="text-xs text-muted-foreground ml-2">(скоро)</span>}
                     </Label>
@@ -336,7 +479,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                       checked={formData[currentStepConfig.otherCharsInput.id as keyof WizardFormData] !== undefined}
                       onCheckedChange={(checked) => {
                         if (checked) {
-                            handleInputChange(currentStepConfig.otherCharsInput!.id, ''); // Initialize with empty string
+                            handleInputChange(currentStepConfig.otherCharsInput!.id, ''); 
                         } else {
                             const newFormData = {...formData};
                             delete newFormData[currentStepConfig.otherCharsInput!.id as keyof WizardFormData];
@@ -390,26 +533,34 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                                 {generatedBlocks.map(b => {
                                     let display = `${BLOCK_CONFIGS[b.type]?.name || b.type}`;
                                     if (b.type === BlockType.LITERAL) display += `: "${(b.settings as any).text}"`;
-                                    if (b.type === BlockType.CHARACTER_CLASS) display += `: [${(b.settings as any).negated ? '^' : ''}${(b.settings as any).pattern}]`;
-                                    if (b.type === BlockType.QUANTIFIER) display += `: ${(b.settings as any).type} (min: ${(b.settings as any).min}, max: ${(b.settings as any).max}, mode: ${(b.settings as any).mode})`;
-                                    if (b.type === BlockType.ANCHOR) display += `: ${(b.settings as any).type}`;
+                                    else if (b.type === BlockType.CHARACTER_CLASS) display += `: [${(b.settings as any).negated ? '^' : ''}${(b.settings as any).pattern}]`;
+                                    else if (b.type === BlockType.QUANTIFIER) {
+                                        const qs = b.settings as QuantifierSettings;
+                                        display += `: ${qs.type}`;
+                                        if (qs.min !== undefined) display += ` (min: ${qs.min}`;
+                                        if (qs.max !== undefined && qs.max !== null) display += `, max: ${qs.max}`;
+                                        if (qs.min !== undefined) display += `)`;
+                                        display += `, ${qs.mode}`;
+                                    }
+                                    else if (b.type === BlockType.ANCHOR) display += `: ${(b.settings as any).type}`;
+                                    else if (b.type === BlockType.GROUP) display += `: (${(b.settings as any).type})`;
+
                                     return <div key={b.id}>{display}</div>;
                                 })}
                             </pre>
                         </Card>
                     ) : (
-                        <p className="text-sm text-muted-foreground">Нет блоков для отображения. Возможно, не все параметры были выбраны.</p>
+                        <p className="text-sm text-muted-foreground">Нет блоков для отображения. Возможно, путь Мастера еще не полностью реализован или не все параметры были выбраны.</p>
                     )}
                     <Alert>
                         <Lightbulb className="h-4 w-4" />
                         <AlertTitle>Подсказка</AlertTitle>
                         <AlertDescription>
-                            Это базовый набор блоков. После добавления вы сможете их детальнее настроить, сгруппировать или добавить другие элементы.
+                            Это базовый набор блоков. После добавления вы сможете их детальнее настроить, сгруппировать или добавить другие элементы в основном редакторе.
                         </AlertDescription>
                     </Alert>
                 </div>
             )}
-
           </div>
         </ScrollArea>
 
@@ -417,19 +568,16 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
             {currentStepId !== 'start' && (
                  <Button variant="outline" onClick={handleBack}>Назад</Button>
             )}
-            <div className="flex-grow"></div> {/* Spacer */}
-          <Button 
-            onClick={handleNext} 
-            disabled={
-                (currentStepConfig.type === 'radio' && !formData[currentStepId as keyof WizardFormData]) ||
-                (currentStepId === 'final_preview' && generatedBlocks.length === 0)
-            }
-          >
-            {currentStepId === 'final_preview' ? "Добавить в выражение" : "Далее"}
-          </Button>
-          <DialogClose asChild>
-            <Button variant="ghost" onClick={resetWizard}>Отмена</Button>
-          </DialogClose>
+            <div className="flex-grow"></div>
+            <Button 
+                onClick={handleNext} 
+                disabled={isNextDisabled()}
+            >
+                {currentStepId === 'final_preview' ? "Добавить в выражение" : "Далее"}
+            </Button>
+            <DialogClose asChild>
+                <Button variant="ghost" onClick={resetWizard}>Отмена</Button>
+            </DialogClose>
         </DialogFooter>
       </DialogContent>
     </Dialog>
