@@ -43,7 +43,7 @@ const standardFormatOptions: StandardFormatOption[] = [
     description: 'Проверка корректности URL-адреса.',
     icon: Globe,
     path: '/wizard/validate/standard-formats/url',
-    disabled: false, // Enabled URL validation
+    disabled: false,
   },
   {
     id: 'phone',
@@ -59,7 +59,7 @@ const standardFormatOptions: StandardFormatOption[] = [
     description: 'Проверка адресов IPv4 или IPv6.',
     icon: Route,
     path: '/wizard/validate/standard-formats/ip',
-    disabled: true,
+    disabled: false, // Enabled IP validation
   },
   {
     id: 'password',
@@ -123,4 +123,3 @@ export default function StandardFormatsPage() {
     </div>
   );
 }
-

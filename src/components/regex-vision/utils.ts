@@ -42,100 +42,94 @@ export const createBackreference = (ref: string | number): Block => ({
 });
 
 export const generateBlocksForEmail = (forExtraction: boolean = false): Block[] => {
+    // More precise character classes for email parts
+    const localPartChars = '[a-zA-Z0-9_!#$%&\'*+/=?`{|}~^.-]+'; // Common local part characters
+    const domainChars = '[a-zA-Z0-9.-]+'; // Domain characters
+    const tldChars = '[a-zA-Z]{2,}'; // TLD
+
     const emailCoreBlocks: Block[] = [
-      createCharClass('[a-zA-Z0-9_!#$%&\'*+/=?`{|}~^.-]+', false), 
-      createLiteral('@', false),
-      createCharClass('[a-zA-Z0-9.-]+', false), 
-      createLiteral('\\.', false),
-      createCharClass('[a-zA-Z]{2,}', false), 
+      createCharClass(localPartChars, false),
+      createLiteral('@', false), // No need to escape @ if it's a literal block
+      createCharClass(domainChars, false),
+      createLiteral('\\.', false), // Dot needs escaping if it's a literal block content for regex string
+      createCharClass(tldChars, false),
     ];
     if(forExtraction) {
+        // For extraction, we typically want to capture the email, so a capturing group around core blocks
         return [createAnchor('\\b'), createSequenceGroup(emailCoreBlocks, 'capturing'), createAnchor('\\b')];
     }
+    // For validation, ensure the whole string matches
     return [createAnchor('^'), ...emailCoreBlocks, createAnchor('$')];
   };
 
 export const generateBlocksForURL = (forExtraction: boolean = false, requireProtocolForValidation: boolean = true): Block[] => {
     const blocks: Block[] = [];
-    
+
+    // Protocol: (?:https?://)? or https?://
     const httpPart = createLiteral('http', false);
     const sPart = createLiteral('s', false);
-    const sQuantifier = createQuantifier('?');
+    const sQuantifier = createQuantifier('?'); // Makes 's' optional for http vs https
     const colonSlashSlashPart = createLiteral('://', false);
-    
     const protocolSequence = createSequenceGroup([httpPart, sPart, sQuantifier, colonSlashSlashPart], 'non-capturing');
-    
-    if (!forExtraction && requireProtocolForValidation) {
-        blocks.push(protocolSequence);
-    } else {
-        // For extraction, or if protocol is not required for validation, make it optional
+
+    if (forExtraction || !requireProtocolForValidation) {
+        // For extraction, or if protocol is not required, make the whole protocol sequence optional
         const optionalProtocolGroup = createSequenceGroup([protocolSequence], 'non-capturing');
-        // This structure is a bit tricky. The quantifier should apply to the protocol sequence itself.
-        // A simple way is to make the group itself optional if it only contains the protocol.
-        // Or, more correctly, wrap the sequence in another group and make *that* optional.
-        // For now, we'll make the entire group optional if it's not required.
-        // A more robust solution would be a quantifier that applies to a group block.
-        // For simplicity with current block structure, let's ensure the sequence is wrapped correctly
-        // and then apply a quantifier to that wrapped group if needed.
-        // This might require adjustments to how quantifiers are applied to groups in generateRegexString or block structure.
-        // For now, let's assume the intent is ( (?:...protocol...) ? )
-        // To achieve this with current utils, we can add a quantifier after the group
-        // if it's meant to be optional.
-        blocks.push(optionalProtocolGroup); 
-        if (forExtraction || !requireProtocolForValidation) {
-             // This attempts to make the protocol group optional.
-             // A proper way would be to have a parent group and quantify that.
-             // For now, we'll rely on the quantifier being placed correctly or enhance createSequenceGroup.
-             // Let's wrap it in an outer optional group for clarity with current tools.
-             const outerOptionalProtocolGroup = createSequenceGroup([optionalProtocolGroup], 'non-capturing');
-             // Add quantifier to make the outer group optional
-             const optionalQuantifier = createQuantifier('?');
-             // This is conceptually what we want: ( (?: ...protocol... ) )?
-             // The structure needs to reflect this to be generated correctly.
-             // A direct way is to ensure the quantifier is applied *after* the protocol group.
-             // So, if optional: push protocolSequence, then push createQuantifier('?');
-             // Re-thinking this part:
-             if (blocks.length > 0 && blocks[blocks.length -1].type === BlockType.GROUP) {
-                // If the last block is the protocol group, make it optional
-                // This is a simplification: (protocol_group)?
-                // The more general (?:https?://)?
-                // This block structure assumes the quantifier applies to the immediately preceding element.
-                blocks.push(createQuantifier('?'));
-             }
-        }
+        blocks.push(optionalProtocolGroup);
+        blocks.push(createQuantifier('?')); // Make the (?:https?://) group optional
+    } else {
+        blocks.push(protocolSequence); // Protocol is required for validation
     }
 
-    const wwwPart = createLiteral('www\\.', false);
+    // Optional www: (?:www\.)?
+    const wwwPart = createLiteral('www\\.', false); // www. (dot escaped)
     const optionalWwwGroup = createSequenceGroup([wwwPart], 'non-capturing');
     blocks.push(optionalWwwGroup);
     blocks.push(createQuantifier('?')); // Make www. optional
 
-    // Domain name: alphanumeric, dot, hyphen. At least one char.
-    blocks.push(createCharClass('[a-zA-Z0-9-]+', false)); 
-    blocks.push(createQuantifier('+')); // Ensure domain part exists
+    // Domain name: [a-zA-Z0-9-]+ (one or more alphanumeric or hyphen)
+    // Followed by TLD: \.[a-zA-Z]{2,}
+    // Combined to avoid issues with just hyphen or multiple hyphens:
+    // [a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?  (for one part of domain)
+    // For simplicity here:
+    blocks.push(createCharClass('[a-zA-Z0-9-]+', false)); // Domain characters
+    blocks.push(createQuantifier('+')); // At least one domain character part
     
-    // TLD: . followed by 2 or more letters.
-    blocks.push(createLiteral('\\.', false)); 
-    blocks.push(createCharClass('[a-zA-Z]{2,}', false));
+    // TLD: (\.[a-zA-Z]{2,})+
+    // More complex TLDs can exist (e.g. .co.uk). For simplicity, we'll use a basic TLD pattern.
+    // This should be (?: \. [a-zA-Z]{2,})+ to handle subdomains correctly as well as TLDs.
+    // For a simple wizard, \.[a-zA-Z]{2,} is often a starting point.
+    // Let's go with a slightly more robust domain and TLD structure
+    const domainPartWithSubdomains = createSequenceGroup([
+        createCharClass('[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?', false), // subdomain or domain name part
+        createLiteral('\\.', false), // dot
+        createCharClass('[a-zA-Z]{2,6}', false) // TLD (common lengths)
+    ], 'non-capturing');
+    
+    // Instead of the simple domain + TLD above, let's use a more common pattern for domain name
+    // (?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,6}
+    // This is a single complex literal block for simplicity in the wizard's block structure.
+    blocks.push(createLiteral('(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,6}', false));
 
-    // Optional path: ( / (alphanumeric, dot, hyphen, underscore, percent) * ) *
-    const pathChars = createCharClass('[a-zA-Z0-9._%+/-]*', false);
+
+    // Optional path: (?:/[a-zA-Z0-9._%+-]*)*
+    const pathChars = createCharClass('[a-zA-Z0-9._%+-]*', false); // Allowed path characters
     const pathSegment = createSequenceGroup([createLiteral('/', false), pathChars], 'non-capturing');
     const optionalPath = createSequenceGroup([pathSegment], 'non-capturing');
     blocks.push(optionalPath);
-    blocks.push(createQuantifier('*')); // Path is optional and can repeat
+    blocks.push(createQuantifier('*')); // Path is optional and can have multiple segments
 
-    // Optional query string: ( ? (any char except newline) * )?
-    const queryStart = createLiteral('\\?', false);
-    const queryChars = createCharClass('[^\\s?#]*', false); // Any char except whitespace, ?, #
+    // Optional query string: (?: \? [^#\s]* )? (any char except # and whitespace)
+    const queryStart = createLiteral('\\?', false); // Escaped ?
+    const queryChars = createCharClass('[^#\\s]*', false); // No # or whitespace
     const querySegment = createSequenceGroup([queryStart, queryChars], 'non-capturing');
     const optionalQuery = createSequenceGroup([querySegment], 'non-capturing');
     blocks.push(optionalQuery);
     blocks.push(createQuantifier('?'));
 
-    // Optional fragment: ( # (any char except newline) * )?
+    // Optional fragment: (?: # [^\s]* )? (any char except whitespace)
     const fragmentStart = createLiteral('#', false);
-    const fragmentChars = createCharClass('[^\\s#]*', false); // Any char except whitespace, #
+    const fragmentChars = createCharClass('[^\\s]*', false); // No whitespace
     const fragmentSegment = createSequenceGroup([fragmentStart, fragmentChars], 'non-capturing');
     const optionalFragment = createSequenceGroup([fragmentSegment], 'non-capturing');
     blocks.push(optionalFragment);
@@ -145,7 +139,20 @@ export const generateBlocksForURL = (forExtraction: boolean = false, requireProt
         return [createAnchor('\\b'), createSequenceGroup(blocks, 'capturing'), createAnchor('\\b')];
     }
     return [createAnchor('^'), ...blocks, createAnchor('$')];
-  };
+};
+
+export const generateBlocksForIPv4 = (): Block[] => {
+  const octet = "(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)"; 
+  const ipv4Regex = `${octet}\\.${octet}\\.${octet}\\.${octet}`;
+  return [createAnchor('^'), createLiteral(ipv4Regex, false), createAnchor('$')];
+};
+
+export const generateBlocksForIPv6 = (): Block[] => {
+  // This is a common, complex regex for IPv6.
+  // It handles various forms including compressed notation and IPv4-mapped addresses.
+  const ipv6Regex = "(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))";
+  return [createAnchor('^'), createLiteral(ipv6Regex, false), createAnchor('$')];
+};
 
 
 export const generateRegexString = (blocks: Block[]): string => {
