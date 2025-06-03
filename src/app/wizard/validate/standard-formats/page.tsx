@@ -43,7 +43,7 @@ const standardFormatOptions: StandardFormatOption[] = [
     description: 'Проверка корректности URL-адреса.',
     icon: Globe,
     path: '/wizard/validate/standard-formats/url',
-    disabled: true,
+    disabled: false, // Enabled URL validation
   },
   {
     id: 'phone',
@@ -123,3 +123,4 @@ export default function StandardFormatsPage() {
     </div>
   );
 }
+

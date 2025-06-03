@@ -1,6 +1,7 @@
 
 
 
+
 "use client";
 import React, { useState, useCallback, useEffect } from 'react';
 import type { Block, QuantifierSettings, CharacterClassSettings, GroupSettings, LookaroundSettings, LiteralSettings, AnchorSettings, BackreferenceSettings } from './types';
@@ -25,9 +26,9 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card } from "@/components/ui/card"; 
-import { Lightbulb, CheckSquare, TextCursorInput, Replace, Eraser, Split, Wand2, Phone, AtSign, Globe, KeyRound, Shuffle, MessageSquareQuote, CaseSensitive, SearchCheck, Route, Workflow, FileText, CalendarClock } from 'lucide-react';
+import { Lightbulb, CheckSquare, TextCursorInput, Replace, Eraser, Split, Wand2, Phone, AtSign, Globe, KeyRound, Shuffle, MessageSquareQuote, CaseSensitive, SearchCheck, Route, Workflow, FileText, CalendarClock, CheckBadge } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { generateId, createAnchor, createLiteral, createCharClass, createQuantifier, createSequenceGroup, createAlternation, createLookaround, createBackreference, escapeRegexChars, generateBlocksForEmail } from './utils';
+import { generateId, createAnchor, createLiteral, createCharClass, createQuantifier, createSequenceGroup, createAlternation, createLookaround, createBackreference, escapeRegexChars, generateBlocksForEmail, generateBlocksForURL } from './utils';
 
 
 interface RegexWizardModalProps {
@@ -44,7 +45,7 @@ type WizardStepId =
   | 'validation_basicPatterns_length'
   | 'validation_basicPatterns_length_specify'
   | 'validation_standardFormats_what' 
-  | 'validation_standardFormats_url_protocol'
+  | 'validation_standardFormats_url_protocol' // Step to ask if protocol is required for URL
   | 'validation_phone_countryCode' 
   | 'validation_phone_separators' 
   | 'validation_ip_type' 
@@ -78,7 +79,7 @@ interface WizardFormData {
   basicPattern_maxLength?: number;
 
   standardFormatChoice?: 'email' | 'url' | 'phone' | 'ip' | 'password';
-  url_requireProtocol?: 'yes' | 'no';
+  url_requireProtocol?: 'yes' | 'no'; // For URL, if http(s) is required
   phone_hasCountryCode?: 'yes' | 'no'; 
   phone_allowSeparators?: 'yes' | 'no'; 
   ip_type?: 'ipv4' | 'ipv6'; 
@@ -193,9 +194,9 @@ const wizardConfig = {
     options: [
       { id: 'email', label: "Email (электронная почта)", icon: AtSign },
       { id: 'url', label: "URL (веб-адрес)", icon: Globe },
-      { id: 'phone', label: "Телефон", icon: Phone },
-      { id: 'ip', label: "IP-адрес (IPv4/IPv6)", icon: Route },
-      { id: 'password', label: "Пароль (проверка сложности)", icon: KeyRound },
+      { id: 'phone', label: "Телефон", icon: Phone, disabled: true }, // Re-disable for now
+      { id: 'ip', label: "IP-адрес (IPv4/IPv6)", icon: Route, disabled: false }, // IP was re-enabled
+      { id: 'password', label: "Пароль (проверка сложности)", icon: KeyRound, disabled: true }, // Re-disable for now
     ],
     next: (choice: string) => {
       if (choice === 'email') return 'final_preview';
@@ -438,6 +439,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         const currentReplacementChoice = newFormData.replacementChoice;
         const currentSplittingChoice = newFormData.splittingChoice;
         const currentDateTimeFormat = newFormData.dateFormat;
+        const currentIpType = newFormData.ip_type;
 
 
         Object.keys(newFormData).forEach(keyStr => {
@@ -454,6 +456,8 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         if (keysToKeep.includes('replacementChoice') && currentReplacementChoice) newFormData.replacementChoice = currentReplacementChoice;
         if (keysToKeep.includes('splittingChoice') && currentSplittingChoice) newFormData.splittingChoice = currentSplittingChoice;
         if (keysToKeep.includes('dateFormat') && currentDateTimeFormat) newFormData.dateFormat = currentDateTimeFormat;
+        if (keysToKeep.includes('ip_type') && currentIpType) newFormData.ip_type = currentIpType;
+
 
     };
     
@@ -478,6 +482,9 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     } else if (currentStepId === 'splitting_delimiter_choice') {
         resetSubsequentFields(['mainCategory']);
         newFormData.splittingChoice = value as WizardFormData['splittingChoice'];
+    } else if (currentStepId === 'validation_ip_type') {
+        resetSubsequentFields(['mainCategory', 'validationTypeChoice', 'standardFormatChoice']);
+        newFormData.ip_type = value as WizardFormData['ip_type'];
     }
      else {
        (newFormData as any)[currentStepId as keyof WizardFormData] = value as any;
@@ -490,7 +497,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     else if (currentStepId === 'extraction_quotedText_type') newFormData.quoteType = value as WizardFormData['quoteType'];
     else if (currentStepId === 'validation_phone_countryCode') newFormData.phone_hasCountryCode = value as WizardFormData['phone_hasCountryCode'];
     else if (currentStepId === 'validation_phone_separators') newFormData.phone_allowSeparators = value as WizardFormData['phone_allowSeparators'];
-    else if (currentStepId === 'validation_ip_type') newFormData.ip_type = value as WizardFormData['ip_type'];
+    // else if (currentStepId === 'validation_ip_type') newFormData.ip_type = value as WizardFormData['ip_type']; // Already handled above
     
     setFormData(newFormData as WizardFormData);
   };
@@ -573,60 +580,6 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   }, [formData]);
 
 
-
-  const generateBlocksForURL = useCallback((forExtraction: boolean = false): Block[] => {
-    const blocks: Block[] = [];
-    const protocolIsRequiredForValidation = !forExtraction && formData.url_requireProtocol === 'yes';
-   
-    const httpPart = createLiteral('http', false);
-    const sPart = createLiteral('s', false);
-    const sQuantifier = createQuantifier('?');
-    const colonSlashSlashPart = createLiteral('://', false);
-    
-    const protocolSequence = createSequenceGroup([httpPart, sPart, sQuantifier, colonSlashSlashPart], 'non-capturing');
-    
-    if (protocolIsRequiredForValidation) {
-        blocks.push(protocolSequence);
-    } else { 
-        const optionalProtocolGroup = createSequenceGroup([protocolSequence], 'non-capturing');
-        if(optionalProtocolGroup.children && optionalProtocolGroup.children.length > 0 && optionalProtocolGroup.children[0].type === BlockType.GROUP){
-             (optionalProtocolGroup.children[0] as Block).children!.push(createQuantifier('?'));
-        } else {
-             optionalProtocolGroup.children.push(createQuantifier('?'));
-        }
-        blocks.push(optionalProtocolGroup);
-    }
-
-
-    const wwwPart = createLiteral('www\\.', false);
-    const optionalWwwGroup = createSequenceGroup([wwwPart], 'non-capturing');
-    (optionalWwwGroup.children[0] as Block).children!.push(createQuantifier('?'));
-    blocks.push(optionalWwwGroup);
-    
-    blocks.push(createCharClass('[A-Za-z0-9._%+-]+', false)); 
-    blocks.push(createLiteral('\\.', false)); 
-    blocks.push(createCharClass('[A-Za-z]{2,6}', false));  
-
-    const pathSegmentParts: Block[] = [
-        createLiteral('/', false),
-        createCharClass('[\\w.-]*', false)
-    ];
-    const pathSegmentGroup = createSequenceGroup(pathSegmentParts, 'non-capturing');
-    const pathQuantifier = createQuantifier('*');
-    
-    const fullPathGroup = createSequenceGroup([pathSegmentGroup, pathQuantifier], 'non-capturing');
-    blocks.push(fullPathGroup);
-    
-    const finalSlash = createLiteral('/', false);
-    const optionalFinalSlashGroup = createSequenceGroup([finalSlash], 'non-capturing');
-    (optionalFinalSlashGroup.children[0] as Block).children!.push(createQuantifier('?'));
-    blocks.push(optionalFinalSlashGroup);
-    
-    if (forExtraction) {
-        return [createAnchor('\\b'), createSequenceGroup(blocks, 'capturing'), createAnchor('\\b')];
-    }
-    return [createAnchor('^'), ...blocks, createAnchor('$')];
-  }, [formData.url_requireProtocol]);
 
   const generateBlocksForPhone = useCallback((): Block[] => {
     const blocks: Block[] = [createAnchor('^')];
@@ -785,11 +738,11 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
   const generateBlocksForExtractEmails = useCallback((): Block[] => {
       return generateBlocksForEmail(true);
-  }, [generateBlocksForEmail]);
+  }, []); // Removed dependency on generateBlocksForEmail
 
   const generateBlocksForExtractURLs = useCallback((): Block[] => {
-      return generateBlocksForURL(true);
-  }, [generateBlocksForURL, formData.url_requireProtocol]);
+      return generateBlocksForURL(true, false); // For extraction, protocol requirement is less strict
+  }, []); // Removed dependency on generateBlocksForURL
 
   const generateBlocksForExtractNumbers = useCallback((): Block[] => {
     return [
@@ -947,7 +900,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                  blocksToSet = generateBlocksForBasicPattern();
             } else if (formData.validationTypeChoice === 'standard') {
                 if(formData.standardFormatChoice === 'email') blocksToSet = generateBlocksForEmail(false);
-                else if (formData.standardFormatChoice === 'url') blocksToSet = generateBlocksForURL(false);
+                else if (formData.standardFormatChoice === 'url') blocksToSet = generateBlocksForURL(false, formData.url_requireProtocol === 'yes');
                 else if (formData.standardFormatChoice === 'phone') blocksToSet = generateBlocksForPhone();
                 else if (formData.standardFormatChoice === 'ip') {
                     if (formData.ip_type === 'ipv4') blocksToSet = generateBlocksForIPv4();
@@ -1449,5 +1402,6 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 };
 
 export default RegexWizardModal;
+
 
 
