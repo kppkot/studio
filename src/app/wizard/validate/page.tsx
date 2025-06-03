@@ -3,7 +3,7 @@
 import React from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/navigation';
-import { FileText, CheckBadge, CalendarClock, ChevronLeft } from 'lucide-react';
+import { FileText, BadgeCheck, CalendarClock, ChevronLeft } from 'lucide-react'; // Changed CheckBadge to BadgeCheck
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import '../wizard.css'; // Reuse common styles
 import { Button } from '@/components/ui/button';
@@ -40,7 +40,7 @@ const validationOptions: ValidationOption[] = [
     id: 'standard',
     label: 'Стандартные форматы',
     description: 'Email, URL, Телефон, IP, Пароль.',
-    icon: CheckBadge,
+    icon: BadgeCheck, // Changed CheckBadge to BadgeCheck
     path: '/wizard/validate/standard-formats', 
   },
   {
