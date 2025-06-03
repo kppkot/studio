@@ -21,31 +21,31 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Card } from "@/components/ui/card"; 
-import { Lightbulb, CheckSquare, TextCursorInput, Replace, Eraser, Split, Wand2, Phone, AtSign, Globe, KeyRound, Shuffle, MessageSquareQuote, CaseSensitive, SearchCheck, Route, Workflow, FileText, CalendarClock, BadgeCheck, AlignLeft } from 'lucide-react';
+import { Card } from "@/components/ui/card";
+import { Lightbulb, CheckSquare, TextCursorInput, Replace, Eraser, Split, Wand2, Phone, AtSign, Globe, KeyRound, Shuffle, MessageSquareQuote, CaseSensitive, SearchCheck, Route, Workflow, FileText, CalendarClock, BadgeCheck, AlignLeft, Calculator } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { generateId, createAnchor, createLiteral, createCharClass, createQuantifier, createSequenceGroup, createAlternation, createLookaround, createBackreference, escapeRegexChars, generateBlocksForEmail, generateBlocksForURL, generateBlocksForIPv4, generateBlocksForIPv6, generateBlocksForDuplicateWords, generateBlocksForMultipleSpaces, generateBlocksForTabsToSpaces } from './utils';
+import { generateId, createAnchor, createLiteral, createCharClass, createQuantifier, createSequenceGroup, createAlternation, createLookaround, createBackreference, escapeRegexChars, generateBlocksForEmail, generateBlocksForURL, generateBlocksForIPv4, generateBlocksForIPv6, generateBlocksForDuplicateWords, generateBlocksForMultipleSpaces, generateBlocksForTabsToSpaces, generateBlocksForNumbers } from './utils';
 
 
 interface RegexWizardModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onComplete: (blocks: Block[], parentId?: string | null) => void; 
-  initialParentId: string | null; 
+  onComplete: (blocks: Block[], parentId?: string | null) => void;
+  initialParentId: string | null;
 }
 
-type WizardStepId = 
+type WizardStepId =
   | 'start'
-  | 'validation_type_choice' 
+  | 'validation_type_choice'
   | 'validation_basicPatterns_what'
   | 'validation_basicPatterns_length'
   | 'validation_basicPatterns_length_specify'
-  | 'validation_standardFormats_what' 
-  | 'validation_standardFormats_url_protocol' 
-  | 'validation_standardFormats_ip_type' 
-  | 'validation_phone_countryCode' 
-  | 'validation_phone_separators' 
-  | 'validation_password_requirements' 
+  | 'validation_standardFormats_what'
+  | 'validation_standardFormats_url_protocol'
+  | 'validation_standardFormats_ip_type'
+  | 'validation_phone_countryCode'
+  | 'validation_phone_separators'
+  | 'validation_password_requirements'
   | 'validation_dateTime_dateFormat'
   | 'validation_dateTime_separators'
   | 'validation_dateTime_validateTime'
@@ -61,9 +61,9 @@ type WizardStepId =
 
 interface WizardFormData {
   mainCategory?: 'validation' | 'extraction' | 'replacement' | 'splitting';
-  
-  validationTypeChoice?: 'basic' | 'standard' | 'datetime'; 
-  
+
+  validationTypeChoice?: 'basic' | 'standard' | 'datetime';
+
   basicPattern_contains_digits?: boolean;
   basicPattern_contains_letters_az?: boolean;
   basicPattern_contains_letters_AZ?: boolean;
@@ -74,15 +74,15 @@ interface WizardFormData {
   basicPattern_maxLength?: number;
 
   standardFormatChoice?: 'email' | 'url' | 'phone' | 'ip' | 'password';
-  url_requireProtocol?: 'yes' | 'no'; 
-  ip_type?: 'ipv4' | 'ipv6'; 
-  phone_hasCountryCode?: 'yes' | 'no'; 
-  phone_allowSeparators?: 'yes' | 'no'; 
-  password_req_digits?: boolean; 
-  password_req_lowercase?: boolean; 
-  password_req_uppercase?: boolean; 
-  password_req_specialChars?: boolean; 
-  password_minLength?: number; 
+  url_requireProtocol?: 'yes' | 'no';
+  ip_type?: 'ipv4' | 'ipv6';
+  phone_hasCountryCode?: 'yes' | 'no';
+  phone_allowSeparators?: 'yes' | 'no';
+  password_req_digits?: boolean;
+  password_req_lowercase?: boolean;
+  password_req_uppercase?: boolean;
+  password_req_specialChars?: boolean;
+  password_minLength?: number;
 
   dateFormat?: 'ddmmyyyy' | 'yyyymmdd' | 'other_date';
   dateSeparators?: ('slash' | 'hyphen' | 'dot')[];
@@ -107,7 +107,7 @@ interface WizardFormData {
 const wizardConfig = {
   start: {
     title: "Мастер Regex: Выберите основную задачу",
-    type: 'card_choice', 
+    type: 'card_choice',
     options: [
       { id: 'validation', label: "Проверить Формат", description: "Валидация email, URL, дат, и т.д.", icon: CheckSquare},
       { id: 'extraction', label: "Найти и Извлечь", description: "Извлечение email, чисел, текста в кавычках.", icon: SearchCheck },
@@ -117,11 +117,11 @@ const wizardConfig = {
       { id: 'pro', label: "Свой Шаблон (PRO)", description: "Для сложных задач и опытных пользователей.", icon: Wand2, disabled: true },
     ],
     next: (choice: string) => {
-      if (choice === 'validation') return 'validation_type_choice'; 
+      if (choice === 'validation') return 'validation_type_choice';
       if (choice === 'extraction') return 'extraction_whatToExtract';
       if (choice === 'replacement') return 'replacement_whatToReplace';
       if (choice === 'splitting') return 'splitting_delimiter_choice';
-      return 'start'; 
+      return 'start';
     }
   },
   validation_type_choice: {
@@ -149,10 +149,10 @@ const wizardConfig = {
       { id: 'basicPattern_contains_letters_AZ', label: "Большие буквы (A-Z)" },
       { id: 'basicPattern_contains_space', label: "Пробелы" },
     ],
-    conditionalInput: { 
-        checkboxId: 'basicPattern_enable_otherChars', 
+    conditionalInput: {
+        checkboxId: 'basicPattern_enable_otherChars',
         checkboxLabel: 'Другие символы (укажите):',
-        inputId: 'basicPattern_contains_otherChars', 
+        inputId: 'basicPattern_contains_otherChars',
         inputPlaceholder: 'например, _-!',
         inputLabel: 'Разрешенные другие символы:'
     },
@@ -167,7 +167,7 @@ const wizardConfig = {
     ],
     next: (choice: string) => {
       if (choice === 'yes') return 'validation_basicPatterns_length_specify';
-      return 'final_preview'; 
+      return 'final_preview';
     }
   },
   validation_basicPatterns_length_specify: {
@@ -185,15 +185,15 @@ const wizardConfig = {
     options: [
       { id: 'email', label: "Email (электронная почта)", icon: AtSign },
       { id: 'url', label: "URL (веб-адрес)", icon: Globe },
-      { id: 'phone', label: "Телефон", icon: Phone, disabled: true }, 
-      { id: 'ip', label: "IP-адрес (IPv4/IPv6)", icon: Route, disabled: false }, 
+      { id: 'phone', label: "Телефон", icon: Phone, disabled: true },
+      { id: 'ip', label: "IP-адрес (IPv4/IPv6)", icon: Route, disabled: false },
       { id: 'password', label: "Пароль (проверка сложности)", icon: KeyRound, disabled: true },
     ],
     next: (choice: string) => {
       if (choice === 'email') return 'final_preview';
       if (choice === 'url') return 'validation_standardFormats_url_protocol';
       if (choice === 'phone') return 'validation_phone_countryCode';
-      if (choice === 'ip') return 'validation_standardFormats_ip_type'; 
+      if (choice === 'ip') return 'validation_standardFormats_ip_type';
       if (choice === 'password') return 'validation_password_requirements';
       return 'validation_standardFormats_what';
     }
@@ -212,14 +212,14 @@ const wizardConfig = {
     type: 'radio',
     options: [
         { id: 'ipv4', label: "IPv4 (например, 192.168.0.1)" },
-        { id: 'ipv6', label: "IPv6 (например, 2001:0db8:...)"}, 
+        { id: 'ipv6', label: "IPv6 (например, 2001:0db8:...)"},
     ],
     next: (choice: string) => {
         if (choice === 'ipv4' || choice === 'ipv6') return 'final_preview';
-        return 'validation_standardFormats_ip_type'; 
+        return 'validation_standardFormats_ip_type';
     }
   },
-  validation_phone_countryCode: { 
+  validation_phone_countryCode: {
     title: "Проверка Телефона: Есть ли код страны?",
     type: 'radio',
     options: [
@@ -228,7 +228,7 @@ const wizardConfig = {
     ],
     nextStep: 'validation_phone_separators'
   },
-  validation_phone_separators: { 
+  validation_phone_separators: {
     title: "Проверка Телефона: Разрешены ли разделители (пробелы, дефисы)?",
     type: 'radio',
     options: [
@@ -237,7 +237,7 @@ const wizardConfig = {
     ],
     nextStep: 'final_preview'
   },
-  validation_password_requirements: { 
+  validation_password_requirements: {
     title: "Проверка Пароля: Укажите требования к сложности",
     type: 'checkbox_and_input',
     checkboxes: [
@@ -259,7 +259,7 @@ const wizardConfig = {
     ],
     next: (choice: string) => {
         if (choice === 'ddmmyyyy') return 'validation_dateTime_separators';
-        if (choice === 'yyyymmdd') return 'validation_dateTime_validateTime'; 
+        if (choice === 'yyyymmdd') return 'validation_dateTime_validateTime';
         return 'validation_dateTime_dateFormat';
     }
   },
@@ -301,9 +301,9 @@ const wizardConfig = {
     options: [
       { id: 'emails', label: "Все email-адреса", icon: AtSign },
       { id: 'urls', label: "Все URL-адреса", icon: Globe },
-      { id: 'numbers', label: "Все числа (целые/десятичные)", icon: CaseSensitive }, 
-      { id: 'quotedText', label: "Текст в кавычках", icon: MessageSquareQuote },
-      { id: 'specificWord', label: "Слово/фразу (ввести)", icon: TextCursorInput },
+      { id: 'numbers', label: "Все числа (целые/десятичные)", icon: Calculator, disabled: false },
+      { id: 'quotedText', label: "Текст в кавычках", icon: MessageSquareQuote, disabled: true },
+      { id: 'specificWord', label: "Слово/фразу (ввести)", icon: TextCursorInput, disabled: true },
       { id: 'duplicateWords', label: "Повторяющиеся слова", icon: Shuffle, disabled: false },
     ],
     next: (choice: string) => {
@@ -341,7 +341,7 @@ const wizardConfig = {
         { id: 'tabsToSpaces', label: "Табуляция → пробелы", icon: AlignLeft },
         { id: 'removeHtml', label: "Удалить HTML-теги", icon: Eraser, disabled: true },
         { id: 'swapParts', label: "Сменить порядок (swap)", icon: Shuffle, disabled: true },
-        { id: 'maskDigits', label: "Маскировать цифры", icon: KeyRound, disabled: true }, 
+        { id: 'maskDigits', label: "Маскировать цифры", icon: KeyRound, disabled: true },
         { id: 'otherReplace', label: "Другое (написать паттерн и замену) (скоро)", icon: Wand2, disabled: true },
     ],
     next: (choice: string) => {
@@ -410,15 +410,15 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
   const currentStepConfig = wizardConfig[currentStepId as keyof typeof wizardConfig];
 
-  const handleCardChoice = (value: string) => { 
-    const newFormData: Partial<WizardFormData> = {}; 
+  const handleCardChoice = (value: string) => {
+    const newFormData: Partial<WizardFormData> = {};
     newFormData.mainCategory = value as WizardFormData['mainCategory'];
     setFormData(newFormData as WizardFormData);
   };
-  
+
   const handleRadioChange = (value: string) => {
     const newFormData : Partial<WizardFormData> = { ...formData };
-    
+
     const resetSubsequentFields = (keysToKeep: (keyof WizardFormData)[]) => {
         const currentMainCategory = newFormData.mainCategory;
         const currentValidationType = newFormData.validationTypeChoice;
@@ -436,7 +436,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                  delete (newFormData as any)[key];
             }
         });
-        
+
         if (keysToKeep.includes('mainCategory') && currentMainCategory) newFormData.mainCategory = currentMainCategory;
         if (keysToKeep.includes('validationTypeChoice') && currentValidationType) newFormData.validationTypeChoice = currentValidationType;
         if (keysToKeep.includes('standardFormatChoice') && currentStandardFormat) newFormData.standardFormatChoice = currentStandardFormat;
@@ -448,7 +448,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
 
     };
-    
+
     if (currentStepId === 'start') {
         resetSubsequentFields([]);
         newFormData.mainCategory = value as WizardFormData['mainCategory'];
@@ -470,14 +470,14 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     } else if (currentStepId === 'splitting_delimiter_choice') {
         resetSubsequentFields(['mainCategory']);
         newFormData.splittingChoice = value as WizardFormData['splittingChoice'];
-    } else if (currentStepId === 'validation_standardFormats_ip_type') { 
+    } else if (currentStepId === 'validation_standardFormats_ip_type') {
         resetSubsequentFields(['mainCategory', 'validationTypeChoice', 'standardFormatChoice']);
         newFormData.ip_type = value as WizardFormData['ip_type'];
     }
      else {
        (newFormData as any)[currentStepId as keyof WizardFormData] = value as any;
     }
-    
+
     if (currentStepId === 'validation_standardFormats_url_protocol') newFormData.url_requireProtocol = value as WizardFormData['url_requireProtocol'];
     else if (currentStepId === 'validation_basicPatterns_length') newFormData.basicPattern_restrictLength = value as WizardFormData['basicPattern_restrictLength'];
     else if (currentStepId === 'validation_dateTime_validateTime') newFormData.validateTime = value as WizardFormData['validateTime'];
@@ -485,7 +485,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     else if (currentStepId === 'extraction_quotedText_type') newFormData.quoteType = value as WizardFormData['quoteType'];
     else if (currentStepId === 'validation_phone_countryCode') newFormData.phone_hasCountryCode = value as WizardFormData['phone_hasCountryCode'];
     else if (currentStepId === 'validation_phone_separators') newFormData.phone_allowSeparators = value as WizardFormData['phone_allowSeparators'];
-    
+
     setFormData(newFormData as WizardFormData);
   };
 
@@ -494,7 +494,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     if (currentStepId === 'validation_type_choice') return formData.validationTypeChoice;
     if (currentStepId === 'validation_standardFormats_what') return formData.standardFormatChoice;
     if (currentStepId === 'validation_standardFormats_url_protocol') return formData.url_requireProtocol;
-    if (currentStepId === 'validation_standardFormats_ip_type') return formData.ip_type; 
+    if (currentStepId === 'validation_standardFormats_ip_type') return formData.ip_type;
     if (currentStepId === 'validation_basicPatterns_length') return formData.basicPattern_restrictLength;
     if (currentStepId === 'validation_dateTime_dateFormat') return formData.dateFormat;
     if (currentStepId === 'validation_dateTime_validateTime') return formData.validateTime;
@@ -522,7 +522,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         setFormData(prev => ({ ...prev, [checkboxId]: checked }));
     }
   };
-  
+
   const handleInputChange = (inputId: string, value: string | number) => {
      setFormData(prev => ({ ...prev, [inputId]: value }));
   };
@@ -542,7 +542,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     if (!patternChars) return [];
 
     blocks.push(createAnchor('^'));
-    
+
     const charClassBlock: Block = createCharClass(patternChars);
 
     let quantifierType: QuantifierSettings['type'] = '+';
@@ -554,12 +554,12 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
       max = typeof formData.basicPattern_maxLength === 'number' && formData.basicPattern_maxLength > 0 ? formData.basicPattern_maxLength : null;
 
 
-      if (min !== undefined && max === null && min === 1) quantifierType = '+'; 
+      if (min !== undefined && max === null && min === 1) quantifierType = '+';
       else if (min !== undefined && max === null) quantifierType = '{n,}';
       else if (min !== undefined && max !== undefined && min === max) quantifierType = '{n}';
       else if (min !== undefined && max !== undefined) quantifierType = '{n,m}';
     }
-    
+
     blocks.push(charClassBlock);
     blocks.push(createQuantifier(quantifierType, min, max));
     blocks.push(createAnchor('$'));
@@ -571,28 +571,28 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   const generateBlocksForPhone = useCallback((): Block[] => {
     const blocks: Block[] = [createAnchor('^')];
     if (formData.phone_hasCountryCode === 'yes') {
-        blocks.push(createLiteral('\\+', true)); 
+        blocks.push(createLiteral('\\+', true));
         blocks.push(createQuantifier('?'));
         blocks.push(createCharClass('\\d', false));
         blocks.push(createQuantifier('{n,m}', 1, 3));
         if (formData.phone_allowSeparators === 'yes') {
-          blocks.push(createCharClass(' -', false)); 
+          blocks.push(createCharClass(' -', false));
           blocks.push(createQuantifier('?'));
         }
     }
-    
+
     const digitPattern = '\\d';
-    
+
     if (formData.phone_allowSeparators === 'yes') {
       const digitAndOptionalSep = createSequenceGroup([
           createCharClass(digitPattern),
-          createSequenceGroup([createCharClass(' -', false)], 'non-capturing'), 
+          createSequenceGroup([createCharClass(' -', false)], 'non-capturing'),
           createQuantifier('?')
       ], 'non-capturing');
       blocks.push(digitAndOptionalSep);
       blocks.push(createQuantifier(formData.phone_hasCountryCode === 'yes' ? '{6,14}' : '{7,15}'));
 
-    } else { 
+    } else {
         blocks.push(createCharClass(digitPattern, false));
         blocks.push(createQuantifier(formData.phone_hasCountryCode === 'yes' ? '{6,14}' : '{7,15}'));
     }
@@ -604,7 +604,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   const generateBlocksForPassword = useCallback((): Block[] => {
     const blocks: Block[] = [createAnchor('^')];
     if (formData.password_req_digits) {
-        blocks.push(createLookaround('positive-lookahead', [createCharClass('.*\\d.*', false)])); 
+        blocks.push(createLookaround('positive-lookahead', [createCharClass('.*\\d.*', false)]));
     }
     if (formData.password_req_lowercase) {
         blocks.push(createLookaround('positive-lookahead', [createCharClass('.*[a-z].*', false)]));
@@ -613,10 +613,10 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         blocks.push(createLookaround('positive-lookahead', [createCharClass('.*[A-Z].*', false)]));
     }
     if (formData.password_req_specialChars) {
-        blocks.push(createLookaround('positive-lookahead', [createCharClass('.*[\\W_].*', false)])); 
+        blocks.push(createLookaround('positive-lookahead', [createCharClass('.*[\\W_].*', false)]));
     }
     const minLength = formData.password_minLength !== undefined ? Math.max(1, formData.password_minLength) : 8;
-    blocks.push(createCharClass('.', false)); 
+    blocks.push(createCharClass('.', false));
     blocks.push(createQuantifier('{n,}', minLength, null));
     blocks.push(createAnchor('$'));
     return blocks;
@@ -631,43 +631,43 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         separatorPattern = formData.dateSeparators.map(s => {
             if (s === 'slash') return '/';
             if (s === 'hyphen') return '-';
-            if (s === 'dot') return '\\.'; 
+            if (s === 'dot') return '\\.';
             return '';
-        }).join(''); 
+        }).join('');
     } else if (formData.dateFormat === 'yyyymmdd') {
-        separatorPattern = '-'; 
+        separatorPattern = '-';
     }
     const separatorClassBlock = separatorPattern ? createCharClass(separatorPattern.length > 1 ? `[${separatorPattern}]` : separatorPattern, false) : null;
 
 
     if (formData.dateFormat === 'ddmmyyyy') {
-        blocks.push(createSequenceGroup([createAlternation([ 
+        blocks.push(createSequenceGroup([createAlternation([
             [createLiteral("0", false), createCharClass("1-9", false)],
             [createCharClass("12", false), createCharClass("0-9", false)],
             [createLiteral("3", false), createCharClass("01", false)]
-        ])])); 
+        ])]));
         if (separatorClassBlock) blocks.push(separatorClassBlock);
-        blocks.push(createSequenceGroup([createAlternation([ 
-            [createLiteral("0", false), createCharClass("1-9", false)],
-            [createLiteral("1", false), createCharClass("012", false)]
-        ])])); 
-        if (separatorClassBlock) blocks.push(separatorClassBlock);
-        blocks.push(createSequenceGroup([ 
-            createAlternation([[createLiteral("19", false)], [createLiteral("20", false)]]),
-            createCharClass("\\d", false), createQuantifier("{n}", 2, 2)
-        ]));
-    } else if (formData.dateFormat === 'yyyymmdd') {
-         blocks.push(createSequenceGroup([ 
-            createAlternation([[createLiteral("19", false)], [createLiteral("20", false)]]),
-            createCharClass("\\d", false), createQuantifier("{n}", 2, 2)
-        ]));
-        if (separatorClassBlock) blocks.push(separatorClassBlock);
-        blocks.push(createSequenceGroup([createAlternation([ 
+        blocks.push(createSequenceGroup([createAlternation([
             [createLiteral("0", false), createCharClass("1-9", false)],
             [createLiteral("1", false), createCharClass("012", false)]
         ])]));
         if (separatorClassBlock) blocks.push(separatorClassBlock);
-        blocks.push(createSequenceGroup([createAlternation([ 
+        blocks.push(createSequenceGroup([
+            createAlternation([[createLiteral("19", false)], [createLiteral("20", false)]]),
+            createCharClass("\\d", false), createQuantifier("{n}", 2, 2)
+        ]));
+    } else if (formData.dateFormat === 'yyyymmdd') {
+         blocks.push(createSequenceGroup([
+            createAlternation([[createLiteral("19", false)], [createLiteral("20", false)]]),
+            createCharClass("\\d", false), createQuantifier("{n}", 2, 2)
+        ]));
+        if (separatorClassBlock) blocks.push(separatorClassBlock);
+        blocks.push(createSequenceGroup([createAlternation([
+            [createLiteral("0", false), createCharClass("1-9", false)],
+            [createLiteral("1", false), createCharClass("012", false)]
+        ])]));
+        if (separatorClassBlock) blocks.push(separatorClassBlock);
+        blocks.push(createSequenceGroup([createAlternation([
             [createLiteral("0", false), createCharClass("1-9", false)],
             [createCharClass("12", false), createCharClass("0-9", false)],
             [createLiteral("3", false), createCharClass("01", false)]
@@ -675,65 +675,48 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     }
 
     if (formData.validateTime === 'yes') {
-        blocks.push(createCharClass("\\s", false)); 
-        blocks.push(createQuantifier("?")); 
+        blocks.push(createCharClass("\\s", false));
+        blocks.push(createQuantifier("?"));
 
-        if (formData.timeFormat === '24hr') { 
-            blocks.push(createSequenceGroup([createAlternation([ 
+        if (formData.timeFormat === '24hr') {
+            blocks.push(createSequenceGroup([createAlternation([
                 [createCharClass("01", false), createCharClass("\\d", false)],
                 [createLiteral("2", false), createCharClass("0-3", false)]
             ])]));
             blocks.push(createLiteral(":", false));
-            blocks.push(createSequenceGroup([createCharClass("0-5", false), createCharClass("\\d", false)])); 
-        } else if (formData.timeFormat === '12hr') { 
-            blocks.push(createSequenceGroup([createAlternation([ 
+            blocks.push(createSequenceGroup([createCharClass("0-5", false), createCharClass("\\d", false)]));
+        } else if (formData.timeFormat === '12hr') {
+            blocks.push(createSequenceGroup([createAlternation([
                 [createSequenceGroup([createLiteral("0", false), createQuantifier("?")]), createCharClass("1-9", false)],
                 [createLiteral("1", false), createCharClass("0-2", false)]
             ])]));
             blocks.push(createLiteral(":", false));
-            blocks.push(createSequenceGroup([createCharClass("0-5", false), createCharClass("\\d", false)])); 
-            blocks.push(createCharClass("\\s", false)); 
+            blocks.push(createSequenceGroup([createCharClass("0-5", false), createCharClass("\\d", false)]));
+            blocks.push(createCharClass("\\s", false));
             blocks.push(createQuantifier("?"));
-            blocks.push(createSequenceGroup([createAlternation([ 
-                [createLiteral("AM", false)], 
+            blocks.push(createSequenceGroup([createAlternation([
+                [createLiteral("AM", false)],
                 [createLiteral("PM", false)]
-            ])], 'non-capturing')); 
+            ])], 'non-capturing'));
         }
     }
-    
+
     blocks.push(createAnchor('$'));
     return blocks;
   }, [formData.dateFormat, formData.dateSeparators, formData.validateTime, formData.timeFormat]);
 
 
-  const generateBlocksForExtractNumbers = useCallback((): Block[] => {
-    return [
-        createAnchor('\\b'),
-        createSequenceGroup([ 
-            createCharClass('\\d', false),
-            createQuantifier('+'),
-            createSequenceGroup([
-                createLiteral('\\.', false),
-                createCharClass('\\d', false),
-                createQuantifier('+')
-            ], 'non-capturing'),
-            createQuantifier('?'), 
-        ], 'capturing'),
-        createAnchor('\\b')
-    ];
-  }, []);
-
   const generateBlocksForQuotedText = useCallback((): Block[] => {
     const quoteChar = formData.quoteType === 'single' ? "'" : '"';
     const escapedQuoteCharPattern = escapeRegexChars(quoteChar);
-    const nonQuotePattern = `[^${escapedQuoteCharPattern}]`; 
+    const nonQuotePattern = `[^${escapedQuoteCharPattern}]`;
 
     return [
-        createLiteral(quoteChar, true), 
-        createSequenceGroup([ 
-            createCharClass(nonQuotePattern, false), 
+        createLiteral(quoteChar, true),
+        createSequenceGroup([
+            createCharClass(nonQuotePattern, false),
             createQuantifier('*', undefined, undefined, 'greedy')
-        ], 'capturing'), 
+        ], 'capturing'),
         createLiteral(quoteChar, true)
     ];
   }, [formData.quoteType]);
@@ -742,7 +725,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     if (!formData.specificWord?.trim()) return [];
     return [
         createAnchor('\\b'),
-        createLiteral(formData.specificWord, true), 
+        createLiteral(formData.specificWord, true),
         createAnchor('\\b')
     ];
   }, [formData.specificWord]);
@@ -750,8 +733,8 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   const generateBlocksForRemoveHtmlTags = useCallback((): Block[] => {
     return [
         createLiteral('<', false),
-        createCharClass('[^>]', false), 
-        createQuantifier('*'),   
+        createCharClass('[^>]', false),
+        createQuantifier('*'),
         createLiteral('>', false)
     ];
   }, []);
@@ -759,9 +742,9 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   const generateBlocksForMaskDigits = useCallback((): Block[] => {
     const keepLastN = formData.maskDigits_keepLast !== undefined ? Math.max(0, formData.maskDigits_keepLast) : 4;
     return [
-        createLiteral("\\d", false), 
-        createLookaround("positive-lookahead", [ 
-            createLiteral(`\\d{${keepLastN}}`, false) 
+        createLiteral("\\d", false),
+        createLookaround("positive-lookahead", [
+            createLiteral(`\\d{${keepLastN}}`, false)
         ])
     ];
   }, [formData.maskDigits_keepLast]);
@@ -775,17 +758,17 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   const generateBlocksForSplitting = useCallback((): Block[] => {
     switch(formData.splittingChoice) {
         case 'comma':
-            return [createLiteral(',', false)]; 
+            return [createLiteral(',', false)];
         case 'space':
             return [createCharClass('\\s', false), createQuantifier('+')];
         case 'simpleChar':
             if (formData.splittingSimpleChar_input && formData.splittingSimpleChar_input.trim()) {
-                return [createLiteral(formData.splittingSimpleChar_input.trim(), true)]; 
+                return [createLiteral(formData.splittingSimpleChar_input.trim(), true)];
             }
             return [];
         case 'regex':
             if (formData.splittingRegex_input && formData.splittingRegex_input.trim()) {
-                return [createLiteral(formData.splittingRegex_input.trim(), false)]; 
+                return [createLiteral(formData.splittingRegex_input.trim(), false)];
             }
             return [];
         default:
@@ -796,30 +779,30 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
   const handleNext = () => {
     if (!currentStepConfig) return;
-    setReplacementString(null); 
+    setReplacementString(null);
     setGeneratedBlocks([]);
 
     if (currentStepId === 'final_preview') {
         if (generatedBlocks.length > 0 || (formData.mainCategory === 'replacement' && replacementString)) {
-          onComplete(generatedBlocks, initialParentId); 
+          onComplete(generatedBlocks, initialParentId);
         }
         return;
     }
-    
+
     let nextStepTargetId: WizardStepId | undefined = undefined;
-    let choice: string | undefined = getRadioValue(); 
+    let choice: string | undefined = getRadioValue();
 
     if ('next' in currentStepConfig && typeof currentStepConfig.next === 'function') {
       if (choice) {
         nextStepTargetId = currentStepConfig.next(choice) as WizardStepId;
       } else if (currentStepConfig.type === 'radio' && !choice && !currentStepConfig.options?.find(o => o.id === getRadioValue())?.disabled) {
           console.warn("Wizard: No choice made on radio step", currentStepId);
-          return; 
+          return;
       }
     } else if ('nextStep' in currentStepConfig) {
       nextStepTargetId = currentStepConfig.nextStep as WizardStepId;
     }
-    
+
     if (nextStepTargetId === 'final_preview') {
         let blocksToSet: Block[] = [];
         if(formData.mainCategory === 'validation'){
@@ -834,7 +817,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                     else if (formData.ip_type === 'ipv6') blocksToSet = generateBlocksForIPv6();
                     else blocksToSet = [];
                 } else if (formData.standardFormatChoice === 'password') blocksToSet = generateBlocksForPassword();
-                else blocksToSet = []; 
+                else blocksToSet = [];
             } else if (formData.validationTypeChoice === 'datetime') {
                 blocksToSet = generateBlocksForDateTime();
             }
@@ -842,7 +825,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         } else if (formData.mainCategory === 'extraction') {
             if (formData.extractionChoice === 'emails') blocksToSet = generateBlocksForEmail(true);
             else if (formData.extractionChoice === 'urls') blocksToSet = generateBlocksForURL(true, false);
-            else if (formData.extractionChoice === 'numbers') blocksToSet = generateBlocksForExtractNumbers();
+            else if (formData.extractionChoice === 'numbers') blocksToSet = generateBlocksForNumbers();
             else if (formData.extractionChoice === 'quotedText') blocksToSet = generateBlocksForQuotedText();
             else if (formData.extractionChoice === 'specificWord') blocksToSet = generateBlocksForSpecificWord();
             else if (formData.extractionChoice === 'duplicateWords') blocksToSet = generateBlocksForDuplicateWords();
@@ -869,7 +852,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
             blocksToSet = generateBlocksForSplitting();
         }
          else {
-            blocksToSet = []; 
+            blocksToSet = [];
         }
         setGeneratedBlocks(blocksToSet);
     }
@@ -883,12 +866,12 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
   const handleBack = () => {
     let prevStep: WizardStepId | null = null;
-    setGeneratedBlocks([]); 
+    setGeneratedBlocks([]);
     setReplacementString(null);
-    
+
     switch (currentStepId) {
-        case 'validation_type_choice': 
-        case 'extraction_whatToExtract': 
+        case 'validation_type_choice':
+        case 'extraction_whatToExtract':
         case 'replacement_whatToReplace':
         case 'splitting_delimiter_choice':
             prevStep = 'start'; break;
@@ -896,26 +879,26 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         case 'validation_basicPatterns_what': prevStep = 'validation_type_choice'; break;
         case 'validation_basicPatterns_length': prevStep = 'validation_basicPatterns_what'; break;
         case 'validation_basicPatterns_length_specify': prevStep = 'validation_basicPatterns_length'; break;
-        
+
         case 'validation_standardFormats_what': prevStep = 'validation_type_choice'; break;
         case 'validation_standardFormats_url_protocol': prevStep = 'validation_standardFormats_what'; break;
-        case 'validation_standardFormats_ip_type': prevStep = 'validation_standardFormats_what'; break; 
+        case 'validation_standardFormats_ip_type': prevStep = 'validation_standardFormats_what'; break;
         case 'validation_phone_countryCode': prevStep = 'validation_standardFormats_what'; break;
         case 'validation_phone_separators': prevStep = 'validation_phone_countryCode'; break;
         case 'validation_password_requirements': prevStep = 'validation_standardFormats_what'; break;
-        
+
         case 'validation_dateTime_dateFormat': prevStep = 'validation_type_choice'; break;
         case 'validation_dateTime_separators': prevStep = 'validation_dateTime_dateFormat'; break;
-        case 'validation_dateTime_validateTime': 
+        case 'validation_dateTime_validateTime':
             if (formData.dateFormat === 'ddmmyyyy') prevStep = 'validation_dateTime_separators';
             else if (formData.dateFormat === 'yyyymmdd') prevStep = 'validation_dateTime_dateFormat';
-            else prevStep = 'validation_dateTime_dateFormat'; 
+            else prevStep = 'validation_dateTime_dateFormat';
             break;
         case 'validation_dateTime_timeFormat': prevStep = 'validation_dateTime_validateTime'; break;
 
         case 'extraction_quotedText_type': prevStep = 'extraction_whatToExtract'; break;
         case 'extraction_specificWord_input': prevStep = 'extraction_whatToExtract'; break;
-        
+
         case 'replacement_maskDigits_options': prevStep = 'replacement_whatToReplace'; break;
         case 'replacement_swap_input': prevStep = 'replacement_whatToReplace'; break;
 
@@ -928,14 +911,14 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                     if (formData.standardFormatChoice === 'email') prevStep = 'validation_standardFormats_what';
                     else if (formData.standardFormatChoice === 'url') prevStep = 'validation_standardFormats_url_protocol';
                     else if (formData.standardFormatChoice === 'phone') prevStep = 'validation_phone_separators';
-                    else if (formData.standardFormatChoice === 'ip') prevStep = 'validation_standardFormats_ip_type'; 
+                    else if (formData.standardFormatChoice === 'ip') prevStep = 'validation_standardFormats_ip_type';
                     else if (formData.standardFormatChoice === 'password') prevStep = 'validation_password_requirements';
-                    else prevStep = 'validation_standardFormats_what'; 
+                    else prevStep = 'validation_standardFormats_what';
                 } else if (formData.validationTypeChoice === 'datetime') {
                     if (formData.validateTime === 'yes') prevStep = 'validation_dateTime_timeFormat';
                     else prevStep = 'validation_dateTime_validateTime';
                 }
-                 else prevStep = 'validation_type_choice'; 
+                 else prevStep = 'validation_type_choice';
             } else if (formData.mainCategory === 'extraction') {
                  if (formData.extractionChoice === 'quotedText') prevStep = 'extraction_quotedText_type';
                  else if (formData.extractionChoice === 'specificWord') prevStep = 'extraction_specificWord_input';
@@ -949,13 +932,13 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
             } else if (formData.mainCategory === 'splitting') {
                 prevStep = 'splitting_delimiter_choice';
             }
-            else prevStep = 'start'; 
+            else prevStep = 'start';
             break;
         default: prevStep = 'start';
     }
-    
+
     if (prevStep) setCurrentStepId(prevStep);
-    else setCurrentStepId('start'); 
+    else setCurrentStepId('start');
   };
 
   const resetWizardAndClose = () => {
@@ -984,12 +967,12 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         const selectedOption = currentStepConfig.options.find(opt => opt.id === currentChoice);
         if (selectedOption?.disabled) return true;
         if (selectedOption && selectedOption.inputId && !formData[selectedOption.inputId as keyof WizardFormData]?.toString().trim()) {
-            return true; 
+            return true;
         }
     }
 
     if (currentStepId === 'validation_dateTime_separators' && (!formData.dateSeparators || formData.dateSeparators.length === 0)) {
-        return true; 
+        return true;
     }
     if (currentStepId === 'extraction_specificWord_input' && !formData.specificWord?.trim()) {
         return true;
@@ -1000,9 +983,9 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
      if (currentStepId === 'replacement_swap_input' && (!formData.swapPattern?.trim() || !formData.swapReplacement?.trim())) {
         return true;
     }
-    
+
     if (currentStepId === 'final_preview') {
-        if (generatedBlocks.length === 0 && !(formData.mainCategory === 'replacement' && replacementString)) { 
+        if (generatedBlocks.length === 0 && !(formData.mainCategory === 'replacement' && replacementString)) {
             return true;
         }
     }
@@ -1018,7 +1001,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
             <DialogDescription>{currentStepConfig.description}</DialogDescription>
           )}
         </DialogHeader>
-        
+
         <ScrollArea className="flex-1 pr-4 -mr-4 py-2">
           <div className="space-y-6">
             {currentStepConfig.type === 'card_choice' && currentStepConfig.options && (
@@ -1044,8 +1027,8 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                 </div>
             )}
             {currentStepConfig.type === 'radio' && currentStepConfig.options && (
-              <RadioGroup 
-                value={getRadioValue()} 
+              <RadioGroup
+                value={getRadioValue()}
                 onValueChange={handleRadioChange}
               >
                 {currentStepConfig.options.map(opt => (
@@ -1060,10 +1043,10 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                 ))}
               </RadioGroup>
             )}
-            
+
             {currentStepConfig.type === 'radio_with_conditional_input' && currentStepConfig.options && (
-              <RadioGroup 
-                value={getRadioValue()} 
+              <RadioGroup
+                value={getRadioValue()}
                 onValueChange={handleRadioChange}
                 className="space-y-3"
               >
@@ -1100,8 +1083,8 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
               <div className="space-y-3">
                 {currentStepConfig.checkboxes.map(cb => (
                   <div key={cb.id} className="flex items-center space-x-3 p-2 border rounded-md hover:bg-muted/50">
-                    <Checkbox 
-                      id={`${currentStepId}-${cb.id}`} 
+                    <Checkbox
+                      id={`${currentStepId}-${cb.id}`}
                       checked={currentStepId === 'validation_dateTime_separators' ? formData.dateSeparators?.includes(cb.id as any) : !!formData[cb.id as keyof WizardFormData]}
                       onCheckedChange={(checked) => handleCheckboxChange(cb.id, !!checked)}
                     />
@@ -1117,8 +1100,8 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                 <div className="space-y-3">
                     {currentStepConfig.checkboxes.map(cb => (
                     <div key={cb.id} className="flex items-center space-x-3 p-2 border rounded-md hover:bg-muted/50">
-                        <Checkbox 
-                        id={`${currentStepId}-${cb.id}`} 
+                        <Checkbox
+                        id={`${currentStepId}-${cb.id}`}
                         checked={!!formData[cb.id as keyof WizardFormData]}
                         onCheckedChange={(checked) => handleCheckboxChange(cb.id, !!checked)}
                         />
@@ -1128,13 +1111,13 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                     </div>
                     ))}
                     <div className="flex items-center space-x-3 p-2 border rounded-md">
-                        <Checkbox 
-                            id={`${currentStepId}-${currentStepConfig.conditionalInput.checkboxId}-enable`} 
+                        <Checkbox
+                            id={`${currentStepId}-${currentStepConfig.conditionalInput.checkboxId}-enable`}
                             checked={formData[currentStepConfig.conditionalInput.inputId as keyof WizardFormData] !== undefined}
                             onCheckedChange={(checked) => {
                                 const inputKey = currentStepConfig.conditionalInput!.inputId as keyof WizardFormData;
                                 if (checked) {
-                                    handleInputChange(inputKey, ''); 
+                                    handleInputChange(inputKey, '');
                                 } else {
                                     setFormData(prev => {
                                         const newState = {...prev};
@@ -1148,7 +1131,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                             {currentStepConfig.conditionalInput.checkboxLabel}
                         </Label>
                         {formData[currentStepConfig.conditionalInput.inputId as keyof WizardFormData] !== undefined && (
-                            <Input 
+                            <Input
                                 id={`${currentStepId}-${currentStepConfig.conditionalInput.inputId}`}
                                 value={formData[currentStepConfig.conditionalInput.inputId as keyof WizardFormData] as string || ''}
                                 onChange={(e) => handleInputChange(currentStepConfig.conditionalInput!.inputId, e.target.value)}
@@ -1159,7 +1142,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                     </div>
                 </div>
             )}
-            
+
             {currentStepConfig.type === 'inputs' && currentStepConfig.inputs && (
               <div className="space-y-4">
                 {currentStepConfig.inputs.map(input => (
@@ -1167,7 +1150,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                     <Label htmlFor={`${currentStepId}-${input.id}`} className="text-sm font-medium">
                       {input.label}
                     </Label>
-                    <Input 
+                    <Input
                       id={`${currentStepId}-${input.id}`}
                       type={input.inputType}
                       value={formData[input.id as keyof WizardFormData] as string || (input.defaultValue !== undefined ? String(input.defaultValue) : '')}
@@ -1189,8 +1172,8 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                 <div className="space-y-3">
                     {currentStepConfig.checkboxes.map(cb => (
                     <div key={cb.id} className="flex items-center space-x-3 p-2 border rounded-md hover:bg-muted/50">
-                        <Checkbox 
-                        id={`${currentStepId}-${cb.id}`} 
+                        <Checkbox
+                        id={`${currentStepId}-${cb.id}`}
                         checked={!!formData[cb.id as keyof WizardFormData]}
                         onCheckedChange={(checked) => handleCheckboxChange(cb.id, !!checked)}
                         />
@@ -1203,7 +1186,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                         <Label htmlFor={`${currentStepId}-${currentStepConfig.input.id}`} className="text-sm font-medium">
                         {currentStepConfig.input.label}
                         </Label>
-                        <Input 
+                        <Input
                         id={`${currentStepId}-${currentStepConfig.input.id}`}
                         type={currentStepConfig.input.inputType}
                         value={String(formData[currentStepConfig.input.id as keyof WizardFormData] ?? currentStepConfig.input.defaultValue ?? '8')}
@@ -1296,7 +1279,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                         <Lightbulb className="h-4 w-4" />
                         <AlertTitle>Подсказка</AlertTitle>
                         <AlertDescription>
-                            Это базовый набор блоков. После добавления вы сможете их детальнее настроить, сгруппировать или добавить другие элементы в основном редакторе. 
+                            Это базовый набор блоков. После добавления вы сможете их детальнее настроить, сгруппировать или добавить другие элементы в основном редакторе.
                             {formData.mainCategory === 'extraction' && " Для сценариев извлечения часто используется флаг 'g' (глобальный поиск), который можно установить в панели вывода Regex."}
                             {formData.mainCategory === 'replacement' && " Для сценариев замены, мастер предлагает паттерн для поиска; сама операция замены выполняется средствами вашего языка программирования или текстового редактора."}
                             {formData.mainCategory === 'splitting' && " Для сценариев разделения, этот паттерн обычно используется с функцией `split()` вашего языка программирования."}
@@ -1313,8 +1296,8 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                  <Button variant="outline" onClick={handleBack}>Назад</Button>
             )}
             <div className="flex-grow"></div>
-            <Button 
-                onClick={handleNext} 
+            <Button
+                onClick={handleNext}
                 disabled={isNextDisabled()}
             >
                 {currentStepId === 'final_preview' ? "Добавить в выражение" : "Далее"}

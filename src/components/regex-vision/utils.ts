@@ -49,9 +49,9 @@ export const generateBlocksForEmail = (forExtraction: boolean = false): Block[] 
 
     const emailCoreBlocks: Block[] = [
       createCharClass(localPartChars, false),
-      createLiteral('@', false), 
+      createLiteral('@', false),
       createCharClass(domainChars, false),
-      createLiteral('\\.', false), 
+      createLiteral('\\.', false),
       createCharClass(tldChars, false),
     ];
     if(forExtraction) {
@@ -65,9 +65,9 @@ export const generateBlocksForURL = (forExtraction: boolean = false, requireProt
 
     const httpPart = createLiteral('http', false);
     const sPart = createLiteral('s', false);
-    const sQuantifier = createQuantifier('?'); 
+    const sQuantifier = createQuantifier('?');
     const colonSlashSlashPart = createLiteral('://', false);
-    
+
     let protocolGroupChildren = [httpPart, sPart, sQuantifier, colonSlashSlashPart];
     let protocolSequence = createSequenceGroup(protocolGroupChildren, 'non-capturing');
 
@@ -82,13 +82,13 @@ export const generateBlocksForURL = (forExtraction: boolean = false, requireProt
         blocks.push(createQuantifier('?'));
     }
      else { // Protocol required for validation
-        blocks.push(protocolSequence); 
+        blocks.push(protocolSequence);
     }
 
-    const wwwPart = createLiteral('www\\.', false); 
+    const wwwPart = createLiteral('www\\.', false);
     const optionalWwwGroup = createSequenceGroup([wwwPart], 'non-capturing');
     blocks.push(optionalWwwGroup);
-    blocks.push(createQuantifier('?')); 
+    blocks.push(createQuantifier('?'));
 
     // Domain name and TLD: (?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,6}
     // This is complex to build with basic blocks directly, so using a literal for it.
@@ -104,8 +104,8 @@ export const generateBlocksForURL = (forExtraction: boolean = false, requireProt
 
 
     // Query string: (?:\?[^#\s]*)?
-    const queryStart = createLiteral('\\?', false); 
-    const queryChars = createCharClass('[^#\\s]*', false); 
+    const queryStart = createLiteral('\\?', false);
+    const queryChars = createCharClass('[^#\\s]*', false);
     const querySegment = createSequenceGroup([queryStart, queryChars], 'non-capturing');
     const optionalQuery = createSequenceGroup([querySegment], 'non-capturing');
     blocks.push(optionalQuery);
@@ -113,12 +113,12 @@ export const generateBlocksForURL = (forExtraction: boolean = false, requireProt
 
     // Fragment: (?:#[^\s]*)?
     const fragmentStart = createLiteral('#', false);
-    const fragmentChars = createCharClass('[^\\s]*', false); 
+    const fragmentChars = createCharClass('[^\\s]*', false);
     const fragmentSegment = createSequenceGroup([fragmentStart, fragmentChars], 'non-capturing');
     const optionalFragment = createSequenceGroup([fragmentSegment], 'non-capturing');
     blocks.push(optionalFragment);
     blocks.push(createQuantifier('?'));
-    
+
     if (forExtraction) {
         return [createAnchor('\\b'), createSequenceGroup(blocks, 'capturing'), createAnchor('\\b')];
     }
@@ -126,7 +126,7 @@ export const generateBlocksForURL = (forExtraction: boolean = false, requireProt
 };
 
 export const generateBlocksForIPv4 = (): Block[] => {
-  const octet = "(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)"; 
+  const octet = "(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)";
   const ipv4Regex = `${octet}\\.${octet}\\.${octet}\\.${octet}`;
   return [createAnchor('^'), createLiteral(ipv4Regex, false), createAnchor('$')];
 };
@@ -148,7 +148,7 @@ export const generateBlocksForDuplicateWords = (): Block[] => {
     createBackreference(1),     // Backreference to the first captured group
     createAnchor('\\b'),
   ];
-  
+
   return [
     createAnchor('\\b'),
     wordCaptureGroup,
@@ -160,13 +160,61 @@ export const generateBlocksForDuplicateWords = (): Block[] => {
 export const generateBlocksForMultipleSpaces = (): Block[] => {
   return [
       createCharClass('\\s', false),
-      createQuantifier('{n,}', 2, null) 
+      createQuantifier('{n,}', 2, null)
   ];
 };
 
 export const generateBlocksForTabsToSpaces = (): Block[] => {
   return [
-    createLiteral('\\t', false) 
+    createLiteral('\\t', false)
+  ];
+};
+
+export const generateBlocksForNumbers = (): Block[] => {
+  // Pattern: \b([+-]?(\d+(\.\d*)?|\.\d+))\b
+  // This finds integers, decimals, positive, and negative numbers.
+  const sign = createCharClass('[+-]', false);
+  const optionalSign = createQuantifier('?');
+
+  const digits = createCharClass('\\d', false);
+  const oneOrMoreDigits = createQuantifier('+');
+  const zeroOrMoreDigits = createQuantifier('*');
+
+  const decimalPoint = createLiteral('\\.', false); // Escaped dot
+
+  // \d+(\.\d*)?
+  const integerWithOptionalDecimalPart = createSequenceGroup([
+    digits,
+    oneOrMoreDigits,
+    createSequenceGroup([decimalPoint, digits, zeroOrMoreDigits], 'non-capturing'),
+    createQuantifier('?'), // Makes the decimal part optional
+  ], 'non-capturing');
+
+  // \.\d+
+  const decimalOnlyPart = createSequenceGroup([
+    decimalPoint,
+    digits,
+    oneOrMoreDigits,
+  ], 'non-capturing');
+
+  // (\d+(\.\d*)?|\.\d+)
+  const numberCore = createAlternation([
+    [digits, oneOrMoreDigits, createSequenceGroup([decimalPoint, digits, zeroOrMoreDigits], 'non-capturing'), createQuantifier('?')], // \d+(\.\d*)?
+    [decimalPoint, digits, oneOrMoreDigits] // \.\d+
+  ]);
+  
+  // We need to wrap the alternation in a non-capturing group if it's part of a larger sequence
+  const numberCoreGroup = createSequenceGroup([
+    sign, 
+    optionalSign,
+    numberCore // The alternation logic already groups its options
+  ], 'capturing');
+
+
+  return [
+    createAnchor('\\b'),
+    numberCoreGroup,
+    createAnchor('\\b'),
   ];
 };
 
@@ -179,18 +227,18 @@ export const generateRegexString = (blocks: Block[]): string => {
     switch (block.type) {
       case BlockType.LITERAL:
         return (settings as LiteralSettings).text || '';
-      
+
       case BlockType.CHARACTER_CLASS:
         const charClassSettings = settings as CharacterClassSettings;
         return `[${charClassSettings.negated ? '^' : ''}${charClassSettings.pattern || ''}]`;
-      
+
       case BlockType.QUANTIFIER:
         const qSettings = settings as QuantifierSettings;
         const baseQuantifier = qSettings.type || '*';
         let modeModifier = '';
         if (qSettings.mode === 'lazy') modeModifier = '?';
         else if (qSettings.mode === 'possessive') modeModifier = '+';
-        
+
         if (baseQuantifier.includes('{')) {
           const min = qSettings.min ?? 0;
           const max = qSettings.max;
@@ -199,19 +247,21 @@ export const generateRegexString = (blocks: Block[]): string => {
           if (baseQuantifier === '{n,m}') return `{${min},${max ?? ''}}${modeModifier}`;
         }
         return baseQuantifier + modeModifier;
-      
+
       case BlockType.GROUP:
         const gSettings = settings as GroupSettings;
         if (gSettings.type === 'non-capturing') return `(?:${childrenRegex})`;
         if (gSettings.type === 'named' && gSettings.name) return `(?<${gSettings.name}>${childrenRegex})`;
         return `(${childrenRegex})`;
-      
+
       case BlockType.ANCHOR:
         return (settings as AnchorSettings).type || '^';
-      
+
       case BlockType.ALTERNATION:
-        return block.children ? block.children.map(generate).join('|') : '';
-      
+        // Children of ALTERNATION are usually sequence groups, so direct join with | is fine
+        return block.children ? block.children.map(child => generate(child)).join('|') : '';
+
+
       case BlockType.LOOKAROUND:
         const lSettings = settings as LookaroundSettings;
         const lookaroundMap = {
@@ -221,7 +271,7 @@ export const generateRegexString = (blocks: Block[]): string => {
           'negative-lookbehind': `(?<!${childrenRegex})`
         };
         return lookaroundMap[lSettings.type] || '';
-      
+
       case BlockType.BACKREFERENCE:
         const brSettings = settings as BackreferenceSettings;
         return `\\${brSettings.ref}`;
@@ -246,4 +296,3 @@ export const generateRegexString = (blocks: Block[]): string => {
   }
   return result;
 };
-

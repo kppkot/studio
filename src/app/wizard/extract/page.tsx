@@ -3,7 +3,7 @@
 import React from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/navigation';
-import { AtSign, Globe, CaseSensitive, MessageSquareQuote, TextCursorInput, Shuffle, ChevronLeft } from 'lucide-react';
+import { AtSign, Globe, Calculator, MessageSquareQuote, TextCursorInput, Shuffle, ChevronLeft } from 'lucide-react'; // Changed CaseSensitive to Calculator
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import '../wizard.css'; // Reuse common styles
 import { Button } from '@/components/ui/button';
@@ -42,16 +42,16 @@ const extractOptions: ExtractOption[] = [
     label: 'Все URL-адреса',
     description: 'Найти и извлечь все веб-адреса.',
     icon: Globe,
-    path: '/wizard/extract/url/result', 
+    path: '/wizard/extract/url/result',
     disabled: false,
   },
   {
     id: 'numbers',
     label: 'Все числа',
     description: 'Целые, десятичные, положительные, отрицательные.',
-    icon: CaseSensitive, // Using CaseSensitive as a stand-in for numbers like '123'
-    path: '/wizard/extract/numbers/result', // Placeholder
-    disabled: true,
+    icon: Calculator, // Using Calculator icon
+    path: '/wizard/extract/numbers/result',
+    disabled: false, // Enabled this option
   },
   {
     id: 'quotedText',
@@ -75,7 +75,7 @@ const extractOptions: ExtractOption[] = [
     description: 'Найти слова, которые повторяются в тексте.',
     icon: Shuffle,
     path: '/wizard/extract/duplicate-words/result',
-    disabled: false, // Enabled this option
+    disabled: false,
   },
 ];
 
