@@ -26,6 +26,8 @@ export default function WizardPage() {
       router.push('/wizard/validate');
     } else if (category === 'extract') {
       router.push('/wizard/extract');
+    } else if (category === 'replace') {
+      router.push('/wizard/replace');
     }
     // Add navigation for other categories later
     // Example: router.push(`/wizard/${category}`);

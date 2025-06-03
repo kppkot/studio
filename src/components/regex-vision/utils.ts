@@ -67,13 +67,21 @@ export const generateBlocksForURL = (forExtraction: boolean = false, requireProt
     const sPart = createLiteral('s', false);
     const sQuantifier = createQuantifier('?'); 
     const colonSlashSlashPart = createLiteral('://', false);
-    const protocolSequence = createSequenceGroup([httpPart, sPart, sQuantifier, colonSlashSlashPart], 'non-capturing');
+    
+    let protocolGroupChildren = [httpPart, sPart, sQuantifier, colonSlashSlashPart];
+    let protocolSequence = createSequenceGroup(protocolGroupChildren, 'non-capturing');
 
-    if (forExtraction || !requireProtocolForValidation) {
+
+    if (!requireProtocolForValidation && !forExtraction) { // Protocol optional for validation
         const optionalProtocolGroup = createSequenceGroup([protocolSequence], 'non-capturing');
         blocks.push(optionalProtocolGroup);
-        blocks.push(createQuantifier('?')); 
-    } else {
+        blocks.push(createQuantifier('?'));
+    } else if (forExtraction) { // Protocol optional for extraction
+        const optionalProtocolGroup = createSequenceGroup([protocolSequence], 'non-capturing');
+        blocks.push(optionalProtocolGroup);
+        blocks.push(createQuantifier('?'));
+    }
+     else { // Protocol required for validation
         blocks.push(protocolSequence); 
     }
 
@@ -82,14 +90,20 @@ export const generateBlocksForURL = (forExtraction: boolean = false, requireProt
     blocks.push(optionalWwwGroup);
     blocks.push(createQuantifier('?')); 
 
+    // Domain name and TLD: (?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,6}
+    // This is complex to build with basic blocks directly, so using a literal for it.
     blocks.push(createLiteral('(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,6}', false));
 
-    const pathChars = createCharClass('[a-zA-Z0-9._%+/~-]*', false); 
+
+    // Path: (?:/[a-zA-Z0-9._%+-]*)*
+    const pathChars = createCharClass('[a-zA-Z0-9._%+/~-]*', false); // Updated path chars
     const pathSegment = createSequenceGroup([createLiteral('/', false), pathChars], 'non-capturing');
     const optionalPath = createSequenceGroup([pathSegment], 'non-capturing');
     blocks.push(optionalPath);
     blocks.push(createQuantifier('*'));
 
+
+    // Query string: (?:\?[^#\s]*)?
     const queryStart = createLiteral('\\?', false); 
     const queryChars = createCharClass('[^#\\s]*', false); 
     const querySegment = createSequenceGroup([queryStart, queryChars], 'non-capturing');
@@ -97,6 +111,7 @@ export const generateBlocksForURL = (forExtraction: boolean = false, requireProt
     blocks.push(optionalQuery);
     blocks.push(createQuantifier('?'));
 
+    // Fragment: (?:#[^\s]*)?
     const fragmentStart = createLiteral('#', false);
     const fragmentChars = createCharClass('[^\\s]*', false); 
     const fragmentSegment = createSequenceGroup([fragmentStart, fragmentChars], 'non-capturing');
@@ -139,6 +154,13 @@ export const generateBlocksForDuplicateWords = (): Block[] => {
     wordCaptureGroup,
     createAnchor('\\b'),
     createLookaround('positive-lookahead', lookaheadContent),
+  ];
+};
+
+export const generateBlocksForMultipleSpaces = (): Block[] => {
+  return [
+      createCharClass('\\s', false),
+      createQuantifier('{n,}', 2, null) 
   ];
 };
 
@@ -218,3 +240,4 @@ export const generateRegexString = (blocks: Block[]): string => {
   }
   return result;
 };
+
