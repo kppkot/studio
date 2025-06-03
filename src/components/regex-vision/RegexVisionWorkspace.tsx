@@ -6,6 +6,7 @@ import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants.tsx';
 import { generateId, generateRegexString } from './utils';
 import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation'; // Import useRouter
 
 import AppHeader from './AppHeader';
 import BlockNode from './BlockNode';
@@ -15,7 +16,8 @@ import RegexOutputDisplay from './RegexOutputDisplay';
 import TestArea from './TestArea';
 import CodeGenerationPanel from './CodeGenerationPanel';
 import DebugView from './DebugView';
-import RegexWizardModal from './RegexWizardModal'; 
+// RegexWizardModal is no longer directly used from here for the main "Wizard" button
+// import RegexWizardModal from './RegexWizardModal'; 
 import { Button } from '@/components/ui/button';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -105,11 +107,12 @@ const findBlockAndParentRecursive = (
 
 
 const RegexVisionWorkspace: React.FC = () => {
+  const router = useRouter(); // Initialize router
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [parentIdForNewBlock, setParentIdForNewBlock] = useState<string | null>(null);
   const [isPaletteVisible, setIsPaletteVisible] = useState(false);
-  const [isWizardModalOpen, setIsWizardModalOpen] = useState(false); 
+  // const [isWizardModalOpen, setIsWizardModalOpen] = useState(false); // Old wizard modal state
   
   const [testText, setTestText] = useState<string>('Быстрая коричневая лиса прыгает через ленивую собаку.');
   const [regexFlags, setRegexFlags] = useState<string>('g');
@@ -203,28 +206,39 @@ const RegexVisionWorkspace: React.FC = () => {
       isExpanded: canBeExpanded ? true : undefined,
     };
 
-    if (parentId) {
-      setBlocks(prev => addChildRecursive(prev, parentId, newBlock));
-    } else {
-      setBlocks(prev => [...prev, newBlock]);
-    }
-    setSelectedBlockId(newBlock.id);
-    setParentIdForNewBlock(null);
-    setIsPaletteVisible(false);
-  }, [toast]);
-
-  const handleAddBlocks = useCallback((newBlocks: Block[], parentId?: string | null) => {
-    if (newBlocks.length === 0) return;
-
     let targetParentId = parentId;
-    if (!targetParentId && selectedBlockId) { // If no explicit parent, try to add to selected block if it's a container
+    if (!targetParentId && selectedBlockId) {
       const selBlock = findBlockRecursive(blocks, selectedBlockId);
       if (selBlock && [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(selBlock.type)) {
         targetParentId = selectedBlockId;
       }
     }
 
+    if (targetParentId) {
+      setBlocks(prev => addChildRecursive(prev, targetParentId, newBlock));
+    } else {
+      setBlocks(prev => [...prev, newBlock]);
+    }
+    setSelectedBlockId(newBlock.id);
+    setParentIdForNewBlock(null); // Reset parent target from palette
+    setIsPaletteVisible(false);
+  }, [toast, blocks, selectedBlockId]);
 
+
+  // This function might be called from the new wizard page eventually to add blocks
+  const handleAddBlocksFromWizard = useCallback((newBlocks: Block[], parentIdFromWizard?: string | null) => {
+    if (newBlocks.length === 0) return;
+  
+    let targetParentId = parentIdFromWizard; 
+  
+    // If no explicit parent from wizard, try to add to selected block if it's a container, or root.
+    if (!targetParentId && selectedBlockId) {
+      const selBlock = findBlockRecursive(blocks, selectedBlockId);
+      if (selBlock && [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(selBlock.type)) {
+        targetParentId = selectedBlockId;
+      }
+    }
+  
     if (targetParentId) {
       setBlocks(prev => {
         const addRec = (currentNodes: Block[], pId: string, blocksToAdd: Block[]): Block[] => {
@@ -244,9 +258,9 @@ const RegexVisionWorkspace: React.FC = () => {
     } else {
       setBlocks(prev => [...prev, ...newBlocks]);
     }
+  
     setSelectedBlockId(newBlocks[newBlocks.length - 1].id);
-    setParentIdForNewBlock(null); 
-    setIsWizardModalOpen(false); 
+    // setIsWizardModalOpen(false); // Not using modal anymore for this button
     toast({ title: "Блоки добавлены", description: "Блоки из Мастера успешно добавлены." });
   }, [toast, blocks, selectedBlockId]);
 
@@ -369,7 +383,6 @@ const RegexVisionWorkspace: React.FC = () => {
       if (!foundBlock) {
         return prevBlocks; 
       }
-      // Ensure we're working with a fresh copy for manipulation to avoid direct state mutation issues
       let blocksWithoutDragged = cloneBlockForState({id: 'root', type: BlockType.LITERAL, settings: {text:''}, children: blocksWithoutDraggedOriginal, isExpanded: true}).children || [];
 
 
@@ -377,7 +390,7 @@ const RegexVisionWorkspace: React.FC = () => {
 
       const dropTargetNodeInfo = findBlockAndParentRecursive(blocksWithoutDragged, dropOnBlockId);
       if (!dropTargetNodeInfo.block) {
-        return prevBlocks; // Drop target not found in the modified tree
+        return prevBlocks; 
       }
       const dropTargetNode = dropTargetNodeInfo.block;
 
@@ -385,10 +398,9 @@ const RegexVisionWorkspace: React.FC = () => {
       const canDropTargetBeParent = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(dropTargetNode.type);
       let finalBlocks: Block[];
       
-      // Prevent dropping a block onto one of its own descendants or itself
       const isDescendantOrSelf = (checkNodes: Block[], parentId: string, childIdToFind: string): boolean => {
         for (const node of checkNodes) {
-          if (node.id === parentId) { // Found the potential parent
+          if (node.id === parentId) { 
             const findChild = (nodesToSearch: Block[], id: string): boolean => {
               for (const n of nodesToSearch) {
                 if (n.id === id) return true;
@@ -406,12 +418,9 @@ const RegexVisionWorkspace: React.FC = () => {
       };
 
       if (draggedId === dropTargetNode.id || isDescendantOrSelf(prevBlocks, draggedId, dropTargetNode.id)) {
-          // console.warn("Cannot drop a block onto itself or its descendants.");
-          return prevBlocks; // Revert to original state if drop is invalid
+          return prevBlocks; 
       }
 
-
-      // If dropping onto a container block (and not itself or its descendant)
       if (canDropTargetBeParent && document.body.getAttribute('data-drag-target-role') === 'parent') { 
         const addAsChildRecursiveFn = (nodes: Block[], targetParentId: string, childToAdd: Block): Block[] => {
           return nodes.map(n => {
@@ -426,18 +435,18 @@ const RegexVisionWorkspace: React.FC = () => {
           });
         };
         finalBlocks = addAsChildRecursiveFn(blocksWithoutDragged, dropOnBlockId, draggedBlockInstance);
-      } else { // Drop as sibling
+      } else { 
         const addAsSiblingRecursiveFn = (
             nodes: Block[], 
             parentToSearchInId: string | null, 
             afterSiblingId: string, 
             blockToAdd: Block
         ): Block[] => {
-            if (parentToSearchInId === null) { // Root level
+            if (parentToSearchInId === null) { 
                 const targetIdx = nodes.findIndex(n => n.id === afterSiblingId);
                 const newRootNodes = [...nodes];
                 if (targetIdx !== -1) newRootNodes.splice(targetIdx + 1, 0, blockToAdd);
-                else newRootNodes.push(blockToAdd); // Fallback: add to end
+                else newRootNodes.push(blockToAdd); 
                 return newRootNodes;
             }
 
@@ -446,7 +455,7 @@ const RegexVisionWorkspace: React.FC = () => {
                     const targetIdx = (n.children || []).findIndex(child => child.id === afterSiblingId);
                     const newChildren = [...(n.children || [])];
                     if (targetIdx !== -1) newChildren.splice(targetIdx + 1, 0, blockToAdd);
-                    else newChildren.push(blockToAdd); // Fallback: add to end of children
+                    else newChildren.push(blockToAdd); 
                     return { ...n, children: newChildren, isExpanded: true };
                 }
                 if (n.children) {
@@ -599,7 +608,6 @@ const RegexVisionWorkspace: React.FC = () => {
         } else if (event.key === 'ArrowLeft') {
           event.preventDefault();
           if (parent && (currentBlock.isExpanded ?? (currentBlock.children && currentBlock.children.length > 0))) {
-             // If expanded or has children and is not root, try to collapse first if it makes sense
             if (canBeExpanded && (currentBlock.isExpanded ?? false)) {
                handleUpdateBlock(selectedBlockId, { ...currentBlock, isExpanded: false });
             } else {
@@ -607,7 +615,7 @@ const RegexVisionWorkspace: React.FC = () => {
             }
           } else if (canBeExpanded && (currentBlock.isExpanded ?? false)) { 
             handleUpdateBlock(selectedBlockId, { ...currentBlock, isExpanded: false });
-          } else if (parent) { // Already collapsed or not expandable, move to parent
+          } else if (parent) { 
             setSelectedBlockId(parent.id);
           }
         }
@@ -644,7 +652,7 @@ const RegexVisionWorkspace: React.FC = () => {
                       <Button variant="outline" size="iconSm" onClick={handleCollapseAll} title="Свернуть всё (Ctrl+Shift+Вверх)">
                         <FoldVertical size={14} />
                       </Button>
-                       <Button size="sm" variant="outline" onClick={() => setIsWizardModalOpen(true)}>
+                       <Button size="sm" variant="outline" onClick={() => router.push('/wizard')}>
                         <Zap size={16} className="mr-1 text-amber-500" /> Мастер Regex
                       </Button>
                       <Button size="sm" onClick={() => { setParentIdForNewBlock(null); setIsPaletteVisible(true); }}>
@@ -734,21 +742,24 @@ const RegexVisionWorkspace: React.FC = () => {
         onToggle={() => setIsPaletteVisible(!isPaletteVisible)}
         parentIdForNewBlock={parentIdForNewBlock}
       />
-      {isWizardModalOpen && (
+      {/* 
+        The RegexWizardModal is no longer triggered by the main button.
+        Its logic will be integrated into the new /wizard page flow later.
+        {isWizardModalOpen && (
         <RegexWizardModal
           isOpen={isWizardModalOpen}
           onClose={() => {
             setIsWizardModalOpen(false);
-            setParentIdForNewBlock(null); // Reset parent target when closing wizard
+            setParentIdForNewBlock(null); 
           }}
           onComplete={(wizardBlocks) => {
             handleAddBlocks(wizardBlocks, parentIdForNewBlock); 
             setIsWizardModalOpen(false);
-            setParentIdForNewBlock(null); // Reset parent target
+            setParentIdForNewBlock(null); 
           }}
           initialParentId={parentIdForNewBlock}
         />
-      )}
+      )} */}
     </div>
   );
 };
