@@ -43,7 +43,7 @@ const extractOptions: ExtractOption[] = [
     description: 'Найти и извлечь все веб-адреса.',
     icon: Globe,
     path: '/wizard/extract/url/result', 
-    disabled: false, // Enabled URL extraction
+    disabled: false,
   },
   {
     id: 'numbers',
@@ -74,8 +74,8 @@ const extractOptions: ExtractOption[] = [
     label: 'Повторяющиеся слова',
     description: 'Найти слова, которые повторяются в тексте.',
     icon: Shuffle,
-    path: '/wizard/extract/duplicate-words/result', // Placeholder
-    disabled: true,
+    path: '/wizard/extract/duplicate-words/result',
+    disabled: false, // Enabled this option
   },
 ];
 

@@ -49,87 +49,56 @@ export const generateBlocksForEmail = (forExtraction: boolean = false): Block[] 
 
     const emailCoreBlocks: Block[] = [
       createCharClass(localPartChars, false),
-      createLiteral('@', false), // No need to escape @ if it's a literal block
+      createLiteral('@', false), 
       createCharClass(domainChars, false),
-      createLiteral('\\.', false), // Dot needs escaping if it's a literal block content for regex string
+      createLiteral('\\.', false), 
       createCharClass(tldChars, false),
     ];
     if(forExtraction) {
-        // For extraction, we typically want to capture the email, so a capturing group around core blocks
         return [createAnchor('\\b'), createSequenceGroup(emailCoreBlocks, 'capturing'), createAnchor('\\b')];
     }
-    // For validation, ensure the whole string matches
     return [createAnchor('^'), ...emailCoreBlocks, createAnchor('$')];
   };
 
 export const generateBlocksForURL = (forExtraction: boolean = false, requireProtocolForValidation: boolean = true): Block[] => {
     const blocks: Block[] = [];
 
-    // Protocol: (?:https?://)? or https?://
     const httpPart = createLiteral('http', false);
     const sPart = createLiteral('s', false);
-    const sQuantifier = createQuantifier('?'); // Makes 's' optional for http vs https
+    const sQuantifier = createQuantifier('?'); 
     const colonSlashSlashPart = createLiteral('://', false);
     const protocolSequence = createSequenceGroup([httpPart, sPart, sQuantifier, colonSlashSlashPart], 'non-capturing');
 
     if (forExtraction || !requireProtocolForValidation) {
-        // For extraction, or if protocol is not required, make the whole protocol sequence optional
         const optionalProtocolGroup = createSequenceGroup([protocolSequence], 'non-capturing');
         blocks.push(optionalProtocolGroup);
-        blocks.push(createQuantifier('?')); // Make the (?:https?://) group optional
+        blocks.push(createQuantifier('?')); 
     } else {
-        blocks.push(protocolSequence); // Protocol is required for validation
+        blocks.push(protocolSequence); 
     }
 
-    // Optional www: (?:www\.)?
-    const wwwPart = createLiteral('www\\.', false); // www. (dot escaped)
+    const wwwPart = createLiteral('www\\.', false); 
     const optionalWwwGroup = createSequenceGroup([wwwPart], 'non-capturing');
     blocks.push(optionalWwwGroup);
-    blocks.push(createQuantifier('?')); // Make www. optional
+    blocks.push(createQuantifier('?')); 
 
-    // Domain name: [a-zA-Z0-9-]+ (one or more alphanumeric or hyphen)
-    // Followed by TLD: \.[a-zA-Z]{2,}
-    // Combined to avoid issues with just hyphen or multiple hyphens:
-    // [a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?  (for one part of domain)
-    // For simplicity here:
-    blocks.push(createCharClass('[a-zA-Z0-9-]+', false)); // Domain characters
-    blocks.push(createQuantifier('+')); // At least one domain character part
-    
-    // TLD: (\.[a-zA-Z]{2,})+
-    // More complex TLDs can exist (e.g. .co.uk). For simplicity, we'll use a basic TLD pattern.
-    // This should be (?: \. [a-zA-Z]{2,})+ to handle subdomains correctly as well as TLDs.
-    // For a simple wizard, \.[a-zA-Z]{2,} is often a starting point.
-    // Let's go with a slightly more robust domain and TLD structure
-    const domainPartWithSubdomains = createSequenceGroup([
-        createCharClass('[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?', false), // subdomain or domain name part
-        createLiteral('\\.', false), // dot
-        createCharClass('[a-zA-Z]{2,6}', false) // TLD (common lengths)
-    ], 'non-capturing');
-    
-    // Instead of the simple domain + TLD above, let's use a more common pattern for domain name
-    // (?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,6}
-    // This is a single complex literal block for simplicity in the wizard's block structure.
     blocks.push(createLiteral('(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,6}', false));
 
-
-    // Optional path: (?:/[a-zA-Z0-9._%+-]*)*
-    const pathChars = createCharClass('[a-zA-Z0-9._%+-]*', false); // Allowed path characters
+    const pathChars = createCharClass('[a-zA-Z0-9._%+/~-]*', false); 
     const pathSegment = createSequenceGroup([createLiteral('/', false), pathChars], 'non-capturing');
     const optionalPath = createSequenceGroup([pathSegment], 'non-capturing');
     blocks.push(optionalPath);
-    blocks.push(createQuantifier('*')); // Path is optional and can have multiple segments
+    blocks.push(createQuantifier('*'));
 
-    // Optional query string: (?: \? [^#\s]* )? (any char except # and whitespace)
-    const queryStart = createLiteral('\\?', false); // Escaped ?
-    const queryChars = createCharClass('[^#\\s]*', false); // No # or whitespace
+    const queryStart = createLiteral('\\?', false); 
+    const queryChars = createCharClass('[^#\\s]*', false); 
     const querySegment = createSequenceGroup([queryStart, queryChars], 'non-capturing');
     const optionalQuery = createSequenceGroup([querySegment], 'non-capturing');
     blocks.push(optionalQuery);
     blocks.push(createQuantifier('?'));
 
-    // Optional fragment: (?: # [^\s]* )? (any char except whitespace)
     const fragmentStart = createLiteral('#', false);
-    const fragmentChars = createCharClass('[^\\s]*', false); // No whitespace
+    const fragmentChars = createCharClass('[^\\s]*', false); 
     const fragmentSegment = createSequenceGroup([fragmentStart, fragmentChars], 'non-capturing');
     const optionalFragment = createSequenceGroup([fragmentSegment], 'non-capturing');
     blocks.push(optionalFragment);
@@ -148,10 +117,29 @@ export const generateBlocksForIPv4 = (): Block[] => {
 };
 
 export const generateBlocksForIPv6 = (): Block[] => {
-  // This is a common, complex regex for IPv6.
-  // It handles various forms including compressed notation and IPv4-mapped addresses.
   const ipv6Regex = "(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))";
   return [createAnchor('^'), createLiteral(ipv6Regex, false), createAnchor('$')];
+};
+
+export const generateBlocksForDuplicateWords = (): Block[] => {
+  const wordCharClass = createCharClass('\\w', false);
+  const wordQuantifier = createQuantifier('+');
+  const wordCaptureGroup = createSequenceGroup([wordCharClass, wordQuantifier], 'capturing');
+
+  const lookaheadContent: Block[] = [
+    createCharClass('.', false), // Any character
+    createQuantifier('*'),      // Zero or more times
+    createAnchor('\\b'),
+    createBackreference(1),     // Backreference to the first captured group
+    createAnchor('\\b'),
+  ];
+  
+  return [
+    createAnchor('\\b'),
+    wordCaptureGroup,
+    createAnchor('\\b'),
+    createLookaround('positive-lookahead', lookaheadContent),
+  ];
 };
 
 
@@ -162,13 +150,10 @@ export const generateRegexString = (blocks: Block[]): string => {
 
     switch (block.type) {
       case BlockType.LITERAL:
-        // Literal text is already escaped (or not) by createLiteral
         return (settings as LiteralSettings).text || '';
       
       case BlockType.CHARACTER_CLASS:
         const charClassSettings = settings as CharacterClassSettings;
-        // Pattern for char class should not be double-escaped if it contains things like \d
-        // Assuming pattern is correctly formed for char class usage.
         return `[${charClassSettings.negated ? '^' : ''}${charClassSettings.pattern || ''}]`;
       
       case BlockType.QUANTIFIER:
@@ -233,4 +218,3 @@ export const generateRegexString = (blocks: Block[]): string => {
   }
   return result;
 };
-
