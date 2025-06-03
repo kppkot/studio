@@ -1,4 +1,5 @@
 
+
 import type { Block, BlockConfig, CharacterClassSettings, ConditionalSettings, GroupSettings, LiteralSettings, LookaroundSettings, QuantifierSettings, AnchorSettings, BackreferenceSettings } from './types';
 import { BlockType } from './types';
 
@@ -39,6 +40,20 @@ export const createLookaround = (type: LookaroundSettings['type'], children: Blo
 export const createBackreference = (ref: string | number): Block => ({
   id: generateId(), type: BlockType.BACKREFERENCE, settings: { ref } as BackreferenceSettings, children: [], isExpanded: false
 });
+
+export const generateBlocksForEmail = (forExtraction: boolean = false): Block[] => {
+    const emailCoreBlocks: Block[] = [
+      createCharClass('[\\w.%+-]+', false), // Allow common email chars, including dot, percent, plus, hyphen
+      createLiteral('@', false),
+      createCharClass('[A-Za-z0-9.-]+', false), // Domain name parts
+      createLiteral('\\.', false),
+      createCharClass('[A-Za-z]{2,}', false), // TLD, at least 2 letters
+    ];
+    if(forExtraction) {
+        return [createAnchor('\\b'), createSequenceGroup(emailCoreBlocks, 'capturing'), createAnchor('\\b')];
+    }
+    return [createAnchor('^'), ...emailCoreBlocks, createAnchor('$')];
+  };
 
 
 export const generateRegexString = (blocks: Block[]): string => {
@@ -119,3 +134,4 @@ export const generateRegexString = (blocks: Block[]): string => {
   }
   return result;
 };
+

@@ -41,7 +41,7 @@ const validationOptions: ValidationOption[] = [
     label: 'Стандартные форматы',
     description: 'Email, URL, Телефон, IP, Пароль.',
     icon: CheckBadge,
-    path: '/wizard/validate/standard-formats', // Placeholder path
+    path: '/wizard/validate/standard-formats', 
   },
   {
     id: 'datetime',

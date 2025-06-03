@@ -1,5 +1,6 @@
 
 
+
 "use client";
 import React, { useState, useCallback, useEffect } from 'react';
 import type { Block, QuantifierSettings, CharacterClassSettings, GroupSettings, LookaroundSettings, LiteralSettings, AnchorSettings, BackreferenceSettings } from './types';
@@ -24,9 +25,9 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card } from "@/components/ui/card"; 
-import { Lightbulb, CheckSquare, TextCursorInput, Replace, Eraser, Split, Wand2, Phone, AtSign, Globe, KeyRound, Shuffle, MessageSquareQuote, CaseSensitive, SearchCheck, Route } from 'lucide-react';
+import { Lightbulb, CheckSquare, TextCursorInput, Replace, Eraser, Split, Wand2, Phone, AtSign, Globe, KeyRound, Shuffle, MessageSquareQuote, CaseSensitive, SearchCheck, Route, Workflow, FileText, CalendarClock } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { generateId, createAnchor, createLiteral, createCharClass, createQuantifier, createSequenceGroup, createAlternation, createLookaround, createBackreference, escapeRegexChars } from './utils';
+import { generateId, createAnchor, createLiteral, createCharClass, createQuantifier, createSequenceGroup, createAlternation, createLookaround, createBackreference, escapeRegexChars, generateBlocksForEmail } from './utils';
 
 
 interface RegexWizardModalProps {
@@ -115,12 +116,12 @@ const wizardConfig = {
     title: "Мастер Regex: Выберите основную задачу",
     type: 'card_choice', // New type for card-like selection
     options: [
-      { id: 'validation', label: "Проверить Формат", description: "Валидация email, URL, дат, и т.д.", icon: <CheckSquare size={24} className="mb-2 text-primary"/> },
-      { id: 'extraction', label: "Найти и Извлечь", description: "Извлечение email, чисел, текста в кавычках.", icon: <SearchCheck size={24} className="mb-2 text-primary"/> },
-      { id: 'replacement', label: "Заменить / Изменить", description: "Удаление пробелов, маскирование, замена.", icon: <Replace size={24} className="mb-2 text-primary"/> },
-      { id: 'splitting', label: "Разделить Текст", description: "Разбивка по запятой, пробелу, символу.", icon: <Split size={24} className="mb-2 text-primary"/> },
-      // { id: 'condition', label: "Проверить Условие", description: "Содержит ли текст 'ошибку', цифры, и т.п." , icon: <HelpCircleIcon size={24} className="mb-2 text-primary"/>, disabled: true },
-      // { id: 'pro', label: "Свой Шаблон (PRO)", description: "Для сложных задач и опытных пользователей.", icon: <Wand2 size={24} className="mb-2 text-primary"/>, disabled: true },
+      { id: 'validation', label: "Проверить Формат", description: "Валидация email, URL, дат, и т.д.", icon: CheckSquare},
+      { id: 'extraction', label: "Найти и Извлечь", description: "Извлечение email, чисел, текста в кавычках.", icon: SearchCheck },
+      { id: 'replacement', label: "Заменить / Изменить", description: "Удаление пробелов, маскирование, замена.", icon: Replace },
+      { id: 'splitting', label: "Разделить Текст", description: "Разбивка по запятой, пробелу, символу.", icon: Split },
+      { id: 'condition', label: "Проверить Условие", description: "Содержит ли текст 'ошибку', цифры, и т.п." , icon: Workflow, disabled: true },
+      { id: 'pro', label: "Свой Шаблон (PRO)", description: "Для сложных задач и опытных пользователей.", icon: Wand2, disabled: true },
     ],
     next: (choice: string) => {
       if (choice === 'validation') return 'validation_type_choice'; 
@@ -135,9 +136,9 @@ const wizardConfig = {
     title: "Валидация: Какой тип проверки вам нужен?",
     type: 'radio',
     options: [
-      { id: 'basic', label: "Простые шаблоны (цифры, буквы, длина и т.д.)" },
-      { id: 'standard', label: "Стандартные форматы (Email, URL, Телефон, IP, Пароль)" },
-      { id: 'datetime', label: "Дата и время (ДД/ММ/ГГГГ, ЧЧ:ММ и т.д.)" },
+      { id: 'basic', label: "Простые шаблоны (цифры, буквы, длина и т.д.)", icon: FileText },
+      { id: 'standard', label: "Стандартные форматы (Email, URL, Телефон, IP, Пароль)", icon: CheckBadge },
+      { id: 'datetime', label: "Дата и время (ДД/ММ/ГГГГ, ЧЧ:ММ и т.д.)", icon: CalendarClock },
     ],
     next: (choice: string) => {
       if (choice === 'basic') return 'validation_basicPatterns_what';
@@ -307,12 +308,12 @@ const wizardConfig = {
     title: "Извлечение/Поиск: Что нужно найти в тексте?",
     type: 'radio',
     options: [
-      { id: 'emails', label: "Все email-адреса" },
-      { id: 'urls', label: "Все URL-адреса" },
-      { id: 'numbers', label: "Все числа (целые/десятичные)" },
-      { id: 'quotedText', label: "Текст в кавычках" },
-      { id: 'specificWord', label: "Слово/фразу (ввести)" },
-      { id: 'duplicateWords', label: "Повторяющиеся слова" },
+      { id: 'emails', label: "Все email-адреса", icon: AtSign },
+      { id: 'urls', label: "Все URL-адреса", icon: Globe },
+      { id: 'numbers', label: "Все числа (целые/десятичные)", icon: CaseSensitive }, // Reusing, could be #
+      { id: 'quotedText', label: "Текст в кавычках", icon: MessageSquareQuote },
+      { id: 'specificWord', label: "Слово/фразу (ввести)", icon: TextCursorInput },
+      { id: 'duplicateWords', label: "Повторяющиеся слова", icon: Shuffle },
     ],
     next: (choice: string) => {
       if (['emails', 'urls', 'numbers', 'duplicateWords'].includes(choice)) {
@@ -346,12 +347,12 @@ const wizardConfig = {
     title: "Замена/Трансформация: Что нужно заменить?",
     type: 'radio',
     options: [
-        { id: 'multipleSpaces', label: "Несколько пробелов → один" },
-        { id: 'tabsToSpaces', label: "Табуляция → пробелы" },
-        { id: 'removeHtml', label: "Удалить HTML-теги" },
-        { id: 'swapParts', label: "Сменить порядок (swap)" },
-        { id: 'maskDigits', label: "Маскировать цифры" },
-        { id: 'otherReplace', label: "Другое (написать паттерн и замену) (скоро)", disabled: true },
+        { id: 'multipleSpaces', label: "Несколько пробелов → один", icon: Eraser },
+        { id: 'tabsToSpaces', label: "Табуляция → пробелы", icon: Eraser },
+        { id: 'removeHtml', label: "Удалить HTML-теги", icon: Eraser },
+        { id: 'swapParts', label: "Сменить порядок (swap)", icon: Shuffle },
+        { id: 'maskDigits', label: "Маскировать цифры", icon: KeyRound }, // Reusing KeyRound
+        { id: 'otherReplace', label: "Другое (написать паттерн и замену) (скоро)", icon: Wand2, disabled: true },
     ],
     next: (choice: string) => {
       if (['multipleSpaces', 'tabsToSpaces', 'removeHtml'].includes(choice)) {
@@ -420,8 +421,8 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
   const currentStepConfig = wizardConfig[currentStepId as keyof typeof wizardConfig];
 
-  const handleCardChoice = (value: string) => { // For 'card_choice' type step
-    const newFormData: Partial<WizardFormData> = {}; // Reset form data for new main category
+  const handleCardChoice = (value: string) => { 
+    const newFormData: Partial<WizardFormData> = {}; 
     newFormData.mainCategory = value as WizardFormData['mainCategory'];
     setFormData(newFormData as WizardFormData);
   };
@@ -436,6 +437,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         const currentExtractionChoice = newFormData.extractionChoice;
         const currentReplacementChoice = newFormData.replacementChoice;
         const currentSplittingChoice = newFormData.splittingChoice;
+        const currentDateTimeFormat = newFormData.dateFormat;
 
 
         Object.keys(newFormData).forEach(keyStr => {
@@ -444,13 +446,14 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                  delete (newFormData as any)[key];
             }
         });
-        // Restore essential higher-level choices if they were kept
+        
         if (keysToKeep.includes('mainCategory') && currentMainCategory) newFormData.mainCategory = currentMainCategory;
         if (keysToKeep.includes('validationTypeChoice') && currentValidationType) newFormData.validationTypeChoice = currentValidationType;
         if (keysToKeep.includes('standardFormatChoice') && currentStandardFormat) newFormData.standardFormatChoice = currentStandardFormat;
         if (keysToKeep.includes('extractionChoice') && currentExtractionChoice) newFormData.extractionChoice = currentExtractionChoice;
         if (keysToKeep.includes('replacementChoice') && currentReplacementChoice) newFormData.replacementChoice = currentReplacementChoice;
         if (keysToKeep.includes('splittingChoice') && currentSplittingChoice) newFormData.splittingChoice = currentSplittingChoice;
+        if (keysToKeep.includes('dateFormat') && currentDateTimeFormat) newFormData.dateFormat = currentDateTimeFormat;
 
     };
     
@@ -464,7 +467,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         resetSubsequentFields(['mainCategory','validationTypeChoice']);
         newFormData.standardFormatChoice = value as WizardFormData['standardFormatChoice'];
     } else if (currentStepId === 'validation_dateTime_dateFormat') {
-        resetSubsequentFields(['mainCategory','validationTypeChoice', 'validationTypeChoice']);
+        resetSubsequentFields(['mainCategory','validationTypeChoice']);
         newFormData.dateFormat = value as WizardFormData['dateFormat'];
     } else if (currentStepId === 'extraction_whatToExtract') {
         resetSubsequentFields(['mainCategory']);
@@ -569,29 +572,12 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     return blocks;
   }, [formData]);
 
-  const generateBlocksForEmail = useCallback((forExtraction: boolean = false): Block[] => {
-    const emailBlocks: Block[] = [
-      createCharClass('[\\w._%+-]', false), 
-      createQuantifier('+'),
-      createLiteral('@', false), 
-      createCharClass('[\\w.-]', false), 
-      createQuantifier('+'),
-      createLiteral('\\.', false), 
-      createCharClass('[A-Za-z]', false), 
-      createQuantifier('{n,m}', 2, 6), 
-    ];
-    if(forExtraction) {
-        // Capture the whole email
-        return [createAnchor('\\b'), createSequenceGroup(emailBlocks, 'capturing'), createAnchor('\\b')];
-    }
-    return [createAnchor('^'), ...emailBlocks, createAnchor('$')];
-  }, []);
+
 
   const generateBlocksForURL = useCallback((forExtraction: boolean = false): Block[] => {
     const blocks: Block[] = [];
     const protocolIsRequiredForValidation = !forExtraction && formData.url_requireProtocol === 'yes';
-    const protocolIsOptionalForExtraction = forExtraction; // Always optional for extraction unless specified
-
+   
     const httpPart = createLiteral('http', false);
     const sPart = createLiteral('s', false);
     const sQuantifier = createQuantifier('?');
@@ -601,9 +587,13 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     
     if (protocolIsRequiredForValidation) {
         blocks.push(protocolSequence);
-    } else if (protocolIsOptionalForExtraction || (!forExtraction && formData.url_requireProtocol === 'no')) {
+    } else { 
         const optionalProtocolGroup = createSequenceGroup([protocolSequence], 'non-capturing');
-        (optionalProtocolGroup.children[0] as Block).children!.push(createQuantifier('?')); // Make the whole sequence optional
+        if(optionalProtocolGroup.children && optionalProtocolGroup.children.length > 0 && optionalProtocolGroup.children[0].type === BlockType.GROUP){
+             (optionalProtocolGroup.children[0] as Block).children!.push(createQuantifier('?'));
+        } else {
+             optionalProtocolGroup.children.push(createQuantifier('?'));
+        }
         blocks.push(optionalProtocolGroup);
     }
 
@@ -613,13 +603,9 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     (optionalWwwGroup.children[0] as Block).children!.push(createQuantifier('?'));
     blocks.push(optionalWwwGroup);
     
-    blocks.push(createCharClass('[A-Za-z0-9._%+-]+', false)); // Domain name and TLD start
-    // blocks.push(createQuantifier('+')); // Simplified: combined with char class
-
+    blocks.push(createCharClass('[A-Za-z0-9._%+-]+', false)); 
     blocks.push(createLiteral('\\.', false)); 
-
-    blocks.push(createCharClass('[A-Za-z]{2,6}', false));  // TLD
-    // blocks.push(createQuantifier('{n,m}', 2, 6)); // Simplified
+    blocks.push(createCharClass('[A-Za-z]{2,6}', false));  
 
     const pathSegmentParts: Block[] = [
         createLiteral('/', false),
@@ -645,12 +631,12 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   const generateBlocksForPhone = useCallback((): Block[] => {
     const blocks: Block[] = [createAnchor('^')];
     if (formData.phone_hasCountryCode === 'yes') {
-        blocks.push(createLiteral('\\+', false)); 
+        blocks.push(createLiteral('\\+', true)); 
         blocks.push(createQuantifier('?'));
         blocks.push(createCharClass('\\d', false));
         blocks.push(createQuantifier('{n,m}', 1, 3));
         if (formData.phone_allowSeparators === 'yes') {
-          blocks.push(createCharClass('[ -]', false));
+          blocks.push(createCharClass(' -', false)); // space and hyphen allowed as separators
           blocks.push(createQuantifier('?'));
         }
     }
@@ -658,30 +644,22 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     const digitPattern = '\\d';
     const separatorPattern = formData.phone_allowSeparators === 'yes' ? '[ -]' : '';
     
-    const mainNumberPart: Block[] = [];
-    mainNumberPart.push(createCharClass(digitPattern)); // Start with a digit
-    mainNumberPart.push(createQuantifier('{n,m}', formData.phone_hasCountryCode === 'yes' ? 6 : 7, 14)); // Adjust min based on country code presence
+    const mainNumberPart: Block[] = [
+      createCharClass(digitPattern), 
+      createQuantifier(formData.phone_hasCountryCode === 'yes' ? '{6,14}' : '{7,15}'),
+    ];
 
     if (formData.phone_allowSeparators === 'yes' && separatorPattern) {
-      // This part is tricky to make it "at least N digits separated by optional separators"
-      // For simplicity, we'll use a more general pattern allowing digits and optional separators
-      const mainNumberContent: Block[] = [
-          createCharClass(digitPattern + (separatorPattern ? escapeRegexChars(separatorPattern) : '')), // e.g. [\d\s-]
-          createQuantifier(formData.phone_hasCountryCode === 'yes' ? '{6,14}' : '{7,15}') // Match 7 to 15 of these characters
-      ];
-      // A more precise approach would involve lookaheads to count digits, which is too complex for the wizard.
-      // This simpler approach will allow numbers like "123 456 789" or "123-456-7890" or "1234567890".
-      // We can refine this further if needed, but for wizard output it's often a balance.
-      // The regex generated by old code: `(\d[ -]?){7,15}` which is a good simple base.
-      // Let's try to mimic that.
-      blocks.push(createSequenceGroup([
+      // More flexible: allow digits and optional separators throughout
+      const digitAndOptionalSep = createSequenceGroup([
           createCharClass(digitPattern),
-          createSequenceGroup([createCharClass(separatorPattern, false)], 'non-capturing'),
+          createSequenceGroup([createCharClass(separatorPattern.slice(1,-1), false)], 'non-capturing'), // remove [ and ]
           createQuantifier('?')
-      ], 'non-capturing'));
+      ], 'non-capturing');
+      blocks.push(digitAndOptionalSep);
       blocks.push(createQuantifier(formData.phone_hasCountryCode === 'yes' ? '{6,14}' : '{7,15}'));
 
-    } else { // Only digits
+    } else { 
         blocks.push(createCharClass(digitPattern, false));
         blocks.push(createQuantifier(formData.phone_hasCountryCode === 'yes' ? '{6,14}' : '{7,15}'));
     }
@@ -691,15 +669,12 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   }, [formData.phone_hasCountryCode, formData.phone_allowSeparators]);
 
   const generateBlocksForIPv4 = useCallback((): Block[] => {
-    const octet = "(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)"; // Non-capturing group for an octet
+    const octet = "(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)"; 
     const ipv4Regex = `${octet}\\.${octet}\\.${octet}\\.${octet}`;
     return [createAnchor('^'), createLiteral(ipv4Regex, false), createAnchor('$')];
   }, []);
   
   const generateBlocksForIPv6 = useCallback((): Block[] => {
-    // This is a common, complex regex for IPv6.
-    // Source: https://stackoverflow.com/questions/53497/regular-expression-that-matches-valid-ipv6-addresses
-    // For the wizard, providing it as a single literal block is usually sufficient.
     const ipv6Regex = "(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))";
     return [createAnchor('^'), createLiteral(ipv6Regex, false), createAnchor('$')];
   }, []);
@@ -716,7 +691,6 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         blocks.push(createLookaround('positive-lookahead', [createCharClass('.*[A-Z].*', false)]));
     }
     if (formData.password_req_specialChars) {
-         // Using \W for non-word characters, and _ for underscore as it's often considered special.
         blocks.push(createLookaround('positive-lookahead', [createCharClass('.*[\\W_].*', false)])); 
     }
     const minLength = formData.password_minLength !== undefined ? Math.max(1, formData.password_minLength) : 8;
@@ -820,7 +794,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   const generateBlocksForExtractNumbers = useCallback((): Block[] => {
     return [
         createAnchor('\\b'),
-        createSequenceGroup([ // Group for capturing the number
+        createSequenceGroup([ 
             createCharClass('\\d', false),
             createQuantifier('+'),
             createSequenceGroup([
@@ -836,13 +810,13 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
   const generateBlocksForQuotedText = useCallback((): Block[] => {
     const quoteChar = formData.quoteType === 'single' ? "'" : '"';
-    const escapedQuoteChar = escapeRegexChars(quoteChar); // This will escape ' or " if needed for pattern
-    const nonQuotePattern = `[^${escapedQuoteChar}]`; 
+    const escapedQuoteCharPattern = escapeRegexChars(quoteChar);
+    const nonQuotePattern = `[^${escapedQuoteCharPattern}]`; 
 
     return [
-        createLiteral(quoteChar, true), // Use autoEscape for literal quote chars
+        createLiteral(quoteChar, true), 
         createSequenceGroup([ 
-            createCharClass(nonQuotePattern, false), // Content itself is a pattern
+            createCharClass(nonQuotePattern, false), 
             createQuantifier('*', undefined, undefined, 'greedy')
         ], 'capturing'), 
         createLiteral(quoteChar, true)
@@ -914,7 +888,6 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
   const generateBlocksForSwapParts = useCallback((): Block[] => {
     if (!formData.swapPattern?.trim()) return [];
-    // User provides the full pattern, so no auto-escaping
     return [createLiteral(formData.swapPattern, false)];
   }, [formData.swapPattern]);
 
@@ -922,18 +895,16 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   const generateBlocksForSplitting = useCallback((): Block[] => {
     switch(formData.splittingChoice) {
         case 'comma':
-            return [createLiteral(',', false)]; // Comma is not special in regex patterns unless in char class
+            return [createLiteral(',', false)]; 
         case 'space':
             return [createCharClass('\\s', false), createQuantifier('+')];
         case 'simpleChar':
             if (formData.splittingSimpleChar_input && formData.splittingSimpleChar_input.trim()) {
-                // Simple char should be escaped for regex
                 return [createLiteral(formData.splittingSimpleChar_input.trim(), true)]; 
             }
             return [];
         case 'regex':
             if (formData.splittingRegex_input && formData.splittingRegex_input.trim()) {
-                // User provides regex, so no auto-escaping
                 return [createLiteral(formData.splittingRegex_input.trim(), false)]; 
             }
             return [];
@@ -950,7 +921,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
     if (currentStepId === 'final_preview') {
         if (generatedBlocks.length > 0 || (formData.mainCategory === 'replacement' && replacementString)) {
-          onComplete(generatedBlocks, initialParentId); // Pass parentId here
+          onComplete(generatedBlocks, initialParentId); 
         }
         return;
     }
@@ -1184,7 +1155,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                             onClick={() => !opt.disabled && handleCardChoice(opt.id)}
                             disabled={opt.disabled}
                         >
-                            {opt.icon}
+                            <opt.icon size={24} className="mb-1 text-primary"/>
                             <span className="font-semibold text-base">{opt.label}</span>
                             <p className="text-xs text-muted-foreground">{opt.description}</p>
                              {opt.disabled && <span className="text-xs text-amber-600 dark:text-amber-400 mt-1">(скоро)</span>}
@@ -1478,4 +1449,5 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 };
 
 export default RegexWizardModal;
+
 
