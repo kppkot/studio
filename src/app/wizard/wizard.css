@@ -1,3 +1,4 @@
+
 /* Using :root for font variables to be accessible by the page component */
 :root {
     /* These will be set by the Next/Font loaders in page.tsx */
@@ -252,19 +253,38 @@
 }
 
 /* --- Стили для карточек выбора шага (например, на /wizard/validate) --- */
-.wizard-step-card {
-    /* Можно оставить как .card или настроить отдельно */
-    padding: 1.8rem 2rem; /* Чуть меньше паддинги для вложенных шагов */
+.wizard-step-card.card { /* More specific selector */
+    padding: 1.5rem; 
+    border-radius: 16px;
 }
-.wizard-step-visual {
-    height: 100px; /* Меньше высота для иконки */
-    margin-bottom: 1.2rem;
-}
-.wizard-step-title {
-    font-size: 1.35rem; /* Чуть меньше заголовок */
-    margin-bottom: 0.6rem;
-}
-.wizard-step-description {
-    font-size: 0.9rem; /* Чуть меньше описание */
+.wizard-step-card .card-visual.wizard-step-visual {
+    height: 80px; 
     margin-bottom: 1rem;
+    background: #f1f5f9; /* Lighter background for step cards */
+    border-radius: 10px;
 }
+.wizard-step-card .card-title.wizard-step-title {
+    font-size: 1.25rem; 
+    margin-bottom: 0.5rem;
+}
+.wizard-step-card .card-description.wizard-step-description {
+    font-size: 0.9rem; 
+    margin-bottom: 0; /* No extra margin for description in step cards */
+    color: #4b556a;
+}
+
+/* --- Стили для страниц с формой (например, /wizard/validate/basic-patterns) --- */
+.wizard-step-page .wizard-header h1 {
+    font-size: clamp(2em, 4vw, 2.8em); /* Чуть меньше для подстраниц */
+}
+.wizard-step-page .wizard-header p {
+    font-size: clamp(0.95em, 2vw, 1.1em);
+}
+
+/* Убедимся, что CardFooter кнопки имеют отступ сверху */
+.wizard-step-page .ui-card-footer { /* Assuming shadcn/ui CardFooter has a class like this or use its direct child */
+    margin-top: 1rem; 
+}
+
+
+    
