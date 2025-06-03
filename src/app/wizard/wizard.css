@@ -17,12 +17,15 @@
     display: flex;
     flex-direction: column;
     align-items: center;
+    position: relative; /* For absolute positioning of back button */
 }
 
 .wizard-header {
     text-align: center;
     margin-bottom: 3.5rem; /* Больше отступ */
     max-width: 700px;
+    position: relative; /* Ensure header content is above back button if overlapping */
+    z-index: 1;
 }
 
 .wizard-header h1 {
@@ -246,4 +249,22 @@
      .pro-constructor-area { grid-template-columns: 1fr; grid-template-rows: auto auto auto; gap: 10px; } /* Для "PRO" на мобильных */
     .regex-building-blocks { border-right: none; border-bottom: 1px dashed #cbd5e1; padding-right:0; padding-bottom:10px; flex-direction:row; flex-wrap:wrap; justify-content:center; gap:5px;}
     .block-item { min-width: 60px; }
+}
+
+/* --- Стили для карточек выбора шага (например, на /wizard/validate) --- */
+.wizard-step-card {
+    /* Можно оставить как .card или настроить отдельно */
+    padding: 1.8rem 2rem; /* Чуть меньше паддинги для вложенных шагов */
+}
+.wizard-step-visual {
+    height: 100px; /* Меньше высота для иконки */
+    margin-bottom: 1.2rem;
+}
+.wizard-step-title {
+    font-size: 1.35rem; /* Чуть меньше заголовок */
+    margin-bottom: 0.6rem;
+}
+.wizard-step-description {
+    font-size: 0.9rem; /* Чуть меньше описание */
+    margin-bottom: 1rem;
 }

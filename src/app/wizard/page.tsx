@@ -1,8 +1,7 @@
 'use client';
 import React from 'react';
 import Head from 'next/head';
-import Link from 'next/link'; // Placeholder for future navigation
-import { useRouter } from 'next/navigation'; // For future navigation
+import { useRouter } from 'next/navigation'; // Import useRouter
 import './wizard.css'; // Import the CSS
 import { Inter, JetBrains_Mono } from 'next/font/google';
 
@@ -20,11 +19,12 @@ const jetbrainsMono = JetBrains_Mono({
 export default function WizardPage() {
   const router = useRouter();
 
-  // Placeholder click handler
   const handleCardClick = (category: string) => {
-    // Later, this will navigate to the next step of the wizard
-    // For now, it can do nothing or log to console
     console.log(`Card clicked: ${category}`);
+    if (category === 'validate') {
+      router.push('/wizard/validate');
+    }
+    // Add navigation for other categories later
     // Example: router.push(`/wizard/${category}`);
   };
 
