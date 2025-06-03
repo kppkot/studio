@@ -1,10 +1,4 @@
 
-
-
-
-
-
-
 "use client";
 import React, { useState, useCallback, useEffect } from 'react';
 import type { Block, QuantifierSettings, CharacterClassSettings, GroupSettings, LookaroundSettings, LiteralSettings, AnchorSettings, BackreferenceSettings } from './types';
@@ -28,9 +22,9 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card } from "@/components/ui/card"; 
-import { Lightbulb, CheckSquare, TextCursorInput, Replace, Eraser, Split, Wand2, Phone, AtSign, Globe, KeyRound, Shuffle, MessageSquareQuote, CaseSensitive, SearchCheck, Route, Workflow, FileText, CalendarClock, BadgeCheck } from 'lucide-react';
+import { Lightbulb, CheckSquare, TextCursorInput, Replace, Eraser, Split, Wand2, Phone, AtSign, Globe, KeyRound, Shuffle, MessageSquareQuote, CaseSensitive, SearchCheck, Route, Workflow, FileText, CalendarClock, BadgeCheck, AlignLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { generateId, createAnchor, createLiteral, createCharClass, createQuantifier, createSequenceGroup, createAlternation, createLookaround, createBackreference, escapeRegexChars, generateBlocksForEmail, generateBlocksForURL, generateBlocksForIPv4, generateBlocksForIPv6, generateBlocksForDuplicateWords, generateBlocksForMultipleSpaces } from './utils';
+import { generateId, createAnchor, createLiteral, createCharClass, createQuantifier, createSequenceGroup, createAlternation, createLookaround, createBackreference, escapeRegexChars, generateBlocksForEmail, generateBlocksForURL, generateBlocksForIPv4, generateBlocksForIPv6, generateBlocksForDuplicateWords, generateBlocksForMultipleSpaces, generateBlocksForTabsToSpaces } from './utils';
 
 
 interface RegexWizardModalProps {
@@ -344,10 +338,10 @@ const wizardConfig = {
     type: 'radio',
     options: [
         { id: 'multipleSpaces', label: "Несколько пробелов → один", icon: Eraser },
-        { id: 'tabsToSpaces', label: "Табуляция → пробелы", icon: Eraser },
-        { id: 'removeHtml', label: "Удалить HTML-теги", icon: Eraser },
-        { id: 'swapParts', label: "Сменить порядок (swap)", icon: Shuffle, disabled: false },
-        { id: 'maskDigits', label: "Маскировать цифры", icon: KeyRound, disabled: false }, 
+        { id: 'tabsToSpaces', label: "Табуляция → пробелы", icon: AlignLeft },
+        { id: 'removeHtml', label: "Удалить HTML-теги", icon: Eraser, disabled: true },
+        { id: 'swapParts', label: "Сменить порядок (swap)", icon: Shuffle, disabled: true },
+        { id: 'maskDigits', label: "Маскировать цифры", icon: KeyRound, disabled: true }, 
         { id: 'otherReplace', label: "Другое (написать паттерн и замену) (скоро)", icon: Wand2, disabled: true },
     ],
     next: (choice: string) => {
@@ -753,12 +747,6 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     ];
   }, [formData.specificWord]);
 
-
-  
-  const generateBlocksForTabsToSpaces = useCallback((): Block[] => {
-    return [createLiteral('\\t', false)];
-  }, []);
-  
   const generateBlocksForRemoveHtmlTags = useCallback((): Block[] => {
     return [
         createLiteral('<', false),
@@ -865,7 +853,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                  setReplacementString(" (один пробел)");
             } else if (formData.replacementChoice === 'tabsToSpaces') {
                  blocksToSet = generateBlocksForTabsToSpaces();
-                 setReplacementString(" (один или несколько пробелов, по вашему выбору)");
+                 setReplacementString(" (один пробел)");
             } else if (formData.replacementChoice === 'removeHtml') {
                  blocksToSet = generateBlocksForRemoveHtmlTags();
                  setReplacementString(" (пустая строка)");
@@ -1341,9 +1329,3 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 };
 
 export default RegexWizardModal;
-
-
-
-
-
-

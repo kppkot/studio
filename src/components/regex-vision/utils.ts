@@ -164,6 +164,12 @@ export const generateBlocksForMultipleSpaces = (): Block[] => {
   ];
 };
 
+export const generateBlocksForTabsToSpaces = (): Block[] => {
+  return [
+    createLiteral('\\t', false) 
+  ];
+};
+
 
 export const generateRegexString = (blocks: Block[]): string => {
   const generate = (block: Block): string => {

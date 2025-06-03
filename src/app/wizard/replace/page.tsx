@@ -3,7 +3,7 @@
 import React from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/navigation';
-import { Eraser, Shuffle, KeyRound, Wand2, ChevronLeft } from 'lucide-react';
+import { Eraser, Shuffle, KeyRound, Wand2, ChevronLeft, AlignLeft } from 'lucide-react'; // Added AlignLeft as a placeholder
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import '../wizard.css'; // Reuse common styles
 import { Button } from '@/components/ui/button';
@@ -41,9 +41,9 @@ const replaceOptions: ReplaceOption[] = [
     id: 'tabsToSpaces',
     label: 'Табуляция → пробелы',
     description: 'Заменить символы табуляции на пробелы.',
-    icon: Eraser, // Using Eraser as a generic replace icon
+    icon: AlignLeft, // Using AlignLeft as an icon for tabs/spaces
     path: '/wizard/replace/tabs-to-spaces/result', 
-    disabled: true,
+    disabled: false, // Enabled this option
   },
   {
     id: 'removeHtml',
