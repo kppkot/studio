@@ -42,8 +42,8 @@ const extractOptions: ExtractOption[] = [
     label: 'Все URL-адреса',
     description: 'Найти и извлечь все веб-адреса.',
     icon: Globe,
-    path: '/wizard/extract/url/result', // Placeholder
-    disabled: true,
+    path: '/wizard/extract/url/result', 
+    disabled: false, // Enabled URL extraction
   },
   {
     id: 'numbers',
@@ -131,5 +131,3 @@ export default function ExtractCategoryPage() {
     </div>
   );
 }
-
-    
