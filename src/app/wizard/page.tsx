@@ -1,3 +1,4 @@
+
 'use client';
 import React from 'react';
 import Head from 'next/head';
@@ -23,6 +24,8 @@ export default function WizardPage() {
     console.log(`Card clicked: ${category}`);
     if (category === 'validate') {
       router.push('/wizard/validate');
+    } else if (category === 'extract') {
+      router.push('/wizard/extract');
     }
     // Add navigation for other categories later
     // Example: router.push(`/wizard/${category}`);
@@ -217,3 +220,5 @@ export default function WizardPage() {
     </div>
   );
 }
+
+    
