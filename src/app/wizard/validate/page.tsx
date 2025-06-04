@@ -24,9 +24,10 @@ interface ValidationOption {
   id: string;
   label: string;
   description: string;
-  icon?: React.ElementType; // Make icon optional for custom visuals
+  icon?: React.ElementType; 
   path: string;
-  visualDemo?: React.ReactNode; // For custom HTML structure
+  visualDemo?: React.ReactNode; 
+  disabled?: boolean;
 }
 
 // Animation functions (adapted from main wizard page)
@@ -60,7 +61,7 @@ const clearValidationText = (element: HTMLElement, onComplete?: () => void) => {
   return clearing;
 };
 
-const animateValidationInput = (inputId: string, indicatorId: string) => {
+const animateValidationInput = (inputId: string, indicatorId: string, noteTextValid: string, noteTextInvalid: string) => {
   const inputEl = document.getElementById(inputId) as HTMLElement;
   const indicatorEl = document.getElementById(indicatorId) as HTMLElement;
   const textSpan = inputEl?.querySelector('.validation-text-anim') as HTMLElement;
@@ -69,10 +70,10 @@ const animateValidationInput = (inputId: string, indicatorId: string) => {
 
   let currentInterval: NodeJS.Timeout | null = null;
   const scenarios = [
-    { text: "user@example.com", valid: true, note: "Email проходит валидацию..." },
-    { text: "invalid-email", valid: false, note: "Строка не соответствует шаблону email." },
-    { text: "123-45-678", valid: true, note: "Номер телефона соответствует формату." },
-    { text: "ABC", valid: false, note: "Только заглавные буквы не проходят." }
+    { text: "user@example.com", valid: true, note: noteTextValid || "Строка проходит валидацию..." },
+    { text: "invalid-email", valid: false, note: noteTextInvalid || "Строка не соответствует шаблону." },
+    { text: "123-45-6789", valid: true, note: noteTextValid || "Формат соответствует." },
+    { text: "ABC", valid: false, note: noteTextInvalid || "Неверный формат." }
   ];
   let scenarioIndex = 0;
 
@@ -112,6 +113,12 @@ const animateValidationInput = (inputId: string, indicatorId: string) => {
     });
   };
   runScenario();
+  // Return a cleanup function for the interval
+  return () => {
+    if (currentInterval) {
+      clearInterval(currentInterval);
+    }
+  };
 };
 
 
@@ -140,8 +147,22 @@ const validationOptions: ValidationOption[] = [
     id: 'standard',
     label: 'Стандартные форматы',
     description: 'Email, URL, Телефон, IP, Пароль.',
-    icon: BadgeCheck,
+    icon: BadgeCheck, // Replaced CheckBadge with BadgeCheck
     path: '/wizard/validate/standard-formats',
+    visualDemo: (
+      <div className="validation-demo-area">
+        <div className="input-field-container">
+          <div className="input-field-visual" id="validationInput_ValidatePage_Standard">
+            <span className="validation-text-anim"></span>
+          </div>
+          <div className="status-indicator" id="statusIndicator_ValidatePage_Standard">
+            <i className="fas fa-check" style={{ display: 'none' }}></i>
+            <i className="fas fa-times" style={{ display: 'none' }}></i>
+          </div>
+        </div>
+        <div className="validation-note">Проверка стандартных форматов...</div>
+      </div>
+    )
   },
   {
     id: 'datetime',
@@ -149,6 +170,21 @@ const validationOptions: ValidationOption[] = [
     description: 'ДД/ММ/ГГГГ, ЧЧ:ММ и т.д.',
     icon: CalendarClock,
     path: '/wizard/validate/datetime-formats', // Placeholder path
+    disabled: true, // Temporarily disable until fully implemented
+    visualDemo: (
+         <div className="validation-demo-area">
+        <div className="input-field-container">
+          <div className="input-field-visual" id="validationInput_ValidatePage_DateTime">
+            <span className="validation-text-anim"></span>
+          </div>
+          <div className="status-indicator" id="statusIndicator_ValidatePage_DateTime">
+            <i className="fas fa-check" style={{ display: 'none' }}></i>
+            <i className="fas fa-times" style={{ display: 'none' }}></i>
+          </div>
+        </div>
+        <div className="validation-note">Проверка формата даты и времени...</div>
+      </div>
+    )
   },
 ];
 
@@ -156,35 +192,48 @@ export default function ValidateCategoryPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Attempt to start animation for the "Простые шаблоны" card
-    // Ensure FontAwesome is loaded for icons in status indicator
+    const cleanupFunctions: (() => void)[] = [];
     const faLink = document.querySelector('link[href*="font-awesome"]');
-    if (faLink) {
-        animateValidationInput('validationInput_ValidatePage_Basic', 'statusIndicator_ValidatePage_Basic');
-    } else {
-        // Fallback or wait for FontAwesome if critical for animation
-        console.warn("FontAwesome not detected, status icons in animation might be missing.");
-        // Could try to load it dynamically or retry animation after a delay
-         animateValidationInput('validationInput_ValidatePage_Basic', 'statusIndicator_ValidatePage_Basic');
-    }
+    const attemptAnimation = (idPrefix: string, noteValid: string, noteInvalid: string) => {
+        const cleanup = animateValidationInput(
+            `validationInput_ValidatePage_${idPrefix}`, 
+            `statusIndicator_ValidatePage_${idPrefix}`,
+            noteValid,
+            noteInvalid
+        );
+        if (cleanup) cleanupFunctions.push(cleanup);
+    };
 
-
-    // Cleanup function for intervals if component unmounts
-    return () => {
-        const inputEl = document.getElementById('validationInput_ValidatePage_Basic');
-        // A bit hacky: trying to clear intervals associated with this animation.
-        // Better would be if animateValidationInput returned the interval IDs.
-        // For now, we assume intervals might still be running and this is a demo.
-        // A more robust solution would involve managing interval IDs directly.
-        if (inputEl) {
-            // This is a placeholder for a more robust cleanup
-            // e.g., if animateValidationInput returned interval IDs to be cleared.
+    const onFaLoaded = () => {
+        attemptAnimation('Basic', 'Строка проходит "фильтр" шаблона...', 'Простой шаблон не соответствует.');
+        attemptAnimation('Standard', 'Стандартный формат корректен.', 'Стандартный формат не соответствует.');
+        if (!validationOptions.find(opt => opt.id === 'datetime')?.disabled) {
+            attemptAnimation('DateTime', 'Дата/время корректны.', 'Формат даты/времени неверный.');
         }
+    };
+
+    if (faLink) {
+      // If FontAwesome is already loaded (e.g., from cache or fast network)
+      if ((faLink as HTMLLinkElement).sheet || (faLink as HTMLLinkElement).style?.cssText) {
+        onFaLoaded();
+      } else {
+        // Wait for FontAwesome to load
+        faLink.addEventListener('load', onFaLoaded);
+        cleanupFunctions.push(() => faLink.removeEventListener('load', onFaLoaded));
+      }
+    } else {
+        console.warn("FontAwesome not detected, status icons in animation might be missing.");
+        onFaLoaded(); // Attempt to run animations anyway
+    }
+    
+    return () => {
+      cleanupFunctions.forEach(cleanup => cleanup());
     };
   }, []);
 
 
   const handleOptionClick = (option: ValidationOption) => {
+    if (option.disabled) return;
     console.log(`Validation option clicked: ${option.id}, navigating to ${option.path}`);
     router.push(option.path);
   };
@@ -212,8 +261,9 @@ export default function ValidateCategoryPage() {
         {validationOptions.map((option) => (
           <Card
             key={option.id}
-            className="wizard-step-card card"
+            className={`wizard-step-card card ${option.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
             onClick={() => handleOptionClick(option)}
+            aria-disabled={option.disabled}
           >
             <CardHeader className="p-4">
               <div className="card-visual wizard-step-visual mx-auto mb-2">
@@ -223,6 +273,7 @@ export default function ValidateCategoryPage() {
             </CardHeader>
             <CardContent className="p-4 pt-0">
               <p className="card-description wizard-step-description text-center">{option.description}</p>
+              {option.disabled && <p className="text-xs text-amber-600 dark:text-amber-400 text-center mt-1">(скоро)</p>}
             </CardContent>
           </Card>
         ))}
@@ -230,3 +281,4 @@ export default function ValidateCategoryPage() {
     </div>
   );
 }
+
