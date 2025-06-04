@@ -144,11 +144,11 @@
 
 /* --- СТИЛИ ДЛЯ ВИЗУАЛИЗАЦИЙ (Адаптированные и объединенные) --- */
 
-/* 1. Валидация */
+/* 1. Валидация (Общий стиль для карточек Простые/Стандартные/ДатаВремя) */
 .validation-demo-area { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px; }
-.input-field-container { position: relative; width: 80%; }
-.input-field-visual { width: 100%; height: 45px; background-color: #fff; border: 2px solid #d1d5db; border-radius: 8px; display: flex; align-items: center; padding: 0 15px 0 45px; font-family: var(--font-jetbrains-mono), monospace; font-size: 13px; color: #374151; transition: border-color 0.3s ease-out, box-shadow 0.3s ease-out; position: relative; overflow: hidden; }
-.input-field-visual::before { content: ""; position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; background-image: linear-gradient(to right, #9ca3af 2px, transparent 2px), linear-gradient(to bottom, #9ca3af 2px, transparent 2px); background-size: 6px 6px; background-repeat: repeat; opacity: 0.5; }
+.input-field-container { position: relative; width: 80%; display: flex; align-items: center; }
+.input-field-visual { width: 100%; height: 45px; background-color: #fff; border: 2px solid #d1d5db; border-radius: 8px; display: flex; align-items: center; padding: 0 15px; font-family: var(--font-jetbrains-mono), monospace; font-size: 13px; color: #374151; transition: border-color 0.3s ease-out, box-shadow 0.3s ease-out; position: relative; overflow: hidden; }
+/* .input-field-visual::before { content: ""; position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; background-image: linear-gradient(to right, #9ca3af 2px, transparent 2px), linear-gradient(to bottom, #9ca3af 2px, transparent 2px); background-size: 6px 6px; background-repeat: repeat; opacity: 0.5; } */
 .validation-text-anim { white-space: nowrap; position: relative; }
 .input-field-visual.valid { border-color: #10b981; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2); }
 .input-field-visual.invalid { border-color: #ef4444; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2); }
@@ -156,6 +156,62 @@
 .status-indicator.valid { background-color: #10b981; opacity: 1; transform: translateY(-50%) scale(1); }
 .status-indicator.invalid { background-color: #ef4444; opacity: 1; transform: translateY(-50%) scale(1); }
 .validation-note { font-size: 10px; color: #64748b; font-family: var(--font-jetbrains-mono), monospace; text-align: center; width: 80%; }
+
+/* Специфичная анимация для "Стандартные Форматы" (чек-лист) */
+.standard-formats-checklist-area {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start; /* Выравнивание по левому краю */
+    gap: 8px; /* Отступ между элементами списка */
+    font-family: var(--font-inter), sans-serif;
+    padding: 10px 20px; /* Немного отступов */
+}
+
+.checklist-item.standard-format-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    font-size: 13px;
+    color: #374151;
+    opacity: 0;
+    transform: translateX(-10px);
+    transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+    padding: 4px 0;
+}
+
+.checklist-item.standard-format-item.visible {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.checklist-item.standard-format-item .status-icon-placeholder {
+    width: 20px; /* Место для иконки */
+    height: 20px;
+    margin-right: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transform: scale(0.5);
+    transition: opacity 0.3s ease-in, transform 0.3s ease-in;
+}
+.checklist-item.standard-format-item .status-icon-placeholder.visible {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.checklist-item.standard-format-item .item-name {
+    font-weight: 500;
+}
+.checklist-item.standard-format-item .item-example {
+    font-size: 11px;
+    color: #6b7280;
+    margin-left: 6px;
+    font-family: var(--font-jetbrains-mono), monospace;
+}
 
 
 /* 2. Найти и Извлечь */
@@ -255,35 +311,47 @@
 
 /* --- Стили для карточек выбора шага (например, на /wizard/validate) --- */
 .wizard-step-card.card { /* More specific selector */
-    padding: 1.5rem; 
+    padding: 1.5rem;
     border-radius: 16px;
 }
 .wizard-step-card .card-visual.wizard-step-visual {
-    height: 80px; 
+    height: 100px; /* Уменьшенная высота для карточек выбора шага */
     margin-bottom: 1rem;
     background: #f1f5f9; /* Lighter background for step cards */
     border-radius: 10px;
+    overflow: hidden; /* Важно для корректного отображения анимаций внутри */
 }
 .wizard-step-card .card-title.wizard-step-title {
-    font-size: 1.25rem; 
+    font-size: 1.25rem;
     margin-bottom: 0.5rem;
 }
 .wizard-step-card .card-description.wizard-step-description {
-    font-size: 0.9rem; 
+    font-size: 0.9rem;
     margin-bottom: 0; /* No extra margin for description in step cards */
     color: #4b556a;
 }
 
 /* Стили для анимации валидации внутри .wizard-step-card */
+.wizard-step-visual .validation-demo-area {
+    gap: 8px; /* Уменьшенный отступ для компактности */
+}
 .wizard-step-visual .validation-demo-area .input-field-container {
   width: 100%; /* Занимает всю ширину доступной области анимации */
+  padding-right: 30px; /* Место для индикатора, если он вынесен за пределы поля */
 }
 .wizard-step-visual .validation-demo-area .input-field-visual {
-  padding-right: 40px; /* Увеличиваем правый отступ для индикатора */
+  height: 38px; /* Уменьшенная высота поля */
+  font-size: 12px; /* Уменьшенный шрифт */
+  padding-left: 10px; /* Уменьшенный левый отступ */
+  /* padding-right: 35px; Увеличиваем правый отступ для индикатора, если он внутри */
+}
+.wizard-step-visual .validation-demo-area .input-field-visual::before {
+    display: none; /* Убираем псевдо-иконку для простоты */
 }
 .wizard-step-visual .validation-demo-area .status-indicator {
-  right: 5px; /* Позиционируем индикатор справа внутри контейнера */
-  transform: translateY(-50%) scale(0.8); /* Немного уменьшаем индикатор по умолчанию */
+  width: 28px; height: 28px; font-size: 14px; /* Уменьшенный индикатор */
+  right: 0px; /* Позиционируем индикатор справа ВНУТРИ input-field-container */
+  transform: translateY(-50%) scale(0.8);
 }
 .wizard-step-visual .validation-demo-area .status-indicator.valid,
 .wizard-step-visual .validation-demo-area .status-indicator.invalid {
@@ -293,6 +361,26 @@
   font-size: 9px;   /* Уменьшаем шрифт заметки */
   line-height: 1.3; /* Улучшаем читаемость при переносе строк */
   width: 90%;       /* Делаем заметку чуть шире */
+}
+
+/* Стили для анимации чек-листа стандартных форматов */
+.wizard-step-visual .standard-formats-checklist-area {
+    height: 100%; /* Занимает всю высоту .card-visual */
+    padding: 5px 10px; /* Уменьшенные отступы */
+    gap: 4px; /* Меньший отступ между элементами */
+}
+.wizard-step-visual .checklist-item.standard-format-item {
+    font-size: 11px; /* Уменьшенный шрифт */
+    padding: 2px 0;
+}
+.wizard-step-visual .checklist-item.standard-format-item .status-icon-placeholder {
+    width: 16px; height: 16px; margin-right: 5px;
+}
+.wizard-step-visual .checklist-item.standard-format-item .status-icon-placeholder svg {
+    width: 12px; height: 12px; /* Уменьшенные иконки статуса */
+}
+.wizard-step-visual .checklist-item.standard-format-item .item-example {
+    font-size: 10px; margin-left: 4px;
 }
 
 
@@ -306,8 +394,5 @@
 
 /* Убедимся, что CardFooter кнопки имеют отступ сверху */
 .wizard-step-page .ui-card-footer { /* Assuming shadcn/ui CardFooter has a class like this or use its direct child */
-    margin-top: 1rem; 
+    margin-top: 1rem;
 }
-
-
-    

@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/navigation';
-import { FileText, BadgeCheck, CalendarClock, ChevronLeft } from 'lucide-react';
+import { FileText, BadgeCheck, CalendarClock, ChevronLeft, AtSign, Globe, Network, CheckCircle, XCircle } from 'lucide-react';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import '../wizard.css'; // Reuse common styles
 import { Button } from '@/components/ui/button';
@@ -24,13 +24,14 @@ interface ValidationOption {
   id: string;
   label: string;
   description: string;
-  icon?: React.ElementType; 
+  icon?: React.ElementType;
   path: string;
-  visualDemo?: React.ReactNode; 
+  visualDemo?: React.ReactNode;
   disabled?: boolean;
+  animationFn?: (idPrefix: string, scenarios?: any[], scenarioTypes?: string[], noteValid?: string, noteInvalid?: string) => (() => void) | void;
 }
 
-// Animation functions (adapted from main wizard page)
+// --- Анимация для "Простые шаблоны" ---
 const typeValidationText = (element: HTMLElement, text: string, onComplete?: () => void) => {
   let i = 0;
   element.innerHTML = '';
@@ -61,65 +62,154 @@ const clearValidationText = (element: HTMLElement, onComplete?: () => void) => {
   return clearing;
 };
 
-const animateValidationInput = (inputId: string, indicatorId: string, noteTextValid: string, noteTextInvalid: string) => {
+const animateValidationInput = (
+  inputId: string,
+  indicatorId: string,
+  scenarios: { text: string; valid: boolean; note: string; type?: string }[],
+  scenarioTypes?: string[], // unused for this animation type, kept for signature consistency
+  noteValid?: string, // unused, note comes from scenario
+  noteInvalid?: string // unused, note comes from scenario
+): (() => void) => {
   const inputEl = document.getElementById(inputId) as HTMLElement;
   const indicatorEl = document.getElementById(indicatorId) as HTMLElement;
   const textSpan = inputEl?.querySelector('.validation-text-anim') as HTMLElement;
 
-  if (!inputEl || !indicatorEl || !textSpan) return;
+  if (!inputEl || !indicatorEl || !textSpan) return () => {};
 
-  let currentInterval: NodeJS.Timeout | null = null;
-  const scenarios = [
-    { text: "user@example.com", valid: true, note: noteTextValid || "Строка проходит валидацию..." },
-    { text: "invalid-email", valid: false, note: noteTextInvalid || "Строка не соответствует шаблону." },
-    { text: "123-45-6789", valid: true, note: noteTextValid || "Формат соответствует." },
-    { text: "ABC", valid: false, note: noteTextInvalid || "Неверный формат." }
-  ];
+  let currentIntervals: (NodeJS.Timeout | number)[] = [];
   let scenarioIndex = 0;
 
   const runScenario = () => {
-    if (currentInterval) clearInterval(currentInterval);
+    currentIntervals.forEach(clearInterval);
+    currentIntervals = [];
+
     const scenario = scenarios[scenarioIndex];
     const noteEl = inputEl.closest('.validation-demo-area')?.querySelector('.validation-note') as HTMLElement;
-    if(noteEl) noteEl.textContent = scenario.note;
+    if (noteEl) noteEl.textContent = scenario.note;
 
     inputEl.classList.remove('valid', 'invalid');
     indicatorEl.classList.remove('valid', 'invalid');
     indicatorEl.style.display = 'none';
-    if (indicatorEl.querySelector('.fa-check')) (indicatorEl.querySelector('.fa-check') as HTMLElement).style.display = 'none';
-    if (indicatorEl.querySelector('.fa-times')) (indicatorEl.querySelector('.fa-times') as HTMLElement).style.display = 'none';
-    
+    const checkIcon = indicatorEl.querySelector('.fa-check') as HTMLElement;
+    const timesIcon = indicatorEl.querySelector('.fa-times') as HTMLElement;
+    if (checkIcon) checkIcon.style.display = 'none';
+    if (timesIcon) timesIcon.style.display = 'none';
 
-    currentInterval = typeValidationText(textSpan, scenario.text, () => {
-      setTimeout(() => {
+    const typingInterval = typeValidationText(textSpan, scenario.text, () => {
+      const timeout1 = setTimeout(() => {
         inputEl.classList.add(scenario.valid ? 'valid' : 'invalid');
         indicatorEl.style.display = 'flex';
         indicatorEl.classList.add(scenario.valid ? 'valid' : 'invalid');
-        if (scenario.valid && indicatorEl.querySelector('.fa-check')) (indicatorEl.querySelector('.fa-check') as HTMLElement).style.display = 'inline';
-        if (!scenario.valid && indicatorEl.querySelector('.fa-times')) (indicatorEl.querySelector('.fa-times') as HTMLElement).style.display = 'inline';
+        if (scenario.valid && checkIcon) checkIcon.style.display = 'inline';
+        if (!scenario.valid && timesIcon) timesIcon.style.display = 'inline';
 
-        currentInterval = setTimeout(() => {
-          clearValidationText(textSpan, () => {
+        const timeout2 = setTimeout(() => {
+          const clearingInterval = clearValidationText(textSpan, () => {
             inputEl.classList.remove('valid', 'invalid');
             indicatorEl.classList.remove('valid', 'invalid');
             indicatorEl.style.display = 'none';
-             if (indicatorEl.querySelector('.fa-check')) (indicatorEl.querySelector('.fa-check') as HTMLElement).style.display = 'none';
-             if (indicatorEl.querySelector('.fa-times')) (indicatorEl.querySelector('.fa-times') as HTMLElement).style.display = 'none';
+            if (checkIcon) checkIcon.style.display = 'none';
+            if (timesIcon) timesIcon.style.display = 'none';
             scenarioIndex = (scenarioIndex + 1) % scenarios.length;
-            setTimeout(runScenario, 500);
+            const timeout3 = setTimeout(runScenario, 500);
+            currentIntervals.push(timeout3);
           });
+          currentIntervals.push(clearingInterval);
         }, 2000);
+        currentIntervals.push(timeout2);
       }, 500);
+      currentIntervals.push(timeout1);
     });
+    currentIntervals.push(typingInterval);
   };
+
   runScenario();
-  // Return a cleanup function for the interval
   return () => {
-    if (currentInterval) {
-      clearInterval(currentInterval);
-    }
+    currentIntervals.forEach(clearInterval);
+    currentIntervals.forEach(clearTimeout);
   };
 };
+
+
+// --- Анимация для "Стандартные форматы" (чек-лист) ---
+const animateStandardFormatsChecklist = (checklistAreaId: string): (() => void) => {
+  const checklistArea = document.getElementById(checklistAreaId);
+  if (!checklistArea) return () => {};
+
+  const items = [
+    { name: "Email", icon: AtSign, valid: true, example: "user@example.com" },
+    { name: "URL", icon: Globe, valid: true, example: "https://regex.vision" },
+    { name: "IP Адрес", icon: Network, valid: false, example: "999.999.999.999" },
+    { name: "Телефон", icon: Phone, valid: true, example: "+1 (555) 123-4567" },
+  ];
+  let currentItemIndex = 0;
+  let currentTimeout: NodeJS.Timeout | null = null;
+
+  const showNextItem = () => {
+    if (!checklistArea) return;
+    checklistArea.innerHTML = ''; // Clear previous items
+
+    const itemData = items[currentItemIndex];
+
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'checklist-item standard-format-item';
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'item-name';
+    nameSpan.textContent = itemData.name;
+    
+    const exampleSpan = document.createElement('span');
+    exampleSpan.className = 'item-example';
+    exampleSpan.textContent = ` (${itemData.example.substring(0,15)+(itemData.example.length > 15 ? '...' : '')})`;
+
+
+    const statusIconPlaceholder = document.createElement('div');
+    statusIconPlaceholder.className = 'status-icon-placeholder';
+
+    itemDiv.appendChild(statusIconPlaceholder);
+    itemDiv.appendChild(nameSpan);
+    itemDiv.appendChild(exampleSpan);
+    checklistArea.appendChild(itemDiv);
+
+    // Animate item appearance
+    setTimeout(() => itemDiv.classList.add('visible'), 50);
+
+
+    currentTimeout = setTimeout(() => {
+      const iconSvg = itemData.valid
+        ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle text-green-500"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`
+        : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x-circle text-red-500"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>`;
+      statusIconPlaceholder.innerHTML = iconSvg;
+      statusIconPlaceholder.classList.add('visible');
+
+      currentItemIndex = (currentItemIndex + 1) % items.length;
+      currentTimeout = setTimeout(showNextItem, 2000); // Next item after 2s
+    }, 1000); // Show icon after 1s
+  };
+
+  showNextItem();
+
+  return () => {
+    if (currentTimeout) clearTimeout(currentTimeout);
+  };
+};
+
+
+const basicPatternScenarios = [
+  { text: "Regex123", valid: true, note: "Содержит буквы и цифры..." },
+  { text: "ТолькоТекст", valid: false, note: "Только буквы, а нужно и цифры..." },
+  { text: "Пример с пробелом", valid: true, note: "Пробелы разрешены..." },
+  { text: "_Спец-Символы!", valid: false, note: "Специальные символы не указаны..." }
+];
+
+const standardFormatScenarios = [ // These are now just for note text for animateValidationInput if it were used
+  { text: "test@example.com", valid: true, note: "Проверка Email...", type: "email" },
+  { text: "invalid-email", valid: false, note: "Проверка Email...", type: "email" },
+  { text: "https://regex.vision", valid: true, note: "Проверка URL...", type: "url" },
+  { text: "ftp://[::1]:21", valid: true, note: "Проверка URL (IPv6 FTP)...", type: "url" },
+  { text: "192.168.1.1", valid: true, note: "Проверка IP-адреса (IPv4)...", type: "ip" },
+  { text: "2001:db8::1", valid: true, note: "Проверка IP-адреса (IPv6)...", type: "ip" },
+];
 
 
 const validationOptions: ValidationOption[] = [
@@ -141,27 +231,26 @@ const validationOptions: ValidationOption[] = [
         </div>
         <div className="validation-note">Строка проходит "фильтр" шаблона...</div>
       </div>
+    ),
+    animationFn: (idPrefix) => animateValidationInput(
+      `validationInput_ValidatePage_${idPrefix}`,
+      `statusIndicator_ValidatePage_${idPrefix}`,
+      basicPatternScenarios
     )
   },
   {
     id: 'standard',
     label: 'Стандартные форматы',
     description: 'Email, URL, Телефон, IP, Пароль.',
-    icon: BadgeCheck, // Replaced CheckBadge with BadgeCheck
+    icon: BadgeCheck,
     path: '/wizard/validate/standard-formats',
     visualDemo: (
-      <div className="validation-demo-area">
-        <div className="input-field-container">
-          <div className="input-field-visual" id="validationInput_ValidatePage_Standard">
-            <span className="validation-text-anim"></span>
-          </div>
-          <div className="status-indicator" id="statusIndicator_ValidatePage_Standard">
-            <i className="fas fa-check" style={{ display: 'none' }}></i>
-            <i className="fas fa-times" style={{ display: 'none' }}></i>
-          </div>
-        </div>
-        <div className="validation-note">Проверка стандартных форматов...</div>
+      <div className="standard-formats-checklist-area" id="checklistArea_ValidatePage_Standard">
+        {/* Items will be populated by JS */}
       </div>
+    ),
+    animationFn: (idPrefix) => animateStandardFormatsChecklist(
+      `checklistArea_ValidatePage_${idPrefix}`
     )
   },
   {
@@ -169,10 +258,10 @@ const validationOptions: ValidationOption[] = [
     label: 'Дата и время',
     description: 'ДД/ММ/ГГГГ, ЧЧ:ММ и т.д.',
     icon: CalendarClock,
-    path: '/wizard/validate/datetime-formats', // Placeholder path
-    disabled: true, // Temporarily disable until fully implemented
-    visualDemo: (
-         <div className="validation-demo-area">
+    path: '/wizard/validate/datetime-formats',
+    disabled: true,
+    visualDemo: ( // Placeholder, can be made unique later
+      <div className="validation-demo-area">
         <div className="input-field-container">
           <div className="input-field-visual" id="validationInput_ValidatePage_DateTime">
             <span className="validation-text-anim"></span>
@@ -184,6 +273,11 @@ const validationOptions: ValidationOption[] = [
         </div>
         <div className="validation-note">Проверка формата даты и времени...</div>
       </div>
+    ),
+     animationFn: (idPrefix) => animateValidationInput(
+      `validationInput_ValidatePage_${idPrefix}`,
+      `statusIndicator_ValidatePage_${idPrefix}`,
+      [{text: "2024-07-15", valid: true, note: "Проверка даты..."}, {text: "35/13/2023", valid: false, note: "Неверная дата..."}]
     )
   },
 ];
@@ -194,38 +288,29 @@ export default function ValidateCategoryPage() {
   useEffect(() => {
     const cleanupFunctions: (() => void)[] = [];
     const faLink = document.querySelector('link[href*="font-awesome"]');
-    const attemptAnimation = (idPrefix: string, noteValid: string, noteInvalid: string) => {
-        const cleanup = animateValidationInput(
-            `validationInput_ValidatePage_${idPrefix}`, 
-            `statusIndicator_ValidatePage_${idPrefix}`,
-            noteValid,
-            noteInvalid
-        );
-        if (cleanup) cleanupFunctions.push(cleanup);
-    };
 
     const onFaLoaded = () => {
-        attemptAnimation('Basic', 'Строка проходит "фильтр" шаблона...', 'Простой шаблон не соответствует.');
-        attemptAnimation('Standard', 'Стандартный формат корректен.', 'Стандартный формат не соответствует.');
-        if (!validationOptions.find(opt => opt.id === 'datetime')?.disabled) {
-            attemptAnimation('DateTime', 'Дата/время корректны.', 'Формат даты/времени неверный.');
+      validationOptions.forEach(opt => {
+        if (opt.animationFn && !opt.disabled) {
+          const cleanup = opt.animationFn(opt.id);
+          if (cleanup) cleanupFunctions.push(cleanup);
         }
+      });
     };
 
     if (faLink) {
-      // If FontAwesome is already loaded (e.g., from cache or fast network)
-      if ((faLink as HTMLLinkElement).sheet || (faLink as HTMLLinkElement).style?.cssText) {
+      const linkElement = faLink as HTMLLinkElement;
+      if (linkElement.sheet || (linkElement.style && linkElement.style.cssText)) { // Check if stylesheet is loaded
         onFaLoaded();
       } else {
-        // Wait for FontAwesome to load
-        faLink.addEventListener('load', onFaLoaded);
-        cleanupFunctions.push(() => faLink.removeEventListener('load', onFaLoaded));
+        linkElement.addEventListener('load', onFaLoaded);
+        cleanupFunctions.push(() => linkElement.removeEventListener('load', onFaLoaded));
       }
     } else {
-        console.warn("FontAwesome not detected, status icons in animation might be missing.");
-        onFaLoaded(); // Attempt to run animations anyway
+      console.warn("FontAwesome not reliably detected for status icons in 'Простые шаблоны' animation.");
+      onFaLoaded(); // Attempt animations anyway
     }
-    
+
     return () => {
       cleanupFunctions.forEach(cleanup => cleanup());
     };
@@ -281,4 +366,3 @@ export default function ValidateCategoryPage() {
     </div>
   );
 }
-
