@@ -1,4 +1,5 @@
 
+
 /* Using :root for font variables to be accessible by the page component */
 :root {
     /* These will be set by the Next/Font loaders in page.tsx */
@@ -272,6 +273,28 @@
     margin-bottom: 0; /* No extra margin for description in step cards */
     color: #4b556a;
 }
+
+/* Стили для анимации валидации внутри .wizard-step-card */
+.wizard-step-visual .validation-demo-area .input-field-container {
+  width: 100%; /* Занимает всю ширину доступной области анимации */
+}
+.wizard-step-visual .validation-demo-area .input-field-visual {
+  padding-right: 40px; /* Увеличиваем правый отступ для индикатора */
+}
+.wizard-step-visual .validation-demo-area .status-indicator {
+  right: 5px; /* Позиционируем индикатор справа внутри контейнера */
+  transform: translateY(-50%) scale(0.8); /* Немного уменьшаем индикатор по умолчанию */
+}
+.wizard-step-visual .validation-demo-area .status-indicator.valid,
+.wizard-step-visual .validation-demo-area .status-indicator.invalid {
+  transform: translateY(-50%) scale(0.9); /* Масштаб для активного состояния (валидно/невалидно) */
+}
+.wizard-step-visual .validation-demo-area .validation-note {
+  font-size: 9px;   /* Уменьшаем шрифт заметки */
+  line-height: 1.3; /* Улучшаем читаемость при переносе строк */
+  width: 90%;       /* Делаем заметку чуть шире */
+}
+
 
 /* --- Стили для страниц с формой (например, /wizard/validate/basic-patterns) --- */
 .wizard-step-page .wizard-header h1 {
