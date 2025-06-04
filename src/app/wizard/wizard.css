@@ -331,7 +331,7 @@
     color: #4b556a;
 }
 
-/* Стили для анимации валидации внутри .wizard-step-card */
+/* Стили для анимации валидации внутри .wizard-step-card (для "Простые шаблоны", "Дата и время") */
 .wizard-step-visual .validation-demo-area {
     gap: 8px; /* Уменьшенный отступ для компактности */
 }
@@ -343,7 +343,6 @@
   height: 38px; /* Уменьшенная высота поля */
   font-size: 12px; /* Уменьшенный шрифт */
   padding-left: 10px; /* Уменьшенный левый отступ */
-  /* padding-right: 35px; Увеличиваем правый отступ для индикатора, если он внутри */
 }
 .wizard-step-visual .validation-demo-area .input-field-visual::before {
     display: none; /* Убираем псевдо-иконку для простоты */
@@ -366,12 +365,18 @@
 /* Стили для анимации чек-листа стандартных форматов */
 .wizard-step-visual .standard-formats-checklist-area {
     height: 100%; /* Занимает всю высоту .card-visual */
+    width: 100%;
     padding: 5px 10px; /* Уменьшенные отступы */
     gap: 4px; /* Меньший отступ между элементами */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
 }
 .wizard-step-visual .checklist-item.standard-format-item {
     font-size: 11px; /* Уменьшенный шрифт */
     padding: 2px 0;
+    width: 100%; /* Чтобы элементы занимали доступную ширину */
 }
 .wizard-step-visual .checklist-item.standard-format-item .status-icon-placeholder {
     width: 16px; height: 16px; margin-right: 5px;
