@@ -1,9 +1,9 @@
 
 'use client';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/navigation';
-import { FileText, BadgeCheck, CalendarClock, ChevronLeft, AtSign, Globe, Network, CheckCircle, XCircle } from 'lucide-react';
+import { FileText, BadgeCheck, CalendarClock, ChevronLeft, AtSign, Globe, Network, CheckCircle, XCircle, Phone } from 'lucide-react';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import '../wizard.css'; // Reuse common styles
 import { Button } from '@/components/ui/button';
@@ -28,13 +28,13 @@ interface ValidationOption {
   path: string;
   visualDemo?: React.ReactNode;
   disabled?: boolean;
-  animationFn?: (idPrefix: string, scenarios?: any[], scenarioTypes?: string[], noteValid?: string, noteInvalid?: string) => (() => void) | void;
+  animationFn?: (idPrefix: string, scenarios?: any[], scenarioTypes?: string[]) => (() => void) | void;
 }
 
-// --- Анимация для "Простые шаблоны" ---
+// --- Анимация для "Простые шаблоны" и общая для ввода ---
 const typeValidationText = (element: HTMLElement, text: string, onComplete?: () => void) => {
   let i = 0;
-  element.innerHTML = '';
+  element.innerHTML = ''; // Очищаем перед набором
   const typing = setInterval(() => {
     if (i < text.length) {
       element.innerHTML += text.charAt(i);
@@ -66,21 +66,31 @@ const animateValidationInput = (
   inputId: string,
   indicatorId: string,
   scenarios: { text: string; valid: boolean; note: string; type?: string }[],
-  scenarioTypes?: string[], // unused for this animation type, kept for signature consistency
-  noteValid?: string, // unused, note comes from scenario
-  noteInvalid?: string // unused, note comes from scenario
+  _scenarioTypes?: string[], 
+  _noteValid?: string, // Not used directly if scenario.note is preferred
+  _noteInvalid?: string // Not used directly if scenario.note is preferred
 ): (() => void) => {
   const inputEl = document.getElementById(inputId) as HTMLElement;
   const indicatorEl = document.getElementById(indicatorId) as HTMLElement;
-  const textSpan = inputEl?.querySelector('.validation-text-anim') as HTMLElement;
 
-  if (!inputEl || !indicatorEl || !textSpan) return () => {};
+  if (!inputEl) {
+    console.warn(`Animation input element not found: ${inputId}`);
+    return () => {};
+  }
+  const textSpan = inputEl.querySelector('.validation-text-anim') as HTMLElement;
+   if (!indicatorEl || !textSpan) {
+    console.warn(`Animation elements not found for inputId: ${inputId}, indicatorId: ${indicatorId}, or textSpan missing.`);
+    return () => {};
+  }
 
   let currentIntervals: (NodeJS.Timeout | number)[] = [];
   let scenarioIndex = 0;
 
   const runScenario = () => {
-    currentIntervals.forEach(clearInterval);
+    currentIntervals.forEach(interval => {
+      if (typeof interval === 'number') clearInterval(interval);
+      else clearTimeout(interval);
+    });
     currentIntervals = [];
 
     const scenario = scenarios[scenarioIndex];
@@ -124,9 +134,12 @@ const animateValidationInput = (
   };
 
   runScenario();
+  
   return () => {
-    currentIntervals.forEach(clearInterval);
-    currentIntervals.forEach(clearTimeout);
+    currentIntervals.forEach(interval => {
+      if (typeof interval === 'number') clearInterval(interval);
+      else clearTimeout(interval);
+    });
   };
 };
 
@@ -134,7 +147,10 @@ const animateValidationInput = (
 // --- Анимация для "Стандартные форматы" (чек-лист) ---
 const animateStandardFormatsChecklist = (checklistAreaId: string): (() => void) => {
   const checklistArea = document.getElementById(checklistAreaId);
-  if (!checklistArea) return () => {};
+  if (!checklistArea) {
+      console.warn(`Checklist area not found: ${checklistAreaId}`);
+      return () => {};
+  }
 
   const items = [
     { name: "Email", icon: AtSign, valid: true, example: "user@example.com" },
@@ -144,6 +160,7 @@ const animateStandardFormatsChecklist = (checklistAreaId: string): (() => void) 
   ];
   let currentItemIndex = 0;
   let currentTimeout: NodeJS.Timeout | null = null;
+  let itemTimeout: NodeJS.Timeout | null = null;
 
   const showNextItem = () => {
     if (!checklistArea) return;
@@ -162,7 +179,6 @@ const animateStandardFormatsChecklist = (checklistAreaId: string): (() => void) 
     exampleSpan.className = 'item-example';
     exampleSpan.textContent = ` (${itemData.example.substring(0,15)+(itemData.example.length > 15 ? '...' : '')})`;
 
-
     const statusIconPlaceholder = document.createElement('div');
     statusIconPlaceholder.className = 'status-icon-placeholder';
 
@@ -171,9 +187,7 @@ const animateStandardFormatsChecklist = (checklistAreaId: string): (() => void) 
     itemDiv.appendChild(exampleSpan);
     checklistArea.appendChild(itemDiv);
 
-    // Animate item appearance
-    setTimeout(() => itemDiv.classList.add('visible'), 50);
-
+    itemTimeout = setTimeout(() => itemDiv.classList.add('visible'), 50);
 
     currentTimeout = setTimeout(() => {
       const iconSvg = itemData.valid
@@ -183,14 +197,15 @@ const animateStandardFormatsChecklist = (checklistAreaId: string): (() => void) 
       statusIconPlaceholder.classList.add('visible');
 
       currentItemIndex = (currentItemIndex + 1) % items.length;
-      currentTimeout = setTimeout(showNextItem, 2000); // Next item after 2s
-    }, 1000); // Show icon after 1s
+      currentTimeout = setTimeout(showNextItem, 2000); 
+    }, 1000); 
   };
 
   showNextItem();
 
   return () => {
     if (currentTimeout) clearTimeout(currentTimeout);
+    if (itemTimeout) clearTimeout(itemTimeout);
   };
 };
 
@@ -202,13 +217,20 @@ const basicPatternScenarios = [
   { text: "_Спец-Символы!", valid: false, note: "Специальные символы не указаны..." }
 ];
 
-const standardFormatScenarios = [ // These are now just for note text for animateValidationInput if it were used
+const standardFormatScenarios = [
   { text: "test@example.com", valid: true, note: "Проверка Email...", type: "email" },
   { text: "invalid-email", valid: false, note: "Проверка Email...", type: "email" },
   { text: "https://regex.vision", valid: true, note: "Проверка URL...", type: "url" },
   { text: "ftp://[::1]:21", valid: true, note: "Проверка URL (IPv6 FTP)...", type: "url" },
   { text: "192.168.1.1", valid: true, note: "Проверка IP-адреса (IPv4)...", type: "ip" },
   { text: "2001:db8::1", valid: true, note: "Проверка IP-адреса (IPv6)...", type: "ip" },
+];
+
+const dateTimeScenarios = [
+  { text: "2024-07-15", valid: true, note: "Проверка даты...", type: "date" },
+  { text: "35/13/2023", valid: false, note: "Неверная дата...", type: "date" },
+  { text: "14:30", valid: true, note: "Проверка времени...", type: "time" },
+  { text: "25:70", valid: false, note: "Неверное время...", type: "time" },
 ];
 
 
@@ -221,10 +243,10 @@ const validationOptions: ValidationOption[] = [
     visualDemo: (
       <div className="validation-demo-area">
         <div className="input-field-container">
-          <div className="input-field-visual" id="validationInput_ValidatePage_Basic">
+          <div className="input-field-visual" id="validationInput_ValidatePage_basic"> {/* ID corrected to lowercase 'basic' */}
             <span className="validation-text-anim"></span>
           </div>
-          <div className="status-indicator" id="statusIndicator_ValidatePage_Basic">
+          <div className="status-indicator" id="statusIndicator_ValidatePage_basic"> {/* ID corrected to lowercase 'basic' */}
             <i className="fas fa-check" style={{ display: 'none' }}></i>
             <i className="fas fa-times" style={{ display: 'none' }}></i>
           </div>
@@ -233,19 +255,19 @@ const validationOptions: ValidationOption[] = [
       </div>
     ),
     animationFn: (idPrefix) => animateValidationInput(
-      `validationInput_ValidatePage_${idPrefix}`,
-      `statusIndicator_ValidatePage_${idPrefix}`,
-      basicPatternScenarios
+        `validationInput_ValidatePage_${idPrefix}`,
+        `statusIndicator_ValidatePage_${idPrefix}`,
+        basicPatternScenarios
     )
   },
   {
     id: 'standard',
     label: 'Стандартные форматы',
     description: 'Email, URL, Телефон, IP, Пароль.',
-    icon: BadgeCheck,
+    icon: BadgeCheck, // Fallback icon if visualDemo is not used or animationFn is null
     path: '/wizard/validate/standard-formats',
     visualDemo: (
-      <div className="standard-formats-checklist-area" id="checklistArea_ValidatePage_Standard">
+      <div className="standard-formats-checklist-area" id="checklistArea_ValidatePage_standard">
         {/* Items will be populated by JS */}
       </div>
     ),
@@ -260,13 +282,13 @@ const validationOptions: ValidationOption[] = [
     icon: CalendarClock,
     path: '/wizard/validate/datetime-formats',
     disabled: true,
-    visualDemo: ( // Placeholder, can be made unique later
+    visualDemo: ( 
       <div className="validation-demo-area">
         <div className="input-field-container">
-          <div className="input-field-visual" id="validationInput_ValidatePage_DateTime">
+          <div className="input-field-visual" id="validationInput_ValidatePage_datetime">
             <span className="validation-text-anim"></span>
           </div>
-          <div className="status-indicator" id="statusIndicator_ValidatePage_DateTime">
+          <div className="status-indicator" id="statusIndicator_ValidatePage_datetime">
             <i className="fas fa-check" style={{ display: 'none' }}></i>
             <i className="fas fa-times" style={{ display: 'none' }}></i>
           </div>
@@ -275,9 +297,9 @@ const validationOptions: ValidationOption[] = [
       </div>
     ),
      animationFn: (idPrefix) => animateValidationInput(
-      `validationInput_ValidatePage_${idPrefix}`,
-      `statusIndicator_ValidatePage_${idPrefix}`,
-      [{text: "2024-07-15", valid: true, note: "Проверка даты..."}, {text: "35/13/2023", valid: false, note: "Неверная дата..."}]
+        `validationInput_ValidatePage_${idPrefix}`,
+        `statusIndicator_ValidatePage_${idPrefix}`,
+        dateTimeScenarios
     )
   },
 ];
@@ -288,26 +310,41 @@ export default function ValidateCategoryPage() {
   useEffect(() => {
     const cleanupFunctions: (() => void)[] = [];
     const faLink = document.querySelector('link[href*="font-awesome"]');
+    let faLoaded = false;
 
     const onFaLoaded = () => {
+      if (faLoaded) return;
+      faLoaded = true;
+
       validationOptions.forEach(opt => {
         if (opt.animationFn && !opt.disabled) {
-          const cleanup = opt.animationFn(opt.id);
+          const cleanup = opt.animationFn(opt.id); // Pass opt.id as idPrefix
           if (cleanup) cleanupFunctions.push(cleanup);
         }
       });
     };
-
+    
     if (faLink) {
       const linkElement = faLink as HTMLLinkElement;
-      if (linkElement.sheet || (linkElement.style && linkElement.style.cssText)) { // Check if stylesheet is loaded
+      const sheet = linkElement.sheet;
+      // Check if stylesheet is loaded - this is a common way, but might not be 100% foolproof
+      if (sheet && sheet.cssRules && sheet.cssRules.length > 0) {
+        onFaLoaded();
+      } else if (linkElement.readyState === 'complete') { // For IE
         onFaLoaded();
       } else {
-        linkElement.addEventListener('load', onFaLoaded);
-        cleanupFunctions.push(() => linkElement.removeEventListener('load', onFaLoaded));
+        const loadHandler = () => {
+          onFaLoaded();
+          linkElement.removeEventListener('load', loadHandler);
+        };
+        linkElement.addEventListener('load', loadHandler);
+        // Fallback timeout in case 'load' event doesn't fire (e.g. cached stylesheet)
+        const fallbackTimeout = setTimeout(onFaLoaded, 1000);
+        cleanupFunctions.push(() => clearTimeout(fallbackTimeout));
+        cleanupFunctions.push(() => linkElement.removeEventListener('load', loadHandler));
       }
     } else {
-      console.warn("FontAwesome not reliably detected for status icons in 'Простые шаблоны' animation.");
+      console.warn("FontAwesome CSS link not found. Animation icons might not display.");
       onFaLoaded(); // Attempt animations anyway
     }
 
@@ -366,3 +403,4 @@ export default function ValidateCategoryPage() {
     </div>
   );
 }
+
