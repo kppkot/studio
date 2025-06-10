@@ -3,10 +3,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Block, RegexMatch } from './types';
 import { BlockType } from './types';
-import { BLOCK_CONFIGS } from './constants.tsx';
+import { BLOCK_CONFIGS } from './constants'; // .tsx removed
 import { generateId, generateRegexString } from './utils';
 import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation'; // Import useRouter
 
 import AppHeader from './AppHeader';
 import BlockNode from './BlockNode';
@@ -16,14 +15,13 @@ import RegexOutputDisplay from './RegexOutputDisplay';
 import TestArea from './TestArea';
 import CodeGenerationPanel from './CodeGenerationPanel';
 import DebugView from './DebugView';
-// RegexWizardModal is no longer directly used from here for the main "Wizard" button
-// import RegexWizardModal from './RegexWizardModal'; 
+import RegexWizardModal from './RegexWizardModal'; 
 import { Button } from '@/components/ui/button';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Zap } from 'lucide-react';
+import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Zap, Sparkles } from 'lucide-react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
 const deepCloneBlock = (block: Block): Block => {
@@ -107,12 +105,11 @@ const findBlockAndParentRecursive = (
 
 
 const RegexVisionWorkspace: React.FC = () => {
-  const router = useRouter(); // Initialize router
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [parentIdForNewBlock, setParentIdForNewBlock] = useState<string | null>(null);
   const [isPaletteVisible, setIsPaletteVisible] = useState(false);
-  // const [isWizardModalOpen, setIsWizardModalOpen] = useState(false); // Old wizard modal state
+  const [isWizardModalOpen, setIsWizardModalOpen] = useState(false); 
   
   const [testText, setTestText] = useState<string>('Быстрая коричневая лиса прыгает через ленивую собаку.');
   const [regexFlags, setRegexFlags] = useState<string>('g');
@@ -220,18 +217,16 @@ const RegexVisionWorkspace: React.FC = () => {
       setBlocks(prev => [...prev, newBlock]);
     }
     setSelectedBlockId(newBlock.id);
-    setParentIdForNewBlock(null); // Reset parent target from palette
+    setParentIdForNewBlock(null); 
     setIsPaletteVisible(false);
   }, [toast, blocks, selectedBlockId]);
 
 
-  // This function might be called from the new wizard page eventually to add blocks
   const handleAddBlocksFromWizard = useCallback((newBlocks: Block[], parentIdFromWizard?: string | null) => {
     if (newBlocks.length === 0) return;
   
     let targetParentId = parentIdFromWizard; 
   
-    // If no explicit parent from wizard, try to add to selected block if it's a container, or root.
     if (!targetParentId && selectedBlockId) {
       const selBlock = findBlockRecursive(blocks, selectedBlockId);
       if (selBlock && [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(selBlock.type)) {
@@ -260,7 +255,7 @@ const RegexVisionWorkspace: React.FC = () => {
     }
   
     setSelectedBlockId(newBlocks[newBlocks.length - 1].id);
-    // setIsWizardModalOpen(false); // Not using modal anymore for this button
+    setIsWizardModalOpen(false); 
     toast({ title: "Блоки добавлены", description: "Блоки из Мастера успешно добавлены." });
   }, [toast, blocks, selectedBlockId]);
 
@@ -652,8 +647,8 @@ const RegexVisionWorkspace: React.FC = () => {
                       <Button variant="outline" size="iconSm" onClick={handleCollapseAll} title="Свернуть всё (Ctrl+Shift+Вверх)">
                         <FoldVertical size={14} />
                       </Button>
-                       <Button size="sm" variant="outline" onClick={() => router.push('/wizard')}>
-                        <Zap size={16} className="mr-1 text-amber-500" /> Мастер Regex
+                      <Button size="sm" variant="outline" onClick={() => { setParentIdForNewBlock(null); setIsWizardModalOpen(true); }}>
+                        <Sparkles size={16} className="mr-1 text-amber-500" /> AI Помощник
                       </Button>
                       <Button size="sm" onClick={() => { setParentIdForNewBlock(null); setIsPaletteVisible(true); }}>
                         <Plus size={16} className="mr-1" /> Добавить блок
@@ -667,7 +662,7 @@ const RegexVisionWorkspace: React.FC = () => {
                       <div className="text-center text-muted-foreground py-10 flex flex-col items-center justify-center h-full">
                         <Layers size={48} className="mb-3 opacity-50" />
                         <p className="font-medium">Начните строить свой regex!</p>
-                        <p className="text-sm">Нажмите "Добавить блок" или используйте "Мастер Regex".</p>
+                        <p className="text-sm">Нажмите "Добавить блок" или используйте "AI Помощник".</p>
                       </div>
                     ) : (
                       <div className="space-y-1">
@@ -742,10 +737,7 @@ const RegexVisionWorkspace: React.FC = () => {
         onToggle={() => setIsPaletteVisible(!isPaletteVisible)}
         parentIdForNewBlock={parentIdForNewBlock}
       />
-      {/* 
-        The RegexWizardModal is no longer triggered by the main button.
-        Its logic will be integrated into the new /wizard page flow later.
-        {isWizardModalOpen && (
+      {isWizardModalOpen && (
         <RegexWizardModal
           isOpen={isWizardModalOpen}
           onClose={() => {
@@ -753,15 +745,17 @@ const RegexVisionWorkspace: React.FC = () => {
             setParentIdForNewBlock(null); 
           }}
           onComplete={(wizardBlocks) => {
-            handleAddBlocks(wizardBlocks, parentIdForNewBlock); 
+            handleAddBlocksFromWizard(wizardBlocks, parentIdForNewBlock); 
             setIsWizardModalOpen(false);
             setParentIdForNewBlock(null); 
           }}
           initialParentId={parentIdForNewBlock}
         />
-      )} */}
+      )}
     </div>
   );
 };
 
 export default RegexVisionWorkspace;
+
+    

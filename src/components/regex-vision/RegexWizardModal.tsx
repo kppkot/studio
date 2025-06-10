@@ -1,9 +1,9 @@
 
 "use client";
 import React, { useState, useCallback, useEffect } from 'react';
-import type { Block, QuantifierSettings, CharacterClassSettings, GroupSettings, LookaroundSettings, LiteralSettings, AnchorSettings, BackreferenceSettings } from './types';
+import type { Block, QuantifierSettings, CharacterClassSettings, GroupSettings, LiteralSettings, AnchorSettings, BackreferenceSettings, LookaroundSettings } from './types';
 import { BlockType } from './types';
-import { BLOCK_CONFIGS } from './constants.tsx';
+import { BLOCK_CONFIGS } from './constants'; // .tsx removed
 
 import {
   Dialog,
@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card } from "@/components/ui/card";
-import { Lightbulb, CheckSquare, TextCursorInput, Replace, Eraser, Split, Wand2, Phone, AtSign, Globe, KeyRound, Shuffle, MessageSquareQuote, CaseSensitive, SearchCheck, Route, Workflow, FileText, CalendarClock, BadgeCheck, AlignLeft, Calculator } from 'lucide-react';
+import { Lightbulb, CheckSquare, TextCursorInput, Replace, Eraser, Split, Wand2, Phone, AtSign, Globe, KeyRound, Shuffle, MessageSquareQuote, CaseSensitive, SearchCheck, Route, Workflow, FileText, CalendarClock, BadgeCheck, AlignLeft, Calculator, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateId, createAnchor, createLiteral, createCharClass, createQuantifier, createSequenceGroup, createAlternation, createLookaround, createBackreference, escapeRegexChars, generateBlocksForEmail, generateBlocksForURL, generateBlocksForIPv4, generateBlocksForIPv6, generateBlocksForDuplicateWords, generateBlocksForMultipleSpaces, generateBlocksForTabsToSpaces, generateBlocksForNumbers } from './utils';
 
@@ -36,6 +36,9 @@ interface RegexWizardModalProps {
 
 type WizardStepId =
   | 'start'
+  // AI Assistant specific step
+  | 'ai_natural_language_input'
+  // Original wizard steps (can be part of AI assistant as guided mode)
   | 'validation_type_choice'
   | 'validation_basicPatterns_what'
   | 'validation_basicPatterns_length'
@@ -60,7 +63,11 @@ type WizardStepId =
   | 'final_preview';
 
 interface WizardFormData {
-  mainCategory?: 'validation' | 'extraction' | 'replacement' | 'splitting';
+  // For AI Assistant
+  naturalLanguageQuery?: string;
+  
+  // For original wizard logic
+  mainCategory?: 'validation' | 'extraction' | 'replacement' | 'splitting' | 'ai_assisted';
 
   validationTypeChoice?: 'basic' | 'standard' | 'datetime';
 
@@ -106,23 +113,34 @@ interface WizardFormData {
 
 const wizardConfig = {
   start: {
-    title: "Мастер Regex: Выберите основную задачу",
+    title: "AI Помощник RegexVision Pro",
+    description: "Как вы хотите создать регулярное выражение?",
     type: 'card_choice',
     options: [
-      { id: 'validation', label: "Проверить Формат", description: "Валидация email, URL, дат, и т.д.", icon: CheckSquare},
-      { id: 'extraction', label: "Найти и Извлечь", description: "Извлечение email, чисел, текста в кавычках.", icon: SearchCheck },
-      { id: 'replacement', label: "Заменить / Изменить", description: "Удаление пробелов, маскирование, замена.", icon: Replace },
-      { id: 'splitting', label: "Разделить Текст", description: "Разбивка по запятой, пробелу, символу.", icon: Split },
-      { id: 'condition', label: "Проверить Условие", description: "Содержит ли текст 'ошибку', цифры, и т.п." , icon: Workflow, disabled: true },
-      { id: 'pro', label: "Свой Шаблон (PRO)", description: "Для сложных задач и опытных пользователей.", icon: Wand2, disabled: true },
+      { id: 'ai_assisted', label: "Ввести запрос на естественном языке", description: "Опишите, что вы хотите найти, и AI предложит варианты.", icon: Sparkles },
+      { id: 'validation', label: "Проверить Формат (по шагам)", description: "Валидация email, URL, дат и т.д.", icon: CheckSquare},
+      { id: 'extraction', label: "Найти и Извлечь (по шагам)", description: "Извлечение email, чисел, текста в кавычках.", icon: SearchCheck },
+      { id: 'replacement', label: "Заменить / Изменить (по шагам)", description: "Удаление пробелов, маскирование, замена.", icon: Replace },
+      { id: 'splitting', label: "Разделить Текст (по шагам)", description: "Разбивка по запятой, пробелу, символу.", icon: Split },
     ],
     next: (choice: string) => {
+      if (choice === 'ai_assisted') return 'ai_natural_language_input';
       if (choice === 'validation') return 'validation_type_choice';
       if (choice === 'extraction') return 'extraction_whatToExtract';
       if (choice === 'replacement') return 'replacement_whatToReplace';
       if (choice === 'splitting') return 'splitting_delimiter_choice';
       return 'start';
     }
+  },
+  ai_natural_language_input: {
+    title: "AI Помощник: Опишите вашу задачу",
+    description: "Например: 'email, но только с доменов .com или .org', 'найти все UUID версии 4', 'извлечь номера телефонов в формате +7 XXX XXX XX XX'.",
+    type: 'inputs',
+    inputs: [
+        { id: 'naturalLanguageQuery', label: "Ваш запрос:", inputType: 'textarea', defaultValue: '', placeholder: "Я хочу найти..." },
+    ],
+    nextStep: 'final_preview', // This will eventually trigger AI generation
+    autoFocusInputId: 'naturalLanguageQuery'
   },
   validation_type_choice: {
     title: "Валидация: Какой тип проверки вам нужен?",
@@ -386,7 +404,7 @@ const wizardConfig = {
     nextStep: 'final_preview'
   },
   final_preview: {
-    title: "Предпросмотр и добавление",
+    title: "Результат Помощника",
     type: 'preview',
   }
 };
@@ -397,7 +415,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   const [formData, setFormData] = useState<WizardFormData>({});
   const [generatedBlocks, setGeneratedBlocks] = useState<Block[]>([]);
   const [replacementString, setReplacementString] = useState<string | null>(null);
-
+  const [isLoadingAI, setIsLoadingAI] = useState(false); // For AI interaction
 
   useEffect(() => {
     if (isOpen) {
@@ -405,48 +423,25 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         setFormData({});
         setGeneratedBlocks([]);
         setReplacementString(null);
+        setIsLoadingAI(false);
     }
   }, [isOpen]);
 
   const currentStepConfig = wizardConfig[currentStepId as keyof typeof wizardConfig];
-
-  const handleCardChoice = (value: string) => {
-    const newFormData: Partial<WizardFormData> = {};
-    newFormData.mainCategory = value as WizardFormData['mainCategory'];
-    setFormData(newFormData as WizardFormData);
-  };
 
   const handleRadioChange = (value: string) => {
     const newFormData : Partial<WizardFormData> = { ...formData };
 
     const resetSubsequentFields = (keysToKeep: (keyof WizardFormData)[]) => {
         const currentMainCategory = newFormData.mainCategory;
-        const currentValidationType = newFormData.validationTypeChoice;
-        const currentStandardFormat = newFormData.standardFormatChoice;
-        const currentExtractionChoice = newFormData.extractionChoice;
-        const currentReplacementChoice = newFormData.replacementChoice;
-        const currentSplittingChoice = newFormData.splittingChoice;
-        const currentDateTimeFormat = newFormData.dateFormat;
-        const currentIpType = newFormData.ip_type;
-
-
+        // ... (keep existing logic for resetting fields based on mainCategory and other high-level choices)
         Object.keys(newFormData).forEach(keyStr => {
             const key = keyStr as keyof WizardFormData;
             if (!keysToKeep.includes(key)) {
                  delete (newFormData as any)[key];
             }
         });
-
         if (keysToKeep.includes('mainCategory') && currentMainCategory) newFormData.mainCategory = currentMainCategory;
-        if (keysToKeep.includes('validationTypeChoice') && currentValidationType) newFormData.validationTypeChoice = currentValidationType;
-        if (keysToKeep.includes('standardFormatChoice') && currentStandardFormat) newFormData.standardFormatChoice = currentStandardFormat;
-        if (keysToKeep.includes('extractionChoice') && currentExtractionChoice) newFormData.extractionChoice = currentExtractionChoice;
-        if (keysToKeep.includes('replacementChoice') && currentReplacementChoice) newFormData.replacementChoice = currentReplacementChoice;
-        if (keysToKeep.includes('splittingChoice') && currentSplittingChoice) newFormData.splittingChoice = currentSplittingChoice;
-        if (keysToKeep.includes('dateFormat') && currentDateTimeFormat) newFormData.dateFormat = currentDateTimeFormat;
-        if (keysToKeep.includes('ip_type') && currentIpType) newFormData.ip_type = currentIpType;
-
-
     };
 
     if (currentStepId === 'start') {
@@ -527,6 +522,48 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
      setFormData(prev => ({ ...prev, [inputId]: value }));
   };
 
+  const generateBlocksFromFormData = useCallback((): Block[] => {
+    if(formData.mainCategory === 'validation'){
+        if(formData.validationTypeChoice === 'basic'){
+             return generateBlocksForBasicPattern();
+        } else if (formData.validationTypeChoice === 'standard') {
+            if(formData.standardFormatChoice === 'email') return generateBlocksForEmail(false);
+            if (formData.standardFormatChoice === 'url') return generateBlocksForURL(false, formData.url_requireProtocol === 'yes');
+            // if (formData.standardFormatChoice === 'phone') return generateBlocksForPhone(); // Disabled
+            if (formData.standardFormatChoice === 'ip') {
+                if (formData.ip_type === 'ipv4') return generateBlocksForIPv4();
+                if (formData.ip_type === 'ipv6') return generateBlocksForIPv6();
+                return [];
+            }
+            // if (formData.standardFormatChoice === 'password') return generateBlocksForPassword(); // Disabled
+            return [];
+        }
+        // if (formData.validationTypeChoice === 'datetime') return generateBlocksForDateTime(); // Disabled
+         return [];
+    } else if (formData.mainCategory === 'extraction') {
+        if (formData.extractionChoice === 'emails') return generateBlocksForEmail(true);
+        if (formData.extractionChoice === 'urls') return generateBlocksForURL(true, false);
+        if (formData.extractionChoice === 'numbers') return generateBlocksForNumbers();
+        // if (formData.extractionChoice === 'quotedText') return generateBlocksForQuotedText(); // Disabled
+        // if (formData.extractionChoice === 'specificWord') return generateBlocksForSpecificWord(); // Disabled
+        if (formData.extractionChoice === 'duplicateWords') return generateBlocksForDuplicateWords();
+        return [];
+    } else if (formData.mainCategory === 'replacement') {
+        if (formData.replacementChoice === 'multipleSpaces') {
+             setReplacementString(" (один пробел)");
+             return generateBlocksForMultipleSpaces();
+        } 
+        if (formData.replacementChoice === 'tabsToSpaces') {
+             setReplacementString(" (один пробел)");
+             return generateBlocksForTabsToSpaces();
+        } 
+        // Other replacement types are disabled or need specific handling
+        return [];
+    }
+    // if (formData.mainCategory === 'splitting') return generateBlocksForSplitting(); // Disabled
+    return [];
+  }, [formData]);
+
 
   const generateBlocksForBasicPattern = useCallback((): Block[] => {
     const blocks: Block[] = [];
@@ -567,220 +604,11 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   }, [formData]);
 
 
-
-  const generateBlocksForPhone = useCallback((): Block[] => {
-    const blocks: Block[] = [createAnchor('^')];
-    if (formData.phone_hasCountryCode === 'yes') {
-        blocks.push(createLiteral('\\+', true));
-        blocks.push(createQuantifier('?'));
-        blocks.push(createCharClass('\\d', false));
-        blocks.push(createQuantifier('{n,m}', 1, 3));
-        if (formData.phone_allowSeparators === 'yes') {
-          blocks.push(createCharClass(' -', false));
-          blocks.push(createQuantifier('?'));
-        }
-    }
-
-    const digitPattern = '\\d';
-
-    if (formData.phone_allowSeparators === 'yes') {
-      const digitAndOptionalSep = createSequenceGroup([
-          createCharClass(digitPattern),
-          createSequenceGroup([createCharClass(' -', false)], 'non-capturing'),
-          createQuantifier('?')
-      ], 'non-capturing');
-      blocks.push(digitAndOptionalSep);
-      blocks.push(createQuantifier(formData.phone_hasCountryCode === 'yes' ? '{6,14}' : '{7,15}'));
-
-    } else {
-        blocks.push(createCharClass(digitPattern, false));
-        blocks.push(createQuantifier(formData.phone_hasCountryCode === 'yes' ? '{6,14}' : '{7,15}'));
-    }
-
-    blocks.push(createAnchor('$'));
-    return blocks;
-  }, [formData.phone_hasCountryCode, formData.phone_allowSeparators]);
-
-  const generateBlocksForPassword = useCallback((): Block[] => {
-    const blocks: Block[] = [createAnchor('^')];
-    if (formData.password_req_digits) {
-        blocks.push(createLookaround('positive-lookahead', [createCharClass('.*\\d.*', false)]));
-    }
-    if (formData.password_req_lowercase) {
-        blocks.push(createLookaround('positive-lookahead', [createCharClass('.*[a-z].*', false)]));
-    }
-    if (formData.password_req_uppercase) {
-        blocks.push(createLookaround('positive-lookahead', [createCharClass('.*[A-Z].*', false)]));
-    }
-    if (formData.password_req_specialChars) {
-        blocks.push(createLookaround('positive-lookahead', [createCharClass('.*[\\W_].*', false)]));
-    }
-    const minLength = formData.password_minLength !== undefined ? Math.max(1, formData.password_minLength) : 8;
-    blocks.push(createCharClass('.', false));
-    blocks.push(createQuantifier('{n,}', minLength, null));
-    blocks.push(createAnchor('$'));
-    return blocks;
-  }, [formData.password_req_digits, formData.password_req_lowercase, formData.password_req_uppercase, formData.password_req_specialChars, formData.password_minLength]);
-
-  const generateBlocksForDateTime = useCallback((): Block[] => {
-    const blocks: Block[] = [];
-    blocks.push(createAnchor('^'));
-
-    let separatorPattern = "";
-    if (formData.dateFormat === 'ddmmyyyy' && formData.dateSeparators && formData.dateSeparators.length > 0) {
-        separatorPattern = formData.dateSeparators.map(s => {
-            if (s === 'slash') return '/';
-            if (s === 'hyphen') return '-';
-            if (s === 'dot') return '\\.';
-            return '';
-        }).join('');
-    } else if (formData.dateFormat === 'yyyymmdd') {
-        separatorPattern = '-';
-    }
-    const separatorClassBlock = separatorPattern ? createCharClass(separatorPattern.length > 1 ? `[${separatorPattern}]` : separatorPattern, false) : null;
-
-
-    if (formData.dateFormat === 'ddmmyyyy') {
-        blocks.push(createSequenceGroup([createAlternation([
-            [createLiteral("0", false), createCharClass("1-9", false)],
-            [createCharClass("12", false), createCharClass("0-9", false)],
-            [createLiteral("3", false), createCharClass("01", false)]
-        ])]));
-        if (separatorClassBlock) blocks.push(separatorClassBlock);
-        blocks.push(createSequenceGroup([createAlternation([
-            [createLiteral("0", false), createCharClass("1-9", false)],
-            [createLiteral("1", false), createCharClass("012", false)]
-        ])]));
-        if (separatorClassBlock) blocks.push(separatorClassBlock);
-        blocks.push(createSequenceGroup([
-            createAlternation([[createLiteral("19", false)], [createLiteral("20", false)]]),
-            createCharClass("\\d", false), createQuantifier("{n}", 2, 2)
-        ]));
-    } else if (formData.dateFormat === 'yyyymmdd') {
-         blocks.push(createSequenceGroup([
-            createAlternation([[createLiteral("19", false)], [createLiteral("20", false)]]),
-            createCharClass("\\d", false), createQuantifier("{n}", 2, 2)
-        ]));
-        if (separatorClassBlock) blocks.push(separatorClassBlock);
-        blocks.push(createSequenceGroup([createAlternation([
-            [createLiteral("0", false), createCharClass("1-9", false)],
-            [createLiteral("1", false), createCharClass("012", false)]
-        ])]));
-        if (separatorClassBlock) blocks.push(separatorClassBlock);
-        blocks.push(createSequenceGroup([createAlternation([
-            [createLiteral("0", false), createCharClass("1-9", false)],
-            [createCharClass("12", false), createCharClass("0-9", false)],
-            [createLiteral("3", false), createCharClass("01", false)]
-        ])]));
-    }
-
-    if (formData.validateTime === 'yes') {
-        blocks.push(createCharClass("\\s", false));
-        blocks.push(createQuantifier("?"));
-
-        if (formData.timeFormat === '24hr') {
-            blocks.push(createSequenceGroup([createAlternation([
-                [createCharClass("01", false), createCharClass("\\d", false)],
-                [createLiteral("2", false), createCharClass("0-3", false)]
-            ])]));
-            blocks.push(createLiteral(":", false));
-            blocks.push(createSequenceGroup([createCharClass("0-5", false), createCharClass("\\d", false)]));
-        } else if (formData.timeFormat === '12hr') {
-            blocks.push(createSequenceGroup([createAlternation([
-                [createSequenceGroup([createLiteral("0", false), createQuantifier("?")]), createCharClass("1-9", false)],
-                [createLiteral("1", false), createCharClass("0-2", false)]
-            ])]));
-            blocks.push(createLiteral(":", false));
-            blocks.push(createSequenceGroup([createCharClass("0-5", false), createCharClass("\\d", false)]));
-            blocks.push(createCharClass("\\s", false));
-            blocks.push(createQuantifier("?"));
-            blocks.push(createSequenceGroup([createAlternation([
-                [createLiteral("AM", false)],
-                [createLiteral("PM", false)]
-            ])], 'non-capturing'));
-        }
-    }
-
-    blocks.push(createAnchor('$'));
-    return blocks;
-  }, [formData.dateFormat, formData.dateSeparators, formData.validateTime, formData.timeFormat]);
-
-
-  const generateBlocksForQuotedText = useCallback((): Block[] => {
-    const quoteChar = formData.quoteType === 'single' ? "'" : '"';
-    const escapedQuoteCharPattern = escapeRegexChars(quoteChar);
-    const nonQuotePattern = `[^${escapedQuoteCharPattern}]`;
-
-    return [
-        createLiteral(quoteChar, true),
-        createSequenceGroup([
-            createCharClass(nonQuotePattern, false),
-            createQuantifier('*', undefined, undefined, 'greedy')
-        ], 'capturing'),
-        createLiteral(quoteChar, true)
-    ];
-  }, [formData.quoteType]);
-
-  const generateBlocksForSpecificWord = useCallback((): Block[] => {
-    if (!formData.specificWord?.trim()) return [];
-    return [
-        createAnchor('\\b'),
-        createLiteral(formData.specificWord, true),
-        createAnchor('\\b')
-    ];
-  }, [formData.specificWord]);
-
-  const generateBlocksForRemoveHtmlTags = useCallback((): Block[] => {
-    return [
-        createLiteral('<', false),
-        createCharClass('[^>]', false),
-        createQuantifier('*'),
-        createLiteral('>', false)
-    ];
-  }, []);
-
-  const generateBlocksForMaskDigits = useCallback((): Block[] => {
-    const keepLastN = formData.maskDigits_keepLast !== undefined ? Math.max(0, formData.maskDigits_keepLast) : 4;
-    return [
-        createLiteral("\\d", false),
-        createLookaround("positive-lookahead", [
-            createLiteral(`\\d{${keepLastN}}`, false)
-        ])
-    ];
-  }, [formData.maskDigits_keepLast]);
-
-  const generateBlocksForSwapParts = useCallback((): Block[] => {
-    if (!formData.swapPattern?.trim()) return [];
-    return [createLiteral(formData.swapPattern, false)];
-  }, [formData.swapPattern]);
-
-
-  const generateBlocksForSplitting = useCallback((): Block[] => {
-    switch(formData.splittingChoice) {
-        case 'comma':
-            return [createLiteral(',', false)];
-        case 'space':
-            return [createCharClass('\\s', false), createQuantifier('+')];
-        case 'simpleChar':
-            if (formData.splittingSimpleChar_input && formData.splittingSimpleChar_input.trim()) {
-                return [createLiteral(formData.splittingSimpleChar_input.trim(), true)];
-            }
-            return [];
-        case 'regex':
-            if (formData.splittingRegex_input && formData.splittingRegex_input.trim()) {
-                return [createLiteral(formData.splittingRegex_input.trim(), false)];
-            }
-            return [];
-        default:
-            return [];
-    }
-  }, [formData.splittingChoice, formData.splittingSimpleChar_input, formData.splittingRegex_input]);
-
-
-  const handleNext = () => {
+  const handleNext = async () => {
     if (!currentStepConfig) return;
     setReplacementString(null);
     setGeneratedBlocks([]);
+    setIsLoadingAI(false);
 
     if (currentStepId === 'final_preview') {
         if (generatedBlocks.length > 0 || (formData.mainCategory === 'replacement' && replacementString)) {
@@ -792,7 +620,30 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     let nextStepTargetId: WizardStepId | undefined = undefined;
     let choice: string | undefined = getRadioValue();
 
-    if ('next' in currentStepConfig && typeof currentStepConfig.next === 'function') {
+    if (currentStepId === 'ai_natural_language_input' && formData.naturalLanguageQuery) {
+        setIsLoadingAI(true);
+        // TODO: Implement actual AI call here using Genkit flow
+        // For now, simulate with a placeholder and go to preview
+        try {
+            // const aiResult = await callGenkitFlow(formData.naturalLanguageQuery);
+            // const parsedBlocks = parseRegexToBlocks(aiResult.regex); // This is a complex function to write
+            // setGeneratedBlocks(parsedBlocks);
+            // For demo purposes:
+            await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API call
+            const placeholderRegex = formData.naturalLanguageQuery.toLowerCase().includes("email") ? 
+                                     generateBlocksForEmail(true) : 
+                                     [createLiteral(formData.naturalLanguageQuery, true)]; // Very basic placeholder
+            setGeneratedBlocks(placeholderRegex);
+
+        } catch (error) {
+            console.error("AI Regex Generation Error:", error);
+            setGeneratedBlocks([createLiteral("Ошибка AI-генерации", false)]);
+        } finally {
+            setIsLoadingAI(false);
+        }
+        nextStepTargetId = 'final_preview';
+
+    } else if ('next' in currentStepConfig && typeof currentStepConfig.next === 'function') {
       if (choice) {
         nextStepTargetId = currentStepConfig.next(choice) as WizardStepId;
       } else if (currentStepConfig.type === 'radio' && !choice && !currentStepConfig.options?.find(o => o.id === getRadioValue())?.disabled) {
@@ -803,58 +654,8 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
       nextStepTargetId = currentStepConfig.nextStep as WizardStepId;
     }
 
-    if (nextStepTargetId === 'final_preview') {
-        let blocksToSet: Block[] = [];
-        if(formData.mainCategory === 'validation'){
-            if(formData.validationTypeChoice === 'basic'){
-                 blocksToSet = generateBlocksForBasicPattern();
-            } else if (formData.validationTypeChoice === 'standard') {
-                if(formData.standardFormatChoice === 'email') blocksToSet = generateBlocksForEmail(false);
-                else if (formData.standardFormatChoice === 'url') blocksToSet = generateBlocksForURL(false, formData.url_requireProtocol === 'yes');
-                else if (formData.standardFormatChoice === 'phone') blocksToSet = generateBlocksForPhone();
-                else if (formData.standardFormatChoice === 'ip') {
-                    if (formData.ip_type === 'ipv4') blocksToSet = generateBlocksForIPv4();
-                    else if (formData.ip_type === 'ipv6') blocksToSet = generateBlocksForIPv6();
-                    else blocksToSet = [];
-                } else if (formData.standardFormatChoice === 'password') blocksToSet = generateBlocksForPassword();
-                else blocksToSet = [];
-            } else if (formData.validationTypeChoice === 'datetime') {
-                blocksToSet = generateBlocksForDateTime();
-            }
-             else blocksToSet = [];
-        } else if (formData.mainCategory === 'extraction') {
-            if (formData.extractionChoice === 'emails') blocksToSet = generateBlocksForEmail(true);
-            else if (formData.extractionChoice === 'urls') blocksToSet = generateBlocksForURL(true, false);
-            else if (formData.extractionChoice === 'numbers') blocksToSet = generateBlocksForNumbers();
-            else if (formData.extractionChoice === 'quotedText') blocksToSet = generateBlocksForQuotedText();
-            else if (formData.extractionChoice === 'specificWord') blocksToSet = generateBlocksForSpecificWord();
-            else if (formData.extractionChoice === 'duplicateWords') blocksToSet = generateBlocksForDuplicateWords();
-            else blocksToSet = [];
-        } else if (formData.mainCategory === 'replacement') {
-            if (formData.replacementChoice === 'multipleSpaces') {
-                 blocksToSet = generateBlocksForMultipleSpaces();
-                 setReplacementString(" (один пробел)");
-            } else if (formData.replacementChoice === 'tabsToSpaces') {
-                 blocksToSet = generateBlocksForTabsToSpaces();
-                 setReplacementString(" (один пробел)");
-            } else if (formData.replacementChoice === 'removeHtml') {
-                 blocksToSet = generateBlocksForRemoveHtmlTags();
-                 setReplacementString(" (пустая строка)");
-            } else if (formData.replacementChoice === 'maskDigits') {
-                 blocksToSet = generateBlocksForMaskDigits();
-                 setReplacementString(" (символ маски, например 'X' или '*')");
-            } else if (formData.replacementChoice === 'swapParts') {
-                blocksToSet = generateBlocksForSwapParts();
-                setReplacementString(formData.swapReplacement || "$2 $1 (пример)");
-            }
-            else blocksToSet = [];
-        } else if (formData.mainCategory === 'splitting') {
-            blocksToSet = generateBlocksForSplitting();
-        }
-         else {
-            blocksToSet = [];
-        }
-        setGeneratedBlocks(blocksToSet);
+    if (nextStepTargetId === 'final_preview' && currentStepId !== 'ai_natural_language_input') {
+        setGeneratedBlocks(generateBlocksFromFormData());
     }
 
     if (nextStepTargetId) {
@@ -868,74 +669,52 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     let prevStep: WizardStepId | null = null;
     setGeneratedBlocks([]);
     setReplacementString(null);
+    setIsLoadingAI(false);
 
-    switch (currentStepId) {
-        case 'validation_type_choice':
-        case 'extraction_whatToExtract':
-        case 'replacement_whatToReplace':
-        case 'splitting_delimiter_choice':
-            prevStep = 'start'; break;
-
-        case 'validation_basicPatterns_what': prevStep = 'validation_type_choice'; break;
-        case 'validation_basicPatterns_length': prevStep = 'validation_basicPatterns_what'; break;
-        case 'validation_basicPatterns_length_specify': prevStep = 'validation_basicPatterns_length'; break;
-
-        case 'validation_standardFormats_what': prevStep = 'validation_type_choice'; break;
-        case 'validation_standardFormats_url_protocol': prevStep = 'validation_standardFormats_what'; break;
-        case 'validation_standardFormats_ip_type': prevStep = 'validation_standardFormats_what'; break;
-        case 'validation_phone_countryCode': prevStep = 'validation_standardFormats_what'; break;
-        case 'validation_phone_separators': prevStep = 'validation_phone_countryCode'; break;
-        case 'validation_password_requirements': prevStep = 'validation_standardFormats_what'; break;
-
-        case 'validation_dateTime_dateFormat': prevStep = 'validation_type_choice'; break;
-        case 'validation_dateTime_separators': prevStep = 'validation_dateTime_dateFormat'; break;
-        case 'validation_dateTime_validateTime':
-            if (formData.dateFormat === 'ddmmyyyy') prevStep = 'validation_dateTime_separators';
-            else if (formData.dateFormat === 'yyyymmdd') prevStep = 'validation_dateTime_dateFormat';
-            else prevStep = 'validation_dateTime_dateFormat';
-            break;
-        case 'validation_dateTime_timeFormat': prevStep = 'validation_dateTime_validateTime'; break;
-
-        case 'extraction_quotedText_type': prevStep = 'extraction_whatToExtract'; break;
-        case 'extraction_specificWord_input': prevStep = 'extraction_whatToExtract'; break;
-
-        case 'replacement_maskDigits_options': prevStep = 'replacement_whatToReplace'; break;
-        case 'replacement_swap_input': prevStep = 'replacement_whatToReplace'; break;
-
-
-        case 'final_preview':
-            if (formData.mainCategory === 'validation') {
-                if (formData.validationTypeChoice === 'basic') {
-                    prevStep = formData.basicPattern_restrictLength === 'yes' ? 'validation_basicPatterns_length_specify' : 'validation_basicPatterns_length';
-                } else if (formData.validationTypeChoice === 'standard') {
-                    if (formData.standardFormatChoice === 'email') prevStep = 'validation_standardFormats_what';
-                    else if (formData.standardFormatChoice === 'url') prevStep = 'validation_standardFormats_url_protocol';
-                    else if (formData.standardFormatChoice === 'phone') prevStep = 'validation_phone_separators';
-                    else if (formData.standardFormatChoice === 'ip') prevStep = 'validation_standardFormats_ip_type';
-                    else if (formData.standardFormatChoice === 'password') prevStep = 'validation_password_requirements';
-                    else prevStep = 'validation_standardFormats_what';
-                } else if (formData.validationTypeChoice === 'datetime') {
-                    if (formData.validateTime === 'yes') prevStep = 'validation_dateTime_timeFormat';
-                    else prevStep = 'validation_dateTime_validateTime';
-                }
-                 else prevStep = 'validation_type_choice';
-            } else if (formData.mainCategory === 'extraction') {
-                 if (formData.extractionChoice === 'quotedText') prevStep = 'extraction_quotedText_type';
-                 else if (formData.extractionChoice === 'specificWord') prevStep = 'extraction_specificWord_input';
-                 else if (['emails', 'urls', 'numbers', 'duplicateWords'].includes(formData.extractionChoice || '')) prevStep = 'extraction_whatToExtract';
-                 else prevStep = 'extraction_whatToExtract';
-            } else if (formData.mainCategory === 'replacement') {
-                if (formData.replacementChoice === 'maskDigits') prevStep = 'replacement_maskDigits_options';
-                else if (formData.replacementChoice === 'swapParts') prevStep = 'replacement_swap_input';
-                else if (['multipleSpaces', 'tabsToSpaces', 'removeHtml'].includes(formData.replacementChoice || '')) prevStep = 'replacement_whatToReplace';
-                else prevStep = 'replacement_whatToReplace';
-            } else if (formData.mainCategory === 'splitting') {
-                prevStep = 'splitting_delimiter_choice';
+    if (currentStepId === 'ai_natural_language_input') {
+        prevStep = 'start';
+    } else if (currentStepId === 'final_preview') {
+        if (formData.mainCategory === 'ai_assisted') {
+            prevStep = 'ai_natural_language_input';
+        } else if (formData.mainCategory === 'validation') {
+            if (formData.validationTypeChoice === 'basic') {
+                prevStep = formData.basicPattern_restrictLength === 'yes' ? 'validation_basicPatterns_length_specify' : 'validation_basicPatterns_length';
+            } else if (formData.validationTypeChoice === 'standard') {
+                if (formData.standardFormatChoice === 'email') prevStep = 'validation_standardFormats_what';
+                else if (formData.standardFormatChoice === 'url') prevStep = 'validation_standardFormats_url_protocol';
+                else if (formData.standardFormatChoice === 'ip') prevStep = 'validation_standardFormats_ip_type';
+                else prevStep = 'validation_standardFormats_what';
             }
-            else prevStep = 'start';
-            break;
-        default: prevStep = 'start';
+             else prevStep = 'validation_type_choice';
+        } else if (formData.mainCategory === 'extraction') {
+             if (['emails', 'urls', 'numbers', 'duplicateWords'].includes(formData.extractionChoice || '')) prevStep = 'extraction_whatToExtract';
+             else prevStep = 'extraction_whatToExtract';
+        } else if (formData.mainCategory === 'replacement') {
+            if (['multipleSpaces', 'tabsToSpaces'].includes(formData.replacementChoice || '')) prevStep = 'replacement_whatToReplace';
+            else prevStep = 'replacement_whatToReplace';
+        }
+        else prevStep = 'start'; // Fallback to start for other main categories
+    } else {
+        // Existing back logic for non-final_preview, non-AI steps
+        switch (currentStepId) {
+            case 'validation_type_choice':
+            case 'extraction_whatToExtract':
+            case 'replacement_whatToReplace':
+            case 'splitting_delimiter_choice':
+                prevStep = 'start'; break;
+
+            case 'validation_basicPatterns_what': prevStep = 'validation_type_choice'; break;
+            case 'validation_basicPatterns_length': prevStep = 'validation_basicPatterns_what'; break;
+            case 'validation_basicPatterns_length_specify': prevStep = 'validation_basicPatterns_length'; break;
+
+            case 'validation_standardFormats_what': prevStep = 'validation_type_choice'; break;
+            case 'validation_standardFormats_url_protocol': prevStep = 'validation_standardFormats_what'; break;
+            case 'validation_standardFormats_ip_type': prevStep = 'validation_standardFormats_what'; break;
+            
+            default: prevStep = 'start';
+        }
     }
+
 
     if (prevStep) setCurrentStepId(prevStep);
     else setCurrentStepId('start');
@@ -946,6 +725,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     setFormData({});
     setGeneratedBlocks([]);
     setReplacementString(null);
+    setIsLoadingAI(false);
     onClose();
   }
 
@@ -971,20 +751,12 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         }
     }
 
-    if (currentStepId === 'validation_dateTime_separators' && (!formData.dateSeparators || formData.dateSeparators.length === 0)) {
-        return true;
-    }
-    if (currentStepId === 'extraction_specificWord_input' && !formData.specificWord?.trim()) {
-        return true;
-    }
-    if (currentStepId === 'replacement_maskDigits_options' && (formData.maskDigits_keepLast === undefined || formData.maskDigits_keepLast < 0)) {
-        return true;
-    }
-     if (currentStepId === 'replacement_swap_input' && (!formData.swapPattern?.trim() || !formData.swapReplacement?.trim())) {
+    if (currentStepId === 'ai_natural_language_input' && !formData.naturalLanguageQuery?.trim()) {
         return true;
     }
 
     if (currentStepId === 'final_preview') {
+        if (isLoadingAI) return true;
         if (generatedBlocks.length === 0 && !(formData.mainCategory === 'replacement' && replacementString)) {
             return true;
         }
@@ -994,7 +766,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) resetWizardAndClose(); }}>
-      <DialogContent className="sm:max-w-xl md:max-w-2xl max-h-[80vh] flex flex-col">
+      <DialogContent className="sm:max-w-xl md:max-w-2xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>{currentStepConfig.title}</DialogTitle>
           {currentStepConfig.description && (
@@ -1015,7 +787,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                                 formData.mainCategory === opt.id && "ring-2 ring-primary bg-accent text-accent-foreground",
                                 opt.disabled && "opacity-50 cursor-not-allowed"
                             )}
-                            onClick={() => !opt.disabled && handleRadioChange(opt.id)} // Changed to handleRadioChange
+                            onClick={() => !opt.disabled && handleRadioChange(opt.id)}
                             disabled={opt.disabled}
                         >
                             <opt.icon size={24} className="mb-1 text-primary"/>
@@ -1150,16 +922,27 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                     <Label htmlFor={`${currentStepId}-${input.id}`} className="text-sm font-medium">
                       {input.label}
                     </Label>
-                    <Input
-                      id={`${currentStepId}-${input.id}`}
-                      type={input.inputType}
-                      value={formData[input.id as keyof WizardFormData] as string || (input.defaultValue !== undefined ? String(input.defaultValue) : '')}
-                      onChange={(e) => handleInputChange(input.id, input.inputType === 'number' ? parseInt(e.target.value) || 0 : e.target.value)}
-                      className="mt-1 h-9"
-                      min={input.inputType === 'number' ? "0" : undefined}
-                      placeholder={input.placeholder}
-                      autoFocus={currentStepConfig.autoFocusInputId === input.id}
-                    />
+                    {input.inputType === 'textarea' ? (
+                        <textarea
+                            id={`${currentStepId}-${input.id}`}
+                            value={formData[input.id as keyof WizardFormData] as string || (input.defaultValue !== undefined ? String(input.defaultValue) : '')}
+                            onChange={(e) => handleInputChange(input.id, e.target.value)}
+                            className="mt-1 h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                            placeholder={input.placeholder}
+                            autoFocus={currentStepConfig.autoFocusInputId === input.id}
+                        />
+                    ) : (
+                        <Input
+                        id={`${currentStepId}-${input.id}`}
+                        type={input.inputType}
+                        value={formData[input.id as keyof WizardFormData] as string || (input.defaultValue !== undefined ? String(input.defaultValue) : '')}
+                        onChange={(e) => handleInputChange(input.id, input.inputType === 'number' ? parseInt(e.target.value) || 0 : e.target.value)}
+                        className="mt-1 h-9"
+                        min={input.inputType === 'number' ? "0" : undefined}
+                        placeholder={input.placeholder}
+                        autoFocus={currentStepConfig.autoFocusInputId === input.id}
+                        />
+                    )}
                   </div>
                 ))}
                  {currentStepConfig.description && (
@@ -1201,91 +984,107 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
             {currentStepId === 'final_preview' && (
                 <div className="space-y-3">
-                    <Label className="text-sm font-medium">Сгенерированные блоки Regex для поиска:</Label>
-                    {generatedBlocks.length > 0 ? (
-                        <Card className="p-3 bg-muted/50 max-h-60 overflow-y-auto">
-                            <div className="text-xs font-mono whitespace-pre-wrap space-y-1">
-                                {generatedBlocks.map(b => {
-                                    let display = `${BLOCK_CONFIGS[b.type]?.name || b.type}`;
-                                    if (b.type === BlockType.LITERAL) display += `: "${(b.settings as LiteralSettings).text}"`;
-                                    else if (b.type === BlockType.CHARACTER_CLASS) display += `: [${(b.settings as CharacterClassSettings).negated ? '^' : ''}${(b.settings as CharacterClassSettings).pattern}]`;
-                                    else if (b.type === BlockType.QUANTIFIER) {
-                                        const qs = b.settings as QuantifierSettings;
-                                        display += `: ${qs.type}`;
-                                        if (qs.min !== undefined) display += ` (min: ${qs.min}`;
-                                        if (qs.max !== undefined && qs.max !== null) display += `, max: ${qs.max}`;
-                                        if (qs.min !== undefined) display += `)`;
-                                        if (qs.mode) display += `, ${qs.mode}`;
-                                    }
-                                    else if (b.type === BlockType.ANCHOR) display += `: ${(b.settings as AnchorSettings).type}`;
-                                    else if (b.type === BlockType.GROUP) {
-                                      display += `: (${(b.settings as GroupSettings).type || 'capturing'})`;
-                                      if((b.settings as GroupSettings).name) display += ` ?<${(b.settings as GroupSettings).name}>`;
-                                    }
-                                    else if (b.type === BlockType.ALTERNATION) display += `: ( | )`;
-                                    else if (b.type === BlockType.LOOKAROUND) display += `: (${(b.settings as LookaroundSettings).type})`;
-                                    else if (b.type === BlockType.BACKREFERENCE) display += `: \\${(b.settings as BackreferenceSettings).ref}`;
-
-
-                                    const renderChildrenPreview = (children: Block[], level: number): string => {
-                                      return children.map(child => {
-                                        let childDisplay = `${'  '.repeat(level)}- ${BLOCK_CONFIGS[child.type]?.name || child.type}`;
-                                        if (child.type === BlockType.LITERAL) childDisplay += `: "${(child.settings as LiteralSettings).text}"`;
-                                        else if (child.type === BlockType.CHARACTER_CLASS) childDisplay += `: [${(child.settings as CharacterClassSettings).negated ? '^' : ''}${(child.settings as CharacterClassSettings).pattern}]`;
-                                        else if (child.type === BlockType.QUANTIFIER) {
-                                            const qs = child.settings as QuantifierSettings;
-                                            childDisplay += `: ${qs.type}`;
-                                            if (qs.min !== undefined) childDisplay += ` (min: ${qs.min}`;
-                                            if (qs.max !== undefined && qs.max !== null) childDisplay += `, max: ${qs.max}`;
-                                            if (qs.min !== undefined) childDisplay += `)`;
-                                            if (qs.mode) childDisplay += `, ${qs.mode}`;
-                                        }
-                                        else if (child.type === BlockType.ANCHOR) childDisplay += `: ${(child.settings as AnchorSettings).type}`;
-                                        else if (child.type === BlockType.GROUP) {
-                                            childDisplay += `: (${(child.settings as GroupSettings).type || 'capturing'})`;
-                                            if((child.settings as GroupSettings).name) childDisplay += ` ?<${(child.settings as GroupSettings).name}>`;
-                                        }
-                                         else if (child.type === BlockType.LOOKAROUND) childDisplay += `: (${(child.settings as LookaroundSettings).type})`;
-                                         else if (child.type === BlockType.BACKREFERENCE) childDisplay += `: \\${(child.settings as BackreferenceSettings).ref}`;
-                                         else if (child.type === BlockType.ALTERNATION) childDisplay += `: ( | )`;
-
-
-                                        let nestedChildrenStr = "";
-                                        if(child.children && child.children.length > 0) {
-                                           nestedChildrenStr = `\n${renderChildrenPreview(child.children, level + 1)}`;
-                                        }
-                                        return `${childDisplay}${nestedChildrenStr}`;
-                                      }).join('\n');
-                                    }
-                                    let childrenStr = "";
-                                    if(b.children && b.children.length > 0) {
-                                        childrenStr = `\n${renderChildrenPreview(b.children, 1)}`;
-                                    }
-
-                                    return <div key={b.id}>{display}{childrenStr}</div>;
-                                })}
-                            </div>
-                        </Card>
-                    ) : (
-                        <p className="text-sm text-muted-foreground">Нет блоков для отображения. Возможно, этот путь Мастера еще не полностью реализован, не все параметры были выбраны, или выбранная опция помечена как "(скоро)".</p>
-                    )}
-                    {replacementString && (
-                        <div className="mt-2">
-                             <Label className="text-sm font-medium">Рекомендуемая строка для замены:</Label>
-                             <p className="text-xs font-mono p-2 bg-muted/50 rounded-md">{replacementString}</p>
+                    {isLoadingAI && (
+                        <div className="flex flex-col items-center justify-center p-4 text-muted-foreground">
+                           <Sparkles size={32} className="animate-pulse text-primary mb-2" />
+                           <p>AI генерирует выражение...</p>
                         </div>
                     )}
-                    <Alert>
-                        <Lightbulb className="h-4 w-4" />
-                        <AlertTitle>Подсказка</AlertTitle>
-                        <AlertDescription>
-                            Это базовый набор блоков. После добавления вы сможете их детальнее настроить, сгруппировать или добавить другие элементы в основном редакторе.
-                            {formData.mainCategory === 'extraction' && " Для сценариев извлечения часто используется флаг 'g' (глобальный поиск), который можно установить в панели вывода Regex."}
-                            {formData.mainCategory === 'replacement' && " Для сценариев замены, мастер предлагает паттерн для поиска; сама операция замены выполняется средствами вашего языка программирования или текстового редактора."}
-                            {formData.mainCategory === 'splitting' && " Для сценариев разделения, этот паттерн обычно используется с функцией `split()` вашего языка программирования."}
-                            Для проверки паролей и IP-адресов, имеющих сложную структуру, Мастер может предложить один блок 'Литерал', содержащий всё регулярное выражение.
-                        </AlertDescription>
-                    </Alert>
+                    {!isLoadingAI && (
+                        <>
+                           <Label className="text-sm font-medium">
+                             {formData.mainCategory === 'ai_assisted' ? "Предложенные AI блоки:" : "Сгенерированные блоки Regex:"}
+                           </Label>
+                            {generatedBlocks.length > 0 ? (
+                                <Card className="p-3 bg-muted/50 max-h-60 overflow-y-auto">
+                                    <div className="text-xs font-mono whitespace-pre-wrap space-y-1">
+                                        {generatedBlocks.map(b => {
+                                            let display = `${BLOCK_CONFIGS[b.type]?.name || b.type}`;
+                                            if (b.type === BlockType.LITERAL) display += `: "${(b.settings as LiteralSettings).text}"`;
+                                            else if (b.type === BlockType.CHARACTER_CLASS) display += `: [${(b.settings as CharacterClassSettings).negated ? '^' : ''}${(b.settings as CharacterClassSettings).pattern}]`;
+                                            else if (b.type === BlockType.QUANTIFIER) {
+                                                const qs = b.settings as QuantifierSettings;
+                                                display += `: ${qs.type}`;
+                                                if (qs.min !== undefined) display += ` (min: ${qs.min}`;
+                                                if (qs.max !== undefined && qs.max !== null) display += `, max: ${qs.max}`;
+                                                if (qs.min !== undefined) display += `)`;
+                                                if (qs.mode) display += `, ${qs.mode}`;
+                                            }
+                                            else if (b.type === BlockType.ANCHOR) display += `: ${(b.settings as AnchorSettings).type}`;
+                                            else if (b.type === BlockType.GROUP) {
+                                            display += `: (${(b.settings as GroupSettings).type || 'capturing'})`;
+                                            if((b.settings as GroupSettings).name) display += ` ?<${(b.settings as GroupSettings).name}>`;
+                                            }
+                                            else if (b.type === BlockType.ALTERNATION) display += `: ( | )`;
+                                            else if (b.type === BlockType.LOOKAROUND) display += `: (${(b.settings as LookaroundSettings).type})`;
+                                            else if (b.type === BlockType.BACKREFERENCE) display += `: \\${(b.settings as BackreferenceSettings).ref}`;
+
+                                            const renderChildrenPreview = (children: Block[], level: number): string => {
+                                            return children.map(child => {
+                                                let childDisplay = `${'  '.repeat(level)}- ${BLOCK_CONFIGS[child.type]?.name || child.type}`;
+                                                if (child.type === BlockType.LITERAL) childDisplay += `: "${(child.settings as LiteralSettings).text}"`;
+                                                else if (child.type === BlockType.CHARACTER_CLASS) childDisplay += `: [${(child.settings as CharacterClassSettings).negated ? '^' : ''}${(child.settings as CharacterClassSettings).pattern}]`;
+                                                else if (child.type === BlockType.QUANTIFIER) {
+                                                    const qs = child.settings as QuantifierSettings;
+                                                    childDisplay += `: ${qs.type}`;
+                                                    if (qs.min !== undefined) childDisplay += ` (min: ${qs.min}`;
+                                                    if (qs.max !== undefined && qs.max !== null) childDisplay += `, max: ${qs.max}`;
+                                                    if (qs.min !== undefined) childDisplay += `)`;
+                                                    if (qs.mode) childDisplay += `, ${qs.mode}`;
+                                                }
+                                                else if (child.type === BlockType.ANCHOR) childDisplay += `: ${(child.settings as AnchorSettings).type}`;
+                                                else if (child.type === BlockType.GROUP) {
+                                                    childDisplay += `: (${(child.settings as GroupSettings).type || 'capturing'})`;
+                                                    if((child.settings as GroupSettings).name) childDisplay += ` ?<${(child.settings as GroupSettings).name}>`;
+                                                }
+                                                else if (child.type === BlockType.LOOKAROUND) childDisplay += `: (${(child.settings as LookaroundSettings).type})`;
+                                                else if (child.type === BlockType.BACKREFERENCE) childDisplay += `: \\${(child.settings as BackreferenceSettings).ref}`;
+                                                else if (child.type === BlockType.ALTERNATION) childDisplay += `: ( | )`;
+
+                                                let nestedChildrenStr = "";
+                                                if(child.children && child.children.length > 0) {
+                                                nestedChildrenStr = `\n${renderChildrenPreview(child.children, level + 1)}`;
+                                                }
+                                                return `${childDisplay}${nestedChildrenStr}`;
+                                            }).join('\n');
+                                            }
+                                            let childrenStr = "";
+                                            if(b.children && b.children.length > 0) {
+                                                childrenStr = `\n${renderChildrenPreview(b.children, 1)}`;
+                                            }
+
+                                            return <div key={b.id}>{display}{childrenStr}</div>;
+                                        })}
+                                    </div>
+                                </Card>
+                            ) : (
+                                <p className="text-sm text-muted-foreground">
+                                    {formData.mainCategory === 'ai_assisted' ? 
+                                        "AI не смог сгенерировать блоки для вашего запроса или произошла ошибка." :
+                                        "Нет блоков для отображения. Возможно, этот путь Мастера еще не полностью реализован, не все параметры были выбраны, или выбранная опция помечена как \"(скоро)\"."
+                                    }
+                                </p>
+                            )}
+                            {replacementString && (
+                                <div className="mt-2">
+                                    <Label className="text-sm font-medium">Рекомендуемая строка для замены:</Label>
+                                    <p className="text-xs font-mono p-2 bg-muted/50 rounded-md">{replacementString}</p>
+                                </div>
+                            )}
+                            <Alert>
+                                <Lightbulb className="h-4 w-4" />
+                                <AlertTitle>Подсказка</AlertTitle>
+                                <AlertDescription>
+                                    {formData.mainCategory === 'ai_assisted' ? 
+                                    "AI предлагает базовую структуру. Вы можете доработать ее в редакторе." :
+                                    "Это базовый набор блоков. После добавления вы сможете их детальнее настроить, сгруппировать или добавить другие элементы в основном редакторе."
+                                    }
+                                    {formData.mainCategory === 'extraction' && " Для сценариев извлечения часто используется флаг 'g' (глобальный поиск), который можно установить в панели вывода Regex."}
+                                    {formData.mainCategory === 'replacement' && " Для сценариев замены, мастер предлагает паттерн для поиска; сама операция замены выполняется средствами вашего языка программирования или текстового редактора."}
+                                </AlertDescription>
+                            </Alert>
+                        </>
+                    )}
                 </div>
             )}
           </div>
@@ -1293,17 +1092,17 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
         <DialogFooter className="pt-4 border-t">
             {currentStepId !== 'start' && (
-                 <Button variant="outline" onClick={handleBack}>Назад</Button>
+                 <Button variant="outline" onClick={handleBack} disabled={isLoadingAI}>Назад</Button>
             )}
             <div className="flex-grow"></div>
             <Button
                 onClick={handleNext}
                 disabled={isNextDisabled()}
             >
-                {currentStepId === 'final_preview' ? "Добавить в выражение" : "Далее"}
+                {isLoadingAI ? "Обработка..." : (currentStepId === 'final_preview' ? "Добавить в выражение" : "Далее")}
             </Button>
             <DialogClose asChild>
-                <Button variant="ghost" onClick={resetWizardAndClose}>Отмена</Button>
+                <Button variant="ghost" onClick={resetWizardAndClose} disabled={isLoadingAI}>Отмена</Button>
             </DialogClose>
         </DialogFooter>
       </DialogContent>
@@ -1312,3 +1111,5 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 };
 
 export default RegexWizardModal;
+
+    
