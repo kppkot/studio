@@ -1,10 +1,10 @@
 
 "use client";
 import React, { useState, useEffect, useCallback } from 'react';
-import type { Block, RegexMatch } from './types';
+import type { Block, RegexMatch, GroupInfo, SavedPattern } from './types'; // Added SavedPattern
 import { BlockType } from './types';
-import { BLOCK_CONFIGS } from './constants'; // .tsx removed
-import { generateId, generateRegexString } from './utils';
+import { BLOCK_CONFIGS } from './constants';
+import { generateId, generateRegexStringAndGroupInfo, generateRegexString } from './utils'; // Updated utils import
 import { useToast } from '@/hooks/use-toast';
 
 import AppHeader from './AppHeader';
@@ -15,19 +15,21 @@ import RegexOutputDisplay from './RegexOutputDisplay';
 import TestArea from './TestArea';
 import CodeGenerationPanel from './CodeGenerationPanel';
 import DebugView from './DebugView';
-import RegexWizardModal from './RegexWizardModal'; 
+import PerformanceAnalyzerView from './PerformanceAnalyzerView';
+import PatternLibraryView from './PatternLibraryView';
+import RegexWizardModal from './RegexWizardModal';
 import { Button } from '@/components/ui/button';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Zap, Sparkles } from 'lucide-react';
+import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Sparkles, Gauge, Library } from 'lucide-react'; // Added Gauge, Library
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
 const deepCloneBlock = (block: Block): Block => {
   const newBlock: Block = {
     ...block,
-    id: generateId(), 
+    id: generateId(),
     settings: { ...block.settings },
     children: block.children ? block.children.map(child => deepCloneBlock(child)) : [],
     isExpanded: block.isExpanded,
@@ -56,7 +58,7 @@ const duplicateAndInsertBlockRecursive = (currentBlocks: Block[], targetId: stri
     const block = currentBlocks[i];
     if (block.id === targetId) {
       const originalBlock = block;
-      const newBlock = deepCloneBlock(originalBlock); 
+      const newBlock = deepCloneBlock(originalBlock);
       const updatedBlocks = [...currentBlocks];
       updatedBlocks.splice(i + 1, 0, newBlock);
       return { updatedBlocks, success: true };
@@ -107,39 +109,73 @@ const findBlockAndParentRecursive = (
 const RegexVisionWorkspace: React.FC = () => {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null); // New state for hover
   const [parentIdForNewBlock, setParentIdForNewBlock] = useState<string | null>(null);
   const [isPaletteVisible, setIsPaletteVisible] = useState(false);
-  const [isWizardModalOpen, setIsWizardModalOpen] = useState(false); 
-  
+  const [isWizardModalOpen, setIsWizardModalOpen] = useState(false);
+
   const [testText, setTestText] = useState<string>('Быстрая коричневая лиса прыгает через ленивую собаку.');
   const [regexFlags, setRegexFlags] = useState<string>('g');
   const [matches, setMatches] = useState<RegexMatch[]>([]);
-  const [generatedRegex, setGeneratedRegex] = useState<string>('');
+  const [regexOutput, setRegexOutput] = useState<{ regexString: string; groupInfos: GroupInfo[] }>({ regexString: '', groupInfos: [] });
+  const [highlightedGroupInTestArea, setHighlightedGroupInTestArea] = useState<{ groupIndex: number } | null>(null);
+
 
   const { toast } = useToast();
 
   useEffect(() => {
-    const newRegex = generateRegexString(blocks);
-    setGeneratedRegex(newRegex);
+    const { regexString: newRegex, groupInfos } = generateRegexStringAndGroupInfo(blocks);
+    setRegexOutput({ regexString: newRegex, groupInfos });
 
     if (newRegex && testText) {
       try {
-        const regexObj = new RegExp(newRegex, regexFlags);
+        // Ensure 'd' flag is present if we want to use match.indices, though it might not be universally supported or always needed for basic group capture.
+        // For now, rely on our groupInfos for mapping.
+        const currentFlags = regexFlags.includes('d') ? regexFlags : regexFlags + (regexFlags.length ? '' : '') + 'd';
+
+        const regexObj = new RegExp(newRegex, currentFlags);
         const foundRawMatches = [...testText.matchAll(regexObj)];
         const formattedMatches: RegexMatch[] = foundRawMatches.map(rawMatch => ({
           match: rawMatch[0],
           index: rawMatch.index!,
-          groups: Array.from(rawMatch).slice(1),
-          namedGroups: rawMatch.groups,
+          groups: Array.from(rawMatch).slice(1), // Standard groups
+          // namedGroups: rawMatch.groups, // Named groups (if any)
+          // groupIndices: rawMatch.indices?.groups, // Indices for named groups if 'd' flag is used and supported
         }));
         setMatches(formattedMatches);
       } catch (error) {
-        setMatches([]); 
+        // console.error("Regex execution error:", error);
+        setMatches([]);
       }
     } else {
       setMatches([]);
     }
   }, [blocks, testText, regexFlags]);
+
+
+  // Effect to update highlighted group in TestArea based on selected or hovered block
+  useEffect(() => {
+    let blockIdToProcess: string | null = null;
+
+    if (hoveredBlockId) {
+      blockIdToProcess = hoveredBlockId;
+    } else if (selectedBlockId) {
+      blockIdToProcess = selectedBlockId;
+    }
+
+    if (blockIdToProcess) {
+      const block = findBlockRecursive(blocks, blockIdToProcess);
+      if (block && block.type === BlockType.GROUP) {
+        const foundGroupInfo = regexOutput.groupInfos.find(gi => gi.blockId === block.id);
+        if (foundGroupInfo) {
+          setHighlightedGroupInTestArea({ groupIndex: foundGroupInfo.groupIndex });
+          return;
+        }
+      }
+    }
+    setHighlightedGroupInTestArea(null);
+  }, [selectedBlockId, hoveredBlockId, blocks, regexOutput.groupInfos]);
+
 
   const findBlockRecursive = (searchBlocks: Block[], id: string): Block | null => {
     for (const block of searchBlocks) {
@@ -161,7 +197,7 @@ const RegexVisionWorkspace: React.FC = () => {
       return block;
     });
   };
-  
+
 
   const deleteBlockRecursive = (currentBlocks: Block[], targetId: string): Block[] => {
     return currentBlocks.filter(block => {
@@ -192,7 +228,7 @@ const RegexVisionWorkspace: React.FC = () => {
       toast({ title: "Ошибка", description: `Неизвестный тип блока: ${type}`, variant: "destructive" });
       return;
     }
-    
+
     const canBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(type);
 
     const newBlock: Block = {
@@ -217,23 +253,23 @@ const RegexVisionWorkspace: React.FC = () => {
       setBlocks(prev => [...prev, newBlock]);
     }
     setSelectedBlockId(newBlock.id);
-    setParentIdForNewBlock(null); 
+    setParentIdForNewBlock(null);
     setIsPaletteVisible(false);
   }, [toast, blocks, selectedBlockId]);
 
 
   const handleAddBlocksFromWizard = useCallback((newBlocks: Block[], parentIdFromWizard?: string | null) => {
     if (newBlocks.length === 0) return;
-  
-    let targetParentId = parentIdFromWizard; 
-  
+
+    let targetParentId = parentIdFromWizard;
+
     if (!targetParentId && selectedBlockId) {
       const selBlock = findBlockRecursive(blocks, selectedBlockId);
       if (selBlock && [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(selBlock.type)) {
         targetParentId = selectedBlockId;
       }
     }
-  
+
     if (targetParentId) {
       setBlocks(prev => {
         const addRec = (currentNodes: Block[], pId: string, blocksToAdd: Block[]): Block[] => {
@@ -253,17 +289,17 @@ const RegexVisionWorkspace: React.FC = () => {
     } else {
       setBlocks(prev => [...prev, ...newBlocks]);
     }
-  
+
     setSelectedBlockId(newBlocks[newBlocks.length - 1].id);
-    setIsWizardModalOpen(false); 
-    toast({ title: "Блоки добавлены", description: "Блоки из Мастера успешно добавлены." });
+    setIsWizardModalOpen(false);
+    toast({ title: "Блоки добавлены", description: "Блоки из Помощника успешно добавлены." });
   }, [toast, blocks, selectedBlockId]);
 
 
   const handleUpdateBlock = useCallback((id: string, updatedBlockSettings: Partial<Block>) => {
     setBlocks(prev => updateBlockRecursive(prev, id, updatedBlockSettings));
   }, []);
-  
+
 
   const handleDeleteBlock = useCallback((id: string) => {
     setBlocks(prev => deleteBlockRecursive(prev, id));
@@ -272,7 +308,7 @@ const RegexVisionWorkspace: React.FC = () => {
     }
     toast({ title: "Блок удален", description: "Блок был успешно удален из дерева." });
   }, [selectedBlockId, toast]);
-  
+
   const handleDuplicateBlock = useCallback((id: string) => {
     setBlocks(prevBlocks => {
       const result = duplicateAndInsertBlockRecursive(prevBlocks, id);
@@ -281,7 +317,7 @@ const RegexVisionWorkspace: React.FC = () => {
         return result.updatedBlocks;
       }
       toast({ title: "Ошибка копирования", description: "Не удалось найти блок для копирования.", variant: "destructive"});
-      return prevBlocks; 
+      return prevBlocks;
     });
   }, [toast]);
 
@@ -293,7 +329,7 @@ const RegexVisionWorkspace: React.FC = () => {
     }
 
     setBlocks(prevBlocks => processUngroupRecursive(prevBlocks, id));
-    
+
     if (selectedBlockId === id) {
       setSelectedBlockId(null);
     }
@@ -306,7 +342,7 @@ const RegexVisionWorkspace: React.FC = () => {
       id: generateId(),
       type: BlockType.GROUP,
       settings: { ...config.defaultSettings },
-      children: [], 
+      children: [],
       isExpanded: true,
     };
 
@@ -314,7 +350,7 @@ const RegexVisionWorkspace: React.FC = () => {
       let success = false;
       const mappedNodes = currentNodes.map(node => {
         if (node.id === blockIdToWrap) {
-          const wrappedNode = cloneBlockForState(node); 
+          const wrappedNode = cloneBlockForState(node);
           newGroupBlock.children = [wrappedNode];
           success = true;
           return newGroupBlock;
@@ -322,7 +358,7 @@ const RegexVisionWorkspace: React.FC = () => {
         if (node.children) {
           const childResult = wrapRecursively(node.children);
           if (childResult.success) {
-            success = true; 
+            success = true;
             return { ...node, children: childResult.wrappedNodes };
           }
         }
@@ -330,11 +366,11 @@ const RegexVisionWorkspace: React.FC = () => {
       });
       return {wrappedNodes: mappedNodes, success};
     };
-    
+
     setBlocks(prevBlocks => {
         const result = wrapRecursively(prevBlocks);
         if(result.success){
-            setSelectedBlockId(newGroupBlock.id); 
+            setSelectedBlockId(newGroupBlock.id);
             toast({ title: "Блок обернут", description: "Выбранный блок был обернут в новую группу." });
             return result.wrappedNodes;
         }
@@ -344,10 +380,10 @@ const RegexVisionWorkspace: React.FC = () => {
   }, [toast]);
 
 
-  const handleReorderBlock = useCallback((draggedId: string, dropOnBlockId: string, parentOfDropOnBlockId: string | null) => {
+  const handleReorderBlock = useCallback((draggedId: string, dropOnBlockId: string, parentOfDropOnBlockIdOrDropTargetId: string | null) => {
     setBlocks(prevBlocks => {
       let draggedBlockInstance: Block | null = null;
-      
+
       const removeDraggedRecursive = (nodes: Block[], idToRemove: string): { updatedNodes: Block[], foundBlock: Block | null } => {
         let found: Block | null = null;
         const filteredNodes = nodes.filter(b => {
@@ -374,28 +410,28 @@ const RegexVisionWorkspace: React.FC = () => {
       };
 
       const { updatedNodes: blocksWithoutDraggedOriginal, foundBlock } = removeDraggedRecursive(prevBlocks, draggedId);
-      
+
       if (!foundBlock) {
-        return prevBlocks; 
+        return prevBlocks;
       }
       let blocksWithoutDragged = cloneBlockForState({id: 'root', type: BlockType.LITERAL, settings: {text:''}, children: blocksWithoutDraggedOriginal, isExpanded: true}).children || [];
 
 
-      draggedBlockInstance = cloneBlockForState(foundBlock); 
+      draggedBlockInstance = cloneBlockForState(foundBlock);
 
       const dropTargetNodeInfo = findBlockAndParentRecursive(blocksWithoutDragged, dropOnBlockId);
       if (!dropTargetNodeInfo.block) {
-        return prevBlocks; 
+        return prevBlocks;
       }
       const dropTargetNode = dropTargetNodeInfo.block;
 
 
       const canDropTargetBeParent = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(dropTargetNode.type);
       let finalBlocks: Block[];
-      
+
       const isDescendantOrSelf = (checkNodes: Block[], parentId: string, childIdToFind: string): boolean => {
         for (const node of checkNodes) {
-          if (node.id === parentId) { 
+          if (node.id === parentId) {
             const findChild = (nodesToSearch: Block[], id: string): boolean => {
               for (const n of nodesToSearch) {
                 if (n.id === id) return true;
@@ -413,10 +449,12 @@ const RegexVisionWorkspace: React.FC = () => {
       };
 
       if (draggedId === dropTargetNode.id || isDescendantOrSelf(prevBlocks, draggedId, dropTargetNode.id)) {
-          return prevBlocks; 
+          return prevBlocks;
       }
 
-      if (canDropTargetBeParent && document.body.getAttribute('data-drag-target-role') === 'parent') { 
+      const dragTargetRole = document.body.getAttribute('data-drag-target-role');
+
+      if (canDropTargetBeParent && dragTargetRole === 'parent') {
         const addAsChildRecursiveFn = (nodes: Block[], targetParentId: string, childToAdd: Block): Block[] => {
           return nodes.map(n => {
             if (n.id === targetParentId) {
@@ -430,18 +468,18 @@ const RegexVisionWorkspace: React.FC = () => {
           });
         };
         finalBlocks = addAsChildRecursiveFn(blocksWithoutDragged, dropOnBlockId, draggedBlockInstance);
-      } else { 
+      } else {
         const addAsSiblingRecursiveFn = (
-            nodes: Block[], 
-            parentToSearchInId: string | null, 
-            afterSiblingId: string, 
+            nodes: Block[],
+            parentToSearchInId: string | null,
+            afterSiblingId: string,
             blockToAdd: Block
         ): Block[] => {
-            if (parentToSearchInId === null) { 
+            if (parentToSearchInId === null) {
                 const targetIdx = nodes.findIndex(n => n.id === afterSiblingId);
                 const newRootNodes = [...nodes];
                 if (targetIdx !== -1) newRootNodes.splice(targetIdx + 1, 0, blockToAdd);
-                else newRootNodes.push(blockToAdd); 
+                else newRootNodes.push(blockToAdd);
                 return newRootNodes;
             }
 
@@ -450,7 +488,7 @@ const RegexVisionWorkspace: React.FC = () => {
                     const targetIdx = (n.children || []).findIndex(child => child.id === afterSiblingId);
                     const newChildren = [...(n.children || [])];
                     if (targetIdx !== -1) newChildren.splice(targetIdx + 1, 0, blockToAdd);
-                    else newChildren.push(blockToAdd); 
+                    else newChildren.push(blockToAdd);
                     return { ...n, children: newChildren, isExpanded: true };
                 }
                 if (n.children) {
@@ -459,9 +497,9 @@ const RegexVisionWorkspace: React.FC = () => {
                 return n;
             });
         };
-        finalBlocks = addAsSiblingRecursiveFn(blocksWithoutDragged, parentOfDropOnBlockId, dropOnBlockId, draggedBlockInstance);
+        finalBlocks = addAsSiblingRecursiveFn(blocksWithoutDragged, parentOfDropOnBlockIdOrDropTargetId, dropOnBlockId, draggedBlockInstance);
       }
-      
+
       toast({ title: "Блок перемещен", description: "Порядок блоков обновлен." });
       return finalBlocks;
     });
@@ -512,7 +550,7 @@ const RegexVisionWorkspace: React.FC = () => {
                   const canBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(b.type);
                   return {
                     ...b,
-                    id: b.id || generateId(), 
+                    id: b.id || generateId(),
                     isExpanded: b.isExpanded ?? (canBeExpanded ? true : undefined),
                     children: b.children ? processImportedBlocks(b.children) : []
                   };
@@ -558,10 +596,10 @@ const RegexVisionWorkspace: React.FC = () => {
       const activeElement = document.activeElement;
       const isTyping = activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' || activeElement.hasAttribute('contenteditable'));
 
-      if (isTyping) return; 
+      if (isTyping) return;
 
       if (selectedBlockId && (event.key === 'Delete' || event.key === 'Backspace')) {
-        event.preventDefault(); 
+        event.preventDefault();
         handleDeleteBlock(selectedBlockId);
       }
 
@@ -584,18 +622,18 @@ const RegexVisionWorkspace: React.FC = () => {
         if (event.key === 'ArrowUp') {
           event.preventDefault();
           const siblings = parent ? parent.children : blocks;
-          if (indexInParent > 0 && siblings) { 
+          if (indexInParent > 0 && siblings) {
             setSelectedBlockId(siblings[indexInParent - 1].id);
           }
         } else if (event.key === 'ArrowDown') {
           event.preventDefault();
           const siblings = parent ? parent.children : blocks;
-          if (siblings && indexInParent < siblings.length - 1) { 
+          if (siblings && indexInParent < siblings.length - 1) {
             setSelectedBlockId(siblings[indexInParent + 1].id);
           }
         } else if (event.key === 'ArrowRight') {
           event.preventDefault();
-          if (canBeExpanded && !(currentBlock.isExpanded ?? (currentBlock.children && currentBlock.children.length > 0))) { 
+          if (canBeExpanded && !(currentBlock.isExpanded ?? (currentBlock.children && currentBlock.children.length > 0))) {
             handleUpdateBlock(selectedBlockId, { ...currentBlock, isExpanded: true });
           } else if (currentBlock.children && currentBlock.children.length > 0) {
             setSelectedBlockId(currentBlock.children[0].id);
@@ -608,9 +646,9 @@ const RegexVisionWorkspace: React.FC = () => {
             } else {
                  setSelectedBlockId(parent.id);
             }
-          } else if (canBeExpanded && (currentBlock.isExpanded ?? false)) { 
+          } else if (canBeExpanded && (currentBlock.isExpanded ?? false)) {
             handleUpdateBlock(selectedBlockId, { ...currentBlock, isExpanded: false });
-          } else if (parent) { 
+          } else if (parent) {
             setSelectedBlockId(parent.id);
           }
         }
@@ -623,15 +661,37 @@ const RegexVisionWorkspace: React.FC = () => {
     };
   }, [selectedBlockId, blocks, handleDeleteBlock, handleExpandAll, handleCollapseAll, handleUpdateBlock]);
 
+  const handleApplySavedPattern = (pattern: SavedPattern) => {
+    const { regexString, groupInfos } = generateRegexStringAndGroupInfo(
+      [{ id: generateId(), type: BlockType.LITERAL, settings: { text: pattern.regexString }, children: [] }] // Create a temporary block structure
+    );
+    setRegexOutput({ regexString, groupInfos }); // Assuming we want fresh groupInfos for the applied regex
+    setRegexFlags(pattern.flags);
+    setTestText(pattern.testString || '');
+    setBlocks([{
+        id: generateId(),
+        type: BlockType.LITERAL, // Represent the entire pattern as a single literal block for simplicity initially
+        settings: { text: pattern.regexString },
+        children: [],
+        isExpanded: false,
+    }]);
+    setSelectedBlockId(null);
+    toast({ title: "Паттерн применен!", description: `"${pattern.name}" загружен в рабочую область.` });
+  };
 
-  const headerHeight = "60px"; 
-  const outputPanelMinHeight = "250px"; 
-  const settingsHeaderHeight = "50px"; 
+  const handleBlockHover = (blockId: string | null) => {
+    setHoveredBlockId(blockId);
+  };
+
+
+  const headerHeight = "60px";
+  const outputPanelMinHeight = "250px";
+  const settingsHeaderHeight = "50px";
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground" style={{ "--header-height": headerHeight, "--output-panel-min-height": outputPanelMinHeight, "--settings-header-height": settingsHeaderHeight } as React.CSSProperties}>
       <AppHeader onShare={handleShare} onExport={handleExport} onImport={handleImport} />
-      
+
       <ResizablePanelGroup direction="vertical" className="flex-1 overflow-hidden">
         <ResizablePanel defaultSize={65} minSize={30}>
           <ResizablePanelGroup direction="horizontal" className="h-full">
@@ -679,8 +739,9 @@ const RegexVisionWorkspace: React.FC = () => {
                             onReorder={handleReorderBlock}
                             selectedId={selectedBlockId}
                             onSelect={setSelectedBlockId}
-                            parentId={null} 
+                            parentId={null}
                             level={0}
+                            onBlockHover={handleBlockHover} // Pass hover handler
                           />
                         ))}
                       </div>
@@ -709,22 +770,43 @@ const RegexVisionWorkspace: React.FC = () => {
         <ResizablePanel defaultSize={35} minSize={20} className="bg-card p-2 shadow-top">
             <div className="h-full flex flex-col">
               <div className="mb-3">
-                <RegexOutputDisplay blocks={blocks} generatedRegex={generatedRegex} regexFlags={regexFlags} onFlagsChange={setRegexFlags} />
+                <RegexOutputDisplay blocks={blocks} generatedRegex={regexOutput.regexString} regexFlags={regexFlags} onFlagsChange={setRegexFlags} />
               </div>
               <Tabs defaultValue="testing" className="flex-1 flex flex-col min-h-0">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-5">
                   <TabsTrigger value="testing"><PlayCircle size={16} className="mr-1.5"/>Тестирование</TabsTrigger>
                   <TabsTrigger value="codegen"><Code2 size={16} className="mr-1.5"/>Генерация кода</TabsTrigger>
                   <TabsTrigger value="debug"><Bug size={16} className="mr-1.5"/>Отладка</TabsTrigger>
+                  <TabsTrigger value="performance"><Gauge size={16} className="mr-1.5"/>Производительность</TabsTrigger>
+                  <TabsTrigger value="library"><Library size={16} className="mr-1.5"/>Библиотека</TabsTrigger>
                 </TabsList>
                 <TabsContent value="testing" className="mt-2 flex-1 overflow-y-auto p-0.5">
-                  <TestArea testText={testText} onTestTextChange={setTestText} matches={matches} generatedRegex={generatedRegex} />
+                  <TestArea
+                    testText={testText}
+                    onTestTextChange={setTestText}
+                    matches={matches}
+                    generatedRegex={regexOutput.regexString}
+                    groupInfos={regexOutput.groupInfos}
+                    onGroupSelect={(blockId) => setSelectedBlockId(blockId)}
+                    highlightedGroupDetails={highlightedGroupInTestArea}
+                  />
                 </TabsContent>
                 <TabsContent value="codegen" className="mt-2 flex-1 overflow-y-auto p-0.5">
-                  <CodeGenerationPanel generatedRegex={generatedRegex} regexFlags={regexFlags} testText={testText} />
+                  <CodeGenerationPanel generatedRegex={regexOutput.regexString} regexFlags={regexFlags} testText={testText} />
                 </TabsContent>
                 <TabsContent value="debug" className="mt-2 flex-1 overflow-y-auto p-0.5">
-                  <DebugView />
+                  <DebugView regexString={regexOutput.regexString} testString={testText} />
+                </TabsContent>
+                <TabsContent value="performance" className="mt-2 flex-1 overflow-y-auto p-0.5">
+                  <PerformanceAnalyzerView regexString={regexOutput.regexString} />
+                </TabsContent>
+                <TabsContent value="library" className="mt-2 flex-1 overflow-y-auto p-0.5">
+                  <PatternLibraryView
+                    currentRegexString={regexOutput.regexString}
+                    currentFlags={regexFlags}
+                    currentTestString={testText}
+                    onApplyPattern={handleApplySavedPattern}
+                  />
                 </TabsContent>
               </Tabs>
             </div>
@@ -742,12 +824,12 @@ const RegexVisionWorkspace: React.FC = () => {
           isOpen={isWizardModalOpen}
           onClose={() => {
             setIsWizardModalOpen(false);
-            setParentIdForNewBlock(null); 
+            setParentIdForNewBlock(null);
           }}
           onComplete={(wizardBlocks) => {
-            handleAddBlocksFromWizard(wizardBlocks, parentIdForNewBlock); 
+            handleAddBlocksFromWizard(wizardBlocks, parentIdForNewBlock);
             setIsWizardModalOpen(false);
-            setParentIdForNewBlock(null); 
+            setParentIdForNewBlock(null);
           }}
           initialParentId={parentIdForNewBlock}
         />
@@ -757,5 +839,3 @@ const RegexVisionWorkspace: React.FC = () => {
 };
 
 export default RegexVisionWorkspace;
-
-    

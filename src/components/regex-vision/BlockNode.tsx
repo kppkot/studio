@@ -22,11 +22,12 @@ interface BlockNodeProps {
   onSelect: (id: string) => void;
   parentId: string | null;
   level?: number;
+  onBlockHover?: (blockId: string | null) => void; // New prop
 }
 
 const BlockNode: React.FC<BlockNodeProps> = ({
   block,
-  onUpdate, 
+  onUpdate,
   onDelete,
   onAddChild,
   onDuplicate,
@@ -37,21 +38,21 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   onSelect,
   parentId,
   level = 0,
+  onBlockHover, // New prop
 }) => {
-  const [isHovered, setIsHovered] = useState(false);
+  const [isInternallyHovered, setIsInternallyHovered] = useState(false); // Renamed to avoid conflict
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [showAsParentDropTarget, setShowAsParentDropTarget] = useState(false);
-  
+
   const config: BlockConfig | undefined = BLOCK_CONFIGS[block.type];
-  
-  const canHaveChildren = block.type === BlockType.GROUP || 
-                          block.type === BlockType.LOOKAROUND || 
-                          block.type === BlockType.ALTERNATION || 
+
+  const canHaveChildren = block.type === BlockType.GROUP ||
+                          block.type === BlockType.LOOKAROUND ||
+                          block.type === BlockType.ALTERNATION ||
                           block.type === BlockType.CONDITIONAL;
-  
+
   const hasVisibleChildren = block.children && block.children.length > 0;
   const isCurrentlyExpanded = block.isExpanded ?? (canHaveChildren ? true : false);
-
 
   const isSelected = selectedId === block.id;
 
@@ -70,6 +71,21 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     e.stopPropagation();
     onSelect(block.id);
   };
+
+  const handleMouseEnter = () => {
+    setIsInternallyHovered(true);
+    if (block.type === BlockType.GROUP && onBlockHover) {
+      onBlockHover(block.id);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setIsInternallyHovered(false);
+    if (block.type === BlockType.GROUP && onBlockHover) {
+      onBlockHover(null);
+    }
+  };
+
 
   const renderBlockContentPreview = (): string => {
     switch (block.type) {
@@ -119,14 +135,16 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
     setIsDraggingOver(true);
-    
+
     const canThisBlockAcceptChildren = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(block.type);
     const draggedId = e.dataTransfer.types.includes('text/plain') ? e.dataTransfer.getData('text/plain') : null;
-    
+
     if (draggedId && draggedId !== block.id && canThisBlockAcceptChildren) {
       setShowAsParentDropTarget(true);
+      document.body.setAttribute('data-drag-target-role', 'parent');
     } else {
       setShowAsParentDropTarget(false);
+      document.body.setAttribute('data-drag-target-role', 'sibling');
     }
   };
 
@@ -134,6 +152,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     e.stopPropagation();
     setIsDraggingOver(false);
     setShowAsParentDropTarget(false);
+    document.body.removeAttribute('data-drag-target-role');
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -143,12 +162,16 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     setShowAsParentDropTarget(false);
     const draggedId = e.dataTransfer.getData('text/plain');
     if (draggedId && draggedId !== block.id) {
-      onReorder(draggedId, block.id, parentId);
+      const dropTargetRole = document.body.getAttribute('data-drag-target-role');
+       // Pass parentId for sibling drop, or block.id if dropping into this block as parent
+      const targetParentForReorder = dropTargetRole === 'parent' ? block.id : parentId;
+      onReorder(draggedId, block.id, targetParentForReorder);
     }
+    document.body.removeAttribute('data-drag-target-role');
   };
 
   return (
-    <Card 
+    <Card
       draggable
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
@@ -161,20 +184,20 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         showAsParentDropTarget && "bg-green-100 dark:bg-green-800/30 border-green-500 ring-1 ring-green-500", // Parent drop target
       )}
       style={{ marginLeft: `${level * 24}px` }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       onClick={handleSelect}
     >
       <CardContent className="p-2">
         <div className="flex items-center gap-2">
           <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />
-          
-          {canHaveChildren && ( 
+
+          {canHaveChildren && (
             <Button variant="ghost" size="icon" onClick={handleToggleExpand} className="h-7 w-7">
               {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
             </Button>
           )}
-          
+
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <span className="text-primary p-1 bg-primary/10 rounded-sm flex items-center justify-center h-7 w-7 flex-shrink-0">
               {typeof config.icon === 'string' ? <span className="font-mono text-xs">{config.icon}</span> : config.icon}
@@ -185,7 +208,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             </span>
           </div>
 
-          <div className={cn("flex items-center gap-1 transition-opacity", isHovered || isSelected ? "opacity-100" : "opacity-0 focus-within:opacity-100")}>
+          <div className={cn("flex items-center gap-1 transition-opacity", isInternallyHovered || isSelected ? "opacity-100" : "opacity-0 focus-within:opacity-100")}>
             {canHaveChildren && (
                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onAddChild(block.id);}} title="Добавить дочерний элемент" className="h-7 w-7">
                     <PlusCircle size={14} className="text-green-600"/>
@@ -207,7 +230,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             </Button>
           </div>
         </div>
-        
+
         {isCurrentlyExpanded && hasVisibleChildren && (
           <div className="mt-2 pl-4 border-l-2 border-dashed ml-[14px]">
             {block.children.map(child => (
@@ -223,8 +246,9 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                 onReorder={onReorder}
                 selectedId={selectedId}
                 onSelect={onSelect}
-                parentId={block.id} 
-                level={level + 1} 
+                parentId={block.id}
+                level={level + 1}
+                onBlockHover={onBlockHover} // Pass down
               />
             ))}
           </div>
