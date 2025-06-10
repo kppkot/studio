@@ -3,7 +3,9 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import type { Block, QuantifierSettings, CharacterClassSettings, GroupSettings, LiteralSettings, AnchorSettings, BackreferenceSettings, LookaroundSettings } from './types';
 import { BlockType } from './types';
-import { BLOCK_CONFIGS } from './constants'; // .tsx removed
+import { BLOCK_CONFIGS } from './constants'; 
+import { generateRegexFromNaturalLanguage, NaturalLanguageRegexOutputSchema } from '@/ai/flows/natural-language-regex-flow'; // AI Flow
+import { useToast } from "@/hooks/use-toast";
 
 import {
   Dialog,
@@ -19,10 +21,11 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card } from "@/components/ui/card";
-import { Lightbulb, CheckSquare, TextCursorInput, Replace, Eraser, Split, Wand2, Phone, AtSign, Globe, KeyRound, Shuffle, MessageSquareQuote, CaseSensitive, SearchCheck, Route, Workflow, FileText, CalendarClock, BadgeCheck, AlignLeft, Calculator, Sparkles } from 'lucide-react';
+import { Lightbulb, CheckSquare, TextCursorInput, Replace, Eraser, Split, Wand2, Phone, AtSign, Globe, KeyRound, Shuffle, MessageSquareQuote, CaseSensitive, SearchCheck, Route, Workflow, FileText, CalendarClock, BadgeCheck, AlignLeft, Calculator, Sparkles, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateId, createAnchor, createLiteral, createCharClass, createQuantifier, createSequenceGroup, createAlternation, createLookaround, createBackreference, escapeRegexChars, generateBlocksForEmail, generateBlocksForURL, generateBlocksForIPv4, generateBlocksForIPv6, generateBlocksForDuplicateWords, generateBlocksForMultipleSpaces, generateBlocksForTabsToSpaces, generateBlocksForNumbers } from './utils';
 
@@ -36,9 +39,7 @@ interface RegexWizardModalProps {
 
 type WizardStepId =
   | 'start'
-  // AI Assistant specific step
   | 'ai_natural_language_input'
-  // Original wizard steps (can be part of AI assistant as guided mode)
   | 'validation_type_choice'
   | 'validation_basicPatterns_what'
   | 'validation_basicPatterns_length'
@@ -46,27 +47,25 @@ type WizardStepId =
   | 'validation_standardFormats_what'
   | 'validation_standardFormats_url_protocol'
   | 'validation_standardFormats_ip_type'
-  | 'validation_phone_countryCode'
-  | 'validation_phone_separators'
-  | 'validation_password_requirements'
-  | 'validation_dateTime_dateFormat'
-  | 'validation_dateTime_separators'
-  | 'validation_dateTime_validateTime'
-  | 'validation_dateTime_timeFormat'
+  | 'validation_phone_countryCode' // Disabled for now
+  | 'validation_phone_separators' // Disabled
+  | 'validation_password_requirements' // Disabled
+  | 'validation_dateTime_dateFormat' // Disabled
+  | 'validation_dateTime_separators' // Disabled
+  | 'validation_dateTime_validateTime' // Disabled
+  | 'validation_dateTime_timeFormat' // Disabled
   | 'extraction_whatToExtract'
-  | 'extraction_quotedText_type'
-  | 'extraction_specificWord_input'
+  | 'extraction_quotedText_type' // Disabled
+  | 'extraction_specificWord_input' // Disabled
   | 'replacement_whatToReplace'
-  | 'replacement_maskDigits_options'
-  | 'replacement_swap_input'
-  | 'splitting_delimiter_choice'
+  | 'replacement_maskDigits_options' // Disabled
+  | 'replacement_swap_input' // Disabled
+  | 'splitting_delimiter_choice' // Disabled
   | 'final_preview';
 
 interface WizardFormData {
-  // For AI Assistant
   naturalLanguageQuery?: string;
   
-  // For original wizard logic
   mainCategory?: 'validation' | 'extraction' | 'replacement' | 'splitting' | 'ai_assisted';
 
   validationTypeChoice?: 'basic' | 'standard' | 'datetime';
@@ -121,7 +120,7 @@ const wizardConfig = {
       { id: 'validation', label: "Проверить Формат (по шагам)", description: "Валидация email, URL, дат и т.д.", icon: CheckSquare},
       { id: 'extraction', label: "Найти и Извлечь (по шагам)", description: "Извлечение email, чисел, текста в кавычках.", icon: SearchCheck },
       { id: 'replacement', label: "Заменить / Изменить (по шагам)", description: "Удаление пробелов, маскирование, замена.", icon: Replace },
-      { id: 'splitting', label: "Разделить Текст (по шагам)", description: "Разбивка по запятой, пробелу, символу.", icon: Split },
+      { id: 'splitting', label: "Разделить Текст (по шагам)", description: "Разбивка по запятой, пробелу, символу.", icon: Split, disabled: true }, // Splitting is complex, disable for now
     ],
     next: (choice: string) => {
       if (choice === 'ai_assisted') return 'ai_natural_language_input';
@@ -139,7 +138,7 @@ const wizardConfig = {
     inputs: [
         { id: 'naturalLanguageQuery', label: "Ваш запрос:", inputType: 'textarea', defaultValue: '', placeholder: "Я хочу найти..." },
     ],
-    nextStep: 'final_preview', // This will eventually trigger AI generation
+    nextStep: 'final_preview', 
     autoFocusInputId: 'naturalLanguageQuery'
   },
   validation_type_choice: {
@@ -148,7 +147,7 @@ const wizardConfig = {
     options: [
       { id: 'basic', label: "Простые шаблоны (цифры, буквы, длина и т.д.)", icon: FileText },
       { id: 'standard', label: "Стандартные форматы (Email, URL, Телефон, IP, Пароль)", icon: BadgeCheck },
-      { id: 'datetime', label: "Дата и время (ДД/ММ/ГГГГ, ЧЧ:ММ и т.д.)", icon: CalendarClock },
+      { id: 'datetime', label: "Дата и время (ДД/ММ/ГГГГ, ЧЧ:ММ и т.д.)", icon: CalendarClock, disabled: true },
     ],
     next: (choice: string) => {
       if (choice === 'basic') return 'validation_basicPatterns_what';
@@ -237,82 +236,17 @@ const wizardConfig = {
         return 'validation_standardFormats_ip_type';
     }
   },
-  validation_phone_countryCode: {
-    title: "Проверка Телефона: Есть ли код страны?",
-    type: 'radio',
-    options: [
-        { id: 'yes', label: "Да (например, +7)" },
-        { id: 'no', label: "Нет" },
-    ],
-    nextStep: 'validation_phone_separators'
-  },
-  validation_phone_separators: {
-    title: "Проверка Телефона: Разрешены ли разделители (пробелы, дефисы)?",
-    type: 'radio',
-    options: [
-        { id: 'yes', label: "Да, могут быть пробелы или дефисы" },
-        { id: 'no', label: "Нет, только цифры (и + если код страны)" },
-    ],
-    nextStep: 'final_preview'
-  },
-  validation_password_requirements: {
-    title: "Проверка Пароля: Укажите требования к сложности",
-    type: 'checkbox_and_input',
-    checkboxes: [
-        { id: 'password_req_digits', label: "Наличие цифр (0-9)" },
-        { id: 'password_req_lowercase', label: "Наличие строчных букв (a-z)" },
-        { id: 'password_req_uppercase', label: "Наличие заглавных букв (A-Z)" },
-        { id: 'password_req_specialChars', label: "Наличие спецсимволов (например, !@#$%)" },
-    ],
-    input: { id: 'password_minLength', label: "Минимальная длина пароля:", inputType: 'number', defaultValue: 8 },
-    nextStep: 'final_preview'
-  },
-  validation_dateTime_dateFormat: {
-    title: "Проверка Даты и Времени: Какой формат даты?",
-    type: 'radio',
-    options: [
-        { id: 'ddmmyyyy', label: "ДД/ММ/ГГГГ или ДД.ММ.ГГГГ" },
-        { id: 'yyyymmdd', label: "ГГГГ-ММ-ДД" },
-        { id: 'other_date', label: "Другой (скоро)", disabled: true },
-    ],
-    next: (choice: string) => {
-        if (choice === 'ddmmyyyy') return 'validation_dateTime_separators';
-        if (choice === 'yyyymmdd') return 'validation_dateTime_validateTime';
-        return 'validation_dateTime_dateFormat';
-    }
-  },
-  validation_dateTime_separators: {
-      title: "Проверка Даты (ДД/ММ/ГГГГ): Какие разделители разрешены?",
-      description: "Выберите один или несколько разделителей.",
-      type: 'checkbox',
-      checkboxes: [
-          { id: 'slash', label: "/ (слэш)" },
-          { id: 'hyphen', label: "- (дефис)" },
-          { id: 'dot', label: ". (точка)" },
-      ],
-      nextStep: 'validation_dateTime_validateTime',
-  },
-  validation_dateTime_validateTime: {
-      title: "Проверка Даты и Времени: Нужно ли также проверять время?",
-      type: 'radio',
-      options: [
-          { id: 'yes', label: "Да" },
-          { id: 'no', label: "Нет" },
-      ],
-      next: (choice: string) => {
-          if (choice === 'yes') return 'validation_dateTime_timeFormat';
-          return 'final_preview';
-      }
-  },
-  validation_dateTime_timeFormat: {
-      title: "Проверка Времени: Какой формат времени?",
-      type: 'radio',
-      options: [
-          { id: '24hr', label: "24-часовой (ЧЧ:ММ)" },
-          { id: '12hr', label: "12-часовой (ЧЧ:ММ AM/PM)" },
-      ],
-      nextStep: 'final_preview',
-  },
+  // Disabled phone steps
+  validation_phone_countryCode: { title: "Телефон: Код страны?", type:'radio', options:[], nextStep: 'validation_phone_separators'},
+  validation_phone_separators: { title: "Телефон: Разделители?", type:'radio', options:[], nextStep: 'final_preview'},
+  // Disabled password steps
+  validation_password_requirements: { title: "Пароль: Требования?", type:'checkbox_and_input', checkboxes:[], input:{id:'pw_min', label:''}, nextStep: 'final_preview'},
+  // Disabled datetime steps
+  validation_dateTime_dateFormat: { title: "Дата: Формат?", type:'radio', options:[], next: () => 'validation_dateTime_separators'},
+  validation_dateTime_separators: { title: "Дата: Разделители?", type:'checkbox', checkboxes:[], nextStep: 'validation_dateTime_validateTime'},
+  validation_dateTime_validateTime: { title: "Дата: Проверять время?", type:'radio', options:[], next: () => 'validation_dateTime_timeFormat'},
+  validation_dateTime_timeFormat: { title: "Время: Формат?", type:'radio', options:[], nextStep: 'final_preview'},
+
   extraction_whatToExtract: {
     title: "Извлечение/Поиск: Что нужно найти в тексте?",
     type: 'radio',
@@ -333,24 +267,10 @@ const wizardConfig = {
       return 'extraction_whatToExtract';
     }
   },
-  extraction_quotedText_type: {
-    title: "Извлечение текста в кавычках: Какой тип кавычек?",
-    type: 'radio',
-    options: [
-        { id: 'double', label: 'Двойные кавычки ("...")' },
-        { id: 'single', label: "Одинарные кавычки ('...')" }
-    ],
-    nextStep: 'final_preview'
-  },
-  extraction_specificWord_input: {
-    title: "Извлечение слова/фразы: Введите слово или фразу",
-    type: 'inputs',
-    inputs: [
-        { id: 'specificWord', label: "Искомый текст:", inputType: 'text', defaultValue: '' },
-    ],
-    autoFocusInputId: 'specificWord',
-    nextStep: 'final_preview'
-  },
+  // Disabled extraction sub-steps
+  extraction_quotedText_type: { title: "Кавычки: Тип?", type:'radio', options:[], nextStep: 'final_preview'},
+  extraction_specificWord_input: { title: "Слово: Ввод", type:'inputs', inputs:[], nextStep: 'final_preview'},
+
   replacement_whatToReplace: {
     title: "Замена/Трансформация: Что нужно заменить?",
     type: 'radio',
@@ -371,38 +291,12 @@ const wizardConfig = {
       return 'replacement_whatToReplace';
     }
   },
-  replacement_maskDigits_options: {
-    title: "Маскирование цифр: Сколько последних цифр оставить видимыми?",
-    type: 'inputs',
-    inputs: [
-        { id: 'maskDigits_keepLast', label: "Количество видимых последних цифр:", inputType: 'number', defaultValue: 4 },
-    ],
-    autoFocusInputId: 'maskDigits_keepLast',
-    nextStep: 'final_preview'
-  },
-  replacement_swap_input: {
-    title: "Смена порядка (Swap): Укажите паттерн и замену",
-    type: 'inputs',
-    inputs: [
-      { id: 'swapPattern', label: "Шаблон для поиска с группами захвата:", inputType: 'text', defaultValue: '(\\w+) (\\w+)', placeholder: "например, (.*) - (.*)"},
-      { id: 'swapReplacement', label: "Строка замены с использованием групп:", inputType: 'text', defaultValue: '$2 $1', placeholder: "например, $2 - $1"},
-    ],
-    description: "Используйте круглые скобки () в шаблоне для создания групп захвата. Затем используйте $1, $2 и т.д. в строке замены, чтобы сослаться на эти группы.",
-    autoFocusInputId: 'swapPattern',
-    nextStep: 'final_preview'
-  },
-  splitting_delimiter_choice: {
-    title: "Разделение текста: По какому символу/шаблону нужно разбить текст?",
-    type: 'radio_with_conditional_input',
-    options: [
-      { id: 'simpleChar', label: "Простой символ (указать)", inputId: 'splittingSimpleChar_input', inputLabel: "Символ-разделитель:", inputPlaceholder: "например, ; или |" },
-      { id: 'comma', label: "Запятая (,)" },
-      { id: 'space', label: "Пробел(ы) (один или несколько)" },
-      { id: 'regex', label: "Регулярное выражение (указать)", inputId: 'splittingRegex_input', inputLabel: "Regex-разделитель:", inputPlaceholder: "например, [,-;]" },
-      { id: 'csv', label: "CSV (запятая, с учетом кавычек) (скоро)", disabled: true },
-    ],
-    nextStep: 'final_preview'
-  },
+  // Disabled replacement sub-steps
+  replacement_maskDigits_options: { title: "Маска: Цифры?", type:'inputs', inputs:[], nextStep: 'final_preview'},
+  replacement_swap_input: { title: "Swap: Паттерн?", type:'inputs', inputs:[], nextStep: 'final_preview'},
+  // Disabled splitting steps
+  splitting_delimiter_choice: { title: "Разделение: Чем?", type:'radio_with_conditional_input', options:[], nextStep: 'final_preview'},
+  
   final_preview: {
     title: "Результат Помощника",
     type: 'preview',
@@ -414,14 +308,17 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   const [currentStepId, setCurrentStepId] = useState<WizardStepId>('start');
   const [formData, setFormData] = useState<WizardFormData>({});
   const [generatedBlocks, setGeneratedBlocks] = useState<Block[]>([]);
+  const [aiExplanation, setAiExplanation] = useState<string | null>(null);
   const [replacementString, setReplacementString] = useState<string | null>(null);
-  const [isLoadingAI, setIsLoadingAI] = useState(false); // For AI interaction
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (isOpen) {
         setCurrentStepId('start');
         setFormData({});
         setGeneratedBlocks([]);
+        setAiExplanation(null);
         setReplacementString(null);
         setIsLoadingAI(false);
     }
@@ -434,7 +331,6 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
     const resetSubsequentFields = (keysToKeep: (keyof WizardFormData)[]) => {
         const currentMainCategory = newFormData.mainCategory;
-        // ... (keep existing logic for resetting fields based on mainCategory and other high-level choices)
         Object.keys(newFormData).forEach(keyStr => {
             const key = keyStr as keyof WizardFormData;
             if (!keysToKeep.includes(key)) {
@@ -529,23 +425,18 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         } else if (formData.validationTypeChoice === 'standard') {
             if(formData.standardFormatChoice === 'email') return generateBlocksForEmail(false);
             if (formData.standardFormatChoice === 'url') return generateBlocksForURL(false, formData.url_requireProtocol === 'yes');
-            // if (formData.standardFormatChoice === 'phone') return generateBlocksForPhone(); // Disabled
             if (formData.standardFormatChoice === 'ip') {
                 if (formData.ip_type === 'ipv4') return generateBlocksForIPv4();
                 if (formData.ip_type === 'ipv6') return generateBlocksForIPv6();
                 return [];
             }
-            // if (formData.standardFormatChoice === 'password') return generateBlocksForPassword(); // Disabled
             return [];
         }
-        // if (formData.validationTypeChoice === 'datetime') return generateBlocksForDateTime(); // Disabled
          return [];
     } else if (formData.mainCategory === 'extraction') {
         if (formData.extractionChoice === 'emails') return generateBlocksForEmail(true);
         if (formData.extractionChoice === 'urls') return generateBlocksForURL(true, false);
         if (formData.extractionChoice === 'numbers') return generateBlocksForNumbers();
-        // if (formData.extractionChoice === 'quotedText') return generateBlocksForQuotedText(); // Disabled
-        // if (formData.extractionChoice === 'specificWord') return generateBlocksForSpecificWord(); // Disabled
         if (formData.extractionChoice === 'duplicateWords') return generateBlocksForDuplicateWords();
         return [];
     } else if (formData.mainCategory === 'replacement') {
@@ -557,10 +448,8 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
              setReplacementString(" (один пробел)");
              return generateBlocksForTabsToSpaces();
         } 
-        // Other replacement types are disabled or need specific handling
         return [];
     }
-    // if (formData.mainCategory === 'splitting') return generateBlocksForSplitting(); // Disabled
     return [];
   }, [formData]);
 
@@ -579,9 +468,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     if (!patternChars) return [];
 
     blocks.push(createAnchor('^'));
-
     const charClassBlock: Block = createCharClass(patternChars);
-
     let quantifierType: QuantifierSettings['type'] = '+';
     let min: number | undefined = undefined;
     let max: number | null | undefined = undefined;
@@ -590,13 +477,11 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
       min = typeof formData.basicPattern_minLength === 'number' ? formData.basicPattern_minLength : 1;
       max = typeof formData.basicPattern_maxLength === 'number' && formData.basicPattern_maxLength > 0 ? formData.basicPattern_maxLength : null;
 
-
       if (min !== undefined && max === null && min === 1) quantifierType = '+';
       else if (min !== undefined && max === null) quantifierType = '{n,}';
       else if (min !== undefined && max !== undefined && min === max) quantifierType = '{n}';
       else if (min !== undefined && max !== undefined) quantifierType = '{n,m}';
     }
-
     blocks.push(charClassBlock);
     blocks.push(createQuantifier(quantifierType, min, max));
     blocks.push(createAnchor('$'));
@@ -608,6 +493,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     if (!currentStepConfig) return;
     setReplacementString(null);
     setGeneratedBlocks([]);
+    setAiExplanation(null);
     setIsLoadingAI(false);
 
     if (currentStepId === 'final_preview') {
@@ -622,22 +508,29 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
     if (currentStepId === 'ai_natural_language_input' && formData.naturalLanguageQuery) {
         setIsLoadingAI(true);
-        // TODO: Implement actual AI call here using Genkit flow
-        // For now, simulate with a placeholder and go to preview
         try {
-            // const aiResult = await callGenkitFlow(formData.naturalLanguageQuery);
-            // const parsedBlocks = parseRegexToBlocks(aiResult.regex); // This is a complex function to write
-            // setGeneratedBlocks(parsedBlocks);
-            // For demo purposes:
-            await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API call
-            const placeholderRegex = formData.naturalLanguageQuery.toLowerCase().includes("email") ? 
-                                     generateBlocksForEmail(true) : 
-                                     [createLiteral(formData.naturalLanguageQuery, true)]; // Very basic placeholder
-            setGeneratedBlocks(placeholderRegex);
-
+            const aiResult = await generateRegexFromNaturalLanguage({ query: formData.naturalLanguageQuery });
+            if (aiResult && aiResult.regex) {
+                setGeneratedBlocks([createLiteral(aiResult.regex, false)]); // Create a literal block, autoEscape=false
+                setAiExplanation(aiResult.explanation);
+            } else {
+                setGeneratedBlocks([createLiteral(".*", false)]); // Fallback
+                setAiExplanation("AI не смог сгенерировать специфический Regex для этого запроса. Пожалуйста, попробуйте переформулировать или быть более конкретным.");
+                toast({
+                    title: "AI Генерация",
+                    description: "AI не смог сгенерировать специфический Regex.",
+                    variant: "default",
+                });
+            }
         } catch (error) {
             console.error("AI Regex Generation Error:", error);
-            setGeneratedBlocks([createLiteral("Ошибка AI-генерации", false)]);
+            setGeneratedBlocks([createLiteral("Ошибка AI :(", false)]);
+            setAiExplanation("Произошла ошибка при обращении к AI сервису.");
+            toast({
+                title: "Ошибка AI",
+                description: "Не удалось связаться с AI сервисом.",
+                variant: "destructive",
+            });
         } finally {
             setIsLoadingAI(false);
         }
@@ -668,6 +561,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   const handleBack = () => {
     let prevStep: WizardStepId | null = null;
     setGeneratedBlocks([]);
+    setAiExplanation(null);
     setReplacementString(null);
     setIsLoadingAI(false);
 
@@ -683,19 +577,18 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                 if (formData.standardFormatChoice === 'email') prevStep = 'validation_standardFormats_what';
                 else if (formData.standardFormatChoice === 'url') prevStep = 'validation_standardFormats_url_protocol';
                 else if (formData.standardFormatChoice === 'ip') prevStep = 'validation_standardFormats_ip_type';
-                else prevStep = 'validation_standardFormats_what';
+                else prevStep = 'validation_standardFormats_what'; // Fallback for disabled standard options
             }
-             else prevStep = 'validation_type_choice';
+             else prevStep = 'validation_type_choice'; // Fallback for disabled datetime
         } else if (formData.mainCategory === 'extraction') {
              if (['emails', 'urls', 'numbers', 'duplicateWords'].includes(formData.extractionChoice || '')) prevStep = 'extraction_whatToExtract';
-             else prevStep = 'extraction_whatToExtract';
+             else prevStep = 'extraction_whatToExtract'; // Fallback for disabled extraction options
         } else if (formData.mainCategory === 'replacement') {
             if (['multipleSpaces', 'tabsToSpaces'].includes(formData.replacementChoice || '')) prevStep = 'replacement_whatToReplace';
-            else prevStep = 'replacement_whatToReplace';
+            else prevStep = 'replacement_whatToReplace'; // Fallback for disabled replacement options
         }
-        else prevStep = 'start'; // Fallback to start for other main categories
+        else prevStep = 'start';
     } else {
-        // Existing back logic for non-final_preview, non-AI steps
         switch (currentStepId) {
             case 'validation_type_choice':
             case 'extraction_whatToExtract':
@@ -711,7 +604,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
             case 'validation_standardFormats_url_protocol': prevStep = 'validation_standardFormats_what'; break;
             case 'validation_standardFormats_ip_type': prevStep = 'validation_standardFormats_what'; break;
             
-            default: prevStep = 'start';
+            default: prevStep = 'start'; // Fallback to a known safe step
         }
     }
 
@@ -724,6 +617,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     setCurrentStepId('start');
     setFormData({});
     setGeneratedBlocks([]);
+    setAiExplanation(null);
     setReplacementString(null);
     setIsLoadingAI(false);
     onClose();
@@ -731,6 +625,8 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
   const isNextDisabled = () => {
     const currentChoice = getRadioValue();
+    if (!currentStepConfig) return true;
+    
     if (currentStepConfig.type === 'radio' && !currentChoice) {
       if (currentStepConfig.options?.every(opt => opt.disabled)) return false;
       return true;
@@ -768,15 +664,15 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) resetWizardAndClose(); }}>
       <DialogContent className="sm:max-w-xl md:max-w-2xl max-h-[85vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>{currentStepConfig.title}</DialogTitle>
-          {currentStepConfig.description && (
+          <DialogTitle>{currentStepConfig?.title || "AI Помощник"}</DialogTitle>
+          {currentStepConfig?.description && (
             <DialogDescription>{currentStepConfig.description}</DialogDescription>
           )}
         </DialogHeader>
 
         <ScrollArea className="flex-1 pr-4 -mr-4 py-2">
           <div className="space-y-6">
-            {currentStepConfig.type === 'card_choice' && currentStepConfig.options && (
+            {currentStepConfig?.type === 'card_choice' && currentStepConfig.options && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {currentStepConfig.options.map(opt => (
                         <Button
@@ -798,7 +694,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                     ))}
                 </div>
             )}
-            {currentStepConfig.type === 'radio' && currentStepConfig.options && (
+            {currentStepConfig?.type === 'radio' && currentStepConfig.options && (
               <RadioGroup
                 value={getRadioValue()}
                 onValueChange={handleRadioChange}
@@ -816,7 +712,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
               </RadioGroup>
             )}
 
-            {currentStepConfig.type === 'radio_with_conditional_input' && currentStepConfig.options && (
+            {currentStepConfig?.type === 'radio_with_conditional_input' && currentStepConfig.options && (
               <RadioGroup
                 value={getRadioValue()}
                 onValueChange={handleRadioChange}
@@ -851,7 +747,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
             )}
 
 
-            {currentStepConfig.type === 'checkbox' && currentStepConfig.checkboxes && (
+            {currentStepConfig?.type === 'checkbox' && currentStepConfig.checkboxes && (
               <div className="space-y-3">
                 {currentStepConfig.checkboxes.map(cb => (
                   <div key={cb.id} className="flex items-center space-x-3 p-2 border rounded-md hover:bg-muted/50">
@@ -868,7 +764,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
               </div>
             )}
 
-            {currentStepConfig.type === 'checkbox_with_input' && currentStepConfig.checkboxes && currentStepConfig.conditionalInput && (
+            {currentStepConfig?.type === 'checkbox_with_input' && currentStepConfig.checkboxes && currentStepConfig.conditionalInput && (
                 <div className="space-y-3">
                     {currentStepConfig.checkboxes.map(cb => (
                     <div key={cb.id} className="flex items-center space-x-3 p-2 border rounded-md hover:bg-muted/50">
@@ -915,7 +811,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                 </div>
             )}
 
-            {currentStepConfig.type === 'inputs' && currentStepConfig.inputs && (
+            {currentStepConfig?.type === 'inputs' && currentStepConfig.inputs && (
               <div className="space-y-4">
                 {currentStepConfig.inputs.map(input => (
                   <div key={input.id}>
@@ -923,7 +819,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                       {input.label}
                     </Label>
                     {input.inputType === 'textarea' ? (
-                        <textarea
+                        <Textarea
                             id={`${currentStepId}-${input.id}`}
                             value={formData[input.id as keyof WizardFormData] as string || (input.defaultValue !== undefined ? String(input.defaultValue) : '')}
                             onChange={(e) => handleInputChange(input.id, e.target.value)}
@@ -951,7 +847,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
               </div>
             )}
 
-            {currentStepConfig.type === 'checkbox_and_input' && currentStepConfig.checkboxes && currentStepConfig.input && (
+            {currentStepConfig?.type === 'checkbox_and_input' && currentStepConfig.checkboxes && currentStepConfig.input && (
                 <div className="space-y-3">
                     {currentStepConfig.checkboxes.map(cb => (
                     <div key={cb.id} className="flex items-center space-x-3 p-2 border rounded-md hover:bg-muted/50">
@@ -986,21 +882,28 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                 <div className="space-y-3">
                     {isLoadingAI && (
                         <div className="flex flex-col items-center justify-center p-4 text-muted-foreground">
-                           <Sparkles size={32} className="animate-pulse text-primary mb-2" />
+                           <Bot size={32} className="animate-pulse text-primary mb-2" />
                            <p>AI генерирует выражение...</p>
                         </div>
                     )}
                     {!isLoadingAI && (
                         <>
                            <Label className="text-sm font-medium">
-                             {formData.mainCategory === 'ai_assisted' ? "Предложенные AI блоки:" : "Сгенерированные блоки Regex:"}
+                             {formData.mainCategory === 'ai_assisted' ? "Предложенный AI Regex:" : "Сгенерированные блоки Regex:"}
                            </Label>
                             {generatedBlocks.length > 0 ? (
                                 <Card className="p-3 bg-muted/50 max-h-60 overflow-y-auto">
                                     <div className="text-xs font-mono whitespace-pre-wrap space-y-1">
                                         {generatedBlocks.map(b => {
                                             let display = `${BLOCK_CONFIGS[b.type]?.name || b.type}`;
-                                            if (b.type === BlockType.LITERAL) display += `: "${(b.settings as LiteralSettings).text}"`;
+                                            if (b.type === BlockType.LITERAL) {
+                                                // If this literal came from AI, it's a full regex string
+                                                if (formData.mainCategory === 'ai_assisted') {
+                                                    display = `Regex: /${(b.settings as LiteralSettings).text}/`;
+                                                } else {
+                                                    display += `: "${(b.settings as LiteralSettings).text}"`;
+                                                }
+                                            }
                                             else if (b.type === BlockType.CHARACTER_CLASS) display += `: [${(b.settings as CharacterClassSettings).negated ? '^' : ''}${(b.settings as CharacterClassSettings).pattern}]`;
                                             else if (b.type === BlockType.QUANTIFIER) {
                                                 const qs = b.settings as QuantifierSettings;
@@ -1029,7 +932,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                                                     childDisplay += `: ${qs.type}`;
                                                     if (qs.min !== undefined) childDisplay += ` (min: ${qs.min}`;
                                                     if (qs.max !== undefined && qs.max !== null) childDisplay += `, max: ${qs.max}`;
-                                                    if (qs.min !== undefined) childDisplay += `)`;
+                                                    if (qs.min !== undefined) display += `)`;
                                                     if (qs.mode) childDisplay += `, ${qs.mode}`;
                                                 }
                                                 else if (child.type === BlockType.ANCHOR) childDisplay += `: ${(child.settings as AnchorSettings).type}`;
@@ -1065,6 +968,14 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                                     }
                                 </p>
                             )}
+                            {aiExplanation && formData.mainCategory === 'ai_assisted' && (
+                                <div className="mt-3">
+                                    <Label className="text-sm font-medium">Объяснение от AI:</Label>
+                                    <Card className="p-3 bg-muted/30 text-xs">
+                                        <p className="whitespace-pre-wrap">{aiExplanation}</p>
+                                    </Card>
+                                </div>
+                            )}
                             {replacementString && (
                                 <div className="mt-2">
                                     <Label className="text-sm font-medium">Рекомендуемая строка для замены:</Label>
@@ -1076,7 +987,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                                 <AlertTitle>Подсказка</AlertTitle>
                                 <AlertDescription>
                                     {formData.mainCategory === 'ai_assisted' ? 
-                                    "AI предлагает базовую структуру. Вы можете доработать ее в редакторе." :
+                                    "AI предлагает готовый Regex. Вы можете скопировать его или добавить в редактор как один блок для дальнейшего анализа." :
                                     "Это базовый набор блоков. После добавления вы сможете их детальнее настроить, сгруппировать или добавить другие элементы в основном редакторе."
                                     }
                                     {formData.mainCategory === 'extraction' && " Для сценариев извлечения часто используется флаг 'g' (глобальный поиск), который можно установить в панели вывода Regex."}
@@ -1111,5 +1022,3 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 };
 
 export default RegexWizardModal;
-
-    
