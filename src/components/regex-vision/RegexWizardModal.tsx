@@ -27,7 +27,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card } from "@/components/ui/card";
 import { Lightbulb, CheckSquare, TextCursorInput, Replace, Eraser, Split, Wand2, Phone, AtSign, Globe, KeyRound, Shuffle, MessageSquareQuote, CaseSensitive, SearchCheck, Route, Workflow, FileText, CalendarClock, BadgeCheck, AlignLeft, Calculator, Sparkles, Bot, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { generateId, createAnchor, createLiteral, createCharClass, createQuantifier, createSequenceGroup, createAlternation, createLookaround, createBackreference, escapeRegexChars, generateBlocksForEmail, generateBlocksForURL, generateBlocksForIPv4, generateBlocksForIPv6, generateBlocksForDuplicateWords, generateBlocksForMultipleSpaces, generateBlocksForTabsToSpaces, generateBlocksForNumbers } from './utils';
+import { generateId, createAnchor, createLiteral, createCharClass, createQuantifier, createSequenceGroup, createAlternation, createLookaround, createBackreference, escapeRegexChars, generateBlocksForEmail, generateBlocksForURL, generateBlocksForIPv4, generateBlocksForIPv6, generateBlocksForDuplicateWords, generateBlocksForMultipleSpaces, generateBlocksForTabsToSpaces, generateBlocksForNumbers, processAiBlocks } from './utils';
 
 
 interface RegexWizardModalProps {
@@ -225,74 +225,6 @@ const wizardConfig: Record<WizardStepId, any> = {
   }
 };
 
-// Helper function to process blocks received from AI
-const processAiBlocks = (aiBlocks: any[]): Block[] => {
-  if (!aiBlocks || !Array.isArray(aiBlocks)) {
-    return [];
-  }
-  return aiBlocks.map((aiBlock: any): Block => {
-    const newBlock: Partial<Block> = {
-      id: generateId(),
-      type: aiBlock.type as BlockType, // Trusting AI for now, validation could be added
-      settings: aiBlock.settings || {},
-      children: [],
-    };
-
-    if (aiBlock.children && Array.isArray(aiBlock.children)) {
-      newBlock.children = processAiBlocks(aiBlock.children);
-    }
-
-    const containerTypes: string[] = [ // Use string array for comparison with AI's string type
-      BlockType.GROUP,
-      BlockType.LOOKAROUND,
-      BlockType.ALTERNATION,
-      BlockType.CONDITIONAL,
-    ];
-    if (containerTypes.includes(newBlock.type!)) {
-      newBlock.isExpanded = true;
-    }
-    
-    // Basic validation/normalization for settings based on type
-    // This is a simplified version. A more robust solution would involve Zod schemas for each setting type.
-    switch (newBlock.type) {
-        case BlockType.LITERAL:
-            if (typeof newBlock.settings?.text !== 'string') newBlock.settings = { text: '' };
-            break;
-        case BlockType.CHARACTER_CLASS:
-            if (typeof newBlock.settings?.pattern !== 'string') newBlock.settings = { ...newBlock.settings, pattern: '' };
-            if (typeof newBlock.settings?.negated !== 'boolean') newBlock.settings = { ...newBlock.settings, negated: false };
-            // AI might send '\\d', we use '\d' in settings.pattern for our utils.
-            // However, the prompt now asks for "\\\\d" for predefined classes.
-            // So, if the AI sends "\\\\d", we should keep it as is for `createCharClass` logic if used later.
-            // For direct use, it's fine.
-            break;
-        case BlockType.QUANTIFIER:
-            if (typeof newBlock.settings?.type !== 'string') newBlock.settings = { ...newBlock.settings, type: '*' };
-            if (!['greedy', 'lazy', 'possessive'].includes(newBlock.settings?.mode)) newBlock.settings = { ...newBlock.settings, mode: 'greedy' };
-            if (newBlock.settings?.type?.includes('{')) {
-                if (typeof newBlock.settings?.min !== 'number') newBlock.settings.min = 0;
-                if (newBlock.settings?.max === undefined) newBlock.settings.max = null; // null means infinity for us
-            }
-            break;
-        case BlockType.GROUP:
-            if (!['capturing', 'non-capturing', 'named'].includes(newBlock.settings?.type)) newBlock.settings = { ...newBlock.settings, type: 'capturing' };
-            if (newBlock.settings?.type === 'named' && typeof newBlock.settings?.name !== 'string') newBlock.settings.name = '';
-            break;
-        case BlockType.ANCHOR:
-             if (typeof newBlock.settings?.type !== 'string') newBlock.settings = { ...newBlock.settings, type: '^' };
-            // AI might send '\\b', we use '\b' internally.
-            // The prompt now asks for double backslash for anchors as well.
-            break;
-        // Add more cases for LOOKAROUND, BACKREFERENCE, CONDITIONAL, ALTERNATION if needed
-        default:
-            break;
-    }
-
-
-    return newBlock as Block;
-  });
-};
-
 
 const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, onComplete, initialParentId }) => {
   const [currentStepId, setCurrentStepId] = useState<WizardStepId>('start');
@@ -457,7 +389,6 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     setReplacementString(null);
     setGeneratedBlocks([]);
     setAiExplanation(null);
-    // setIsLoadingAI is handled per step if AI call is made
 
     if (currentStepId === 'final_preview') {
         if (generatedBlocks.length > 0 || (formData.mainCategory === 'replacement' && replacementString)) {
@@ -482,7 +413,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                     description: "Проверьте предложенные блоки.",
                 });
             } else if (aiResult.regex) {
-                setGeneratedBlocks([createLiteral(aiResult.regex, false)]); // autoEscape=false for AI regex
+                setGeneratedBlocks([createLiteral(aiResult.regex, false)]); 
                  toast({
                     title: "AI Сгенерировал Regex",
                     description: "AI не смог разобрать regex на блоки, но предоставил строку.",
@@ -512,7 +443,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         nextStepTargetId = 'final_preview';
 
     } else if ('next' in currentStepConfig && typeof currentStepConfig.next === 'function') {
-      if (choice || currentStepConfig.type !== 'radio' && currentStepConfig.type !== 'card_choice' && currentStepConfig.type !== 'radio_with_conditional_input' ) { // For non-choice steps, proceed
+      if (choice || currentStepConfig.type !== 'radio' && currentStepConfig.type !== 'card_choice' && currentStepConfig.type !== 'radio_with_conditional_input' ) { 
         nextStepTargetId = currentStepConfig.next(choice) as WizardStepId;
       } else if (!choice && (currentStepConfig.type === 'radio' || currentStepConfig.type === 'card_choice' || currentStepConfig.type === 'radio_with_conditional_input')) {
           console.warn("Wizard: No choice made on step", currentStepId);
@@ -529,7 +460,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
     if (nextStepTargetId) {
       setCurrentStepId(nextStepTargetId);
-    } else if (currentStepId !== 'ai_natural_language_input') { // Avoid warning if AI call is pending
+    } else if (currentStepId !== 'ai_natural_language_input') { 
       console.warn("Wizard: No next step defined for", currentStepId, "with choice", choice);
     }
   };
@@ -562,8 +493,6 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     } else {
         const stepKeys = Object.keys(wizardConfig) as WizardStepId[];
         const currentIndex = stepKeys.indexOf(currentStepId);
-        // This is a simplified back logic, assumes linear progression for non-branching parts
-        // For branching, we need to trace back based on formData.
         if (currentStepId === 'validation_type_choice' || currentStepId === 'extraction_whatToExtract' || currentStepId === 'replacement_whatToReplace') {
             prevStep = 'start';
         } else if (currentStepId === 'validation_basicPatterns_what') prevStep = 'validation_type_choice';
@@ -767,7 +696,6 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                                         {generatedBlocks.map(b => {
                                             let display = `${BLOCK_CONFIGS[b.type]?.name || b.type}`;
                                             if (b.type === BlockType.LITERAL) {
-                                                // If this literal came from AI AND it's the only block, it's a full regex string
                                                 if (formData.mainCategory === 'ai_assisted' && generatedBlocks.length === 1) {
                                                     display = `Regex: /${(b.settings as LiteralSettings).text}/`;
                                                 } else {
@@ -788,7 +716,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                                             display += `: (${(b.settings as GroupSettings).type || 'capturing'})`;
                                             if((b.settings as GroupSettings).name) display += ` ?<${(b.settings as GroupSettings).name}>`;
                                             }
-                                            else if (b.type === BlockType.ALTERNATION) display += `: ( | )`; // Simplified
+                                            else if (b.type === BlockType.ALTERNATION) display += `: ( | )`; 
                                             else if (b.type === BlockType.LOOKAROUND) display += `: (${(b.settings as LookaroundSettings).type})`;
                                             else if (b.type === BlockType.BACKREFERENCE) display += `: \\${(b.settings as BackreferenceSettings).ref}`;
 
@@ -797,11 +725,10 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                                                 let childDisplay = `${'  '.repeat(level)}- ${BLOCK_CONFIGS[child.type]?.name || child.type}`;
                                                 if (child.type === BlockType.LITERAL) childDisplay += `: "${(child.settings as LiteralSettings).text}"`;
                                                 else if (child.type === BlockType.CHARACTER_CLASS) childDisplay += `: [${(child.settings as CharacterClassSettings).negated ? '^' : ''}${(child.settings as CharacterClassSettings).pattern}]`;
-                                                else if (child.type === BlockType.QUANTIFIER) { /* ... similar detail ... */ }
+                                                else if (child.type === BlockType.QUANTIFIER) {  }
                                                 else if (child.type === BlockType.ANCHOR) childDisplay += `: ${(child.settings as AnchorSettings).type}`;
                                                 else if (child.type === BlockType.GROUP) { childDisplay += `: (${(child.settings as GroupSettings).type || 'capturing'})`; if((child.settings as GroupSettings).name) childDisplay += ` ?<${(child.settings as GroupSettings).name}>`;}
                                                 else if (child.type === BlockType.ALTERNATION) childDisplay += `: ( | )`;
-                                                // Add other types as needed
                                                 
                                                 let nestedChildrenStr = "";
                                                 if(child.children && child.children.length > 0) {

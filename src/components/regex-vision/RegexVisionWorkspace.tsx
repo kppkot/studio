@@ -1,11 +1,12 @@
 
 "use client";
 import React, { useState, useEffect, useCallback } from 'react';
-import type { Block, RegexMatch, GroupInfo, SavedPattern } from './types'; // Added SavedPattern
+import type { Block, RegexMatch, GroupInfo, SavedPattern } from './types'; 
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { generateId, generateRegexStringAndGroupInfo, generateRegexString } from './utils'; // Updated utils import
+import { generateId, generateRegexStringAndGroupInfo, generateRegexString, processAiBlocks, createLiteral } from './utils'; 
 import { useToast } from '@/hooks/use-toast';
+import { generateRegexFromNaturalLanguage, NaturalLanguageRegexOutput } from '@/ai/flows/natural-language-regex-flow';
 
 import AppHeader from './AppHeader';
 import BlockNode from './BlockNode';
@@ -23,7 +24,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Sparkles, Gauge, Library } from 'lucide-react'; // Added Gauge, Library
+import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Sparkles, Gauge, Library } from 'lucide-react'; 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
 const deepCloneBlock = (block: Block): Block => {
@@ -109,7 +110,7 @@ const findBlockAndParentRecursive = (
 const RegexVisionWorkspace: React.FC = () => {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
-  const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null); // New state for hover
+  const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null); 
   const [parentIdForNewBlock, setParentIdForNewBlock] = useState<string | null>(null);
   const [isPaletteVisible, setIsPaletteVisible] = useState(false);
   const [isWizardModalOpen, setIsWizardModalOpen] = useState(false);
@@ -129,8 +130,6 @@ const RegexVisionWorkspace: React.FC = () => {
 
     if (newRegex && testText) {
       try {
-        // Ensure 'd' flag is present if we want to use match.indices, though it might not be universally supported or always needed for basic group capture.
-        // For now, rely on our groupInfos for mapping.
         const currentFlags = regexFlags.includes('d') ? regexFlags : regexFlags + (regexFlags.length ? '' : '') + 'd';
 
         const regexObj = new RegExp(newRegex, currentFlags);
@@ -138,13 +137,10 @@ const RegexVisionWorkspace: React.FC = () => {
         const formattedMatches: RegexMatch[] = foundRawMatches.map(rawMatch => ({
           match: rawMatch[0],
           index: rawMatch.index!,
-          groups: Array.from(rawMatch).slice(1), // Standard groups
-          // namedGroups: rawMatch.groups, // Named groups (if any)
-          // groupIndices: rawMatch.indices?.groups, // Indices for named groups if 'd' flag is used and supported
+          groups: Array.from(rawMatch).slice(1), 
         }));
         setMatches(formattedMatches);
       } catch (error) {
-        // console.error("Regex execution error:", error);
         setMatches([]);
       }
     } else {
@@ -153,27 +149,31 @@ const RegexVisionWorkspace: React.FC = () => {
   }, [blocks, testText, regexFlags]);
 
 
-  // Effect to update highlighted group in TestArea based on selected or hovered block
   useEffect(() => {
     let blockIdToProcess: string | null = null;
+    let isHoverSource = false;
 
     if (hoveredBlockId) {
-      blockIdToProcess = hoveredBlockId;
+        blockIdToProcess = hoveredBlockId;
+        isHoverSource = true;
     } else if (selectedBlockId) {
-      blockIdToProcess = selectedBlockId;
+        blockIdToProcess = selectedBlockId;
     }
 
     if (blockIdToProcess) {
-      const block = findBlockRecursive(blocks, blockIdToProcess);
-      if (block && block.type === BlockType.GROUP) {
-        const foundGroupInfo = regexOutput.groupInfos.find(gi => gi.blockId === block.id);
-        if (foundGroupInfo) {
-          setHighlightedGroupInTestArea({ groupIndex: foundGroupInfo.groupIndex });
-          return;
+        const block = findBlockRecursive(blocks, blockIdToProcess);
+        if (block && block.type === BlockType.GROUP) {
+            const foundGroupInfo = regexOutput.groupInfos.find(gi => gi.blockId === block.id);
+            if (foundGroupInfo) {
+                setHighlightedGroupInTestArea({ groupIndex: foundGroupInfo.groupIndex });
+                return;
+            }
         }
-      }
     }
-    setHighlightedGroupInTestArea(null);
+    
+    if (!isHoverSource || !blockIdToProcess) { // Only clear if not actively hovering or selection is cleared
+        setHighlightedGroupInTestArea(null);
+    }
   }, [selectedBlockId, hoveredBlockId, blocks, regexOutput.groupInfos]);
 
 
@@ -661,22 +661,35 @@ const RegexVisionWorkspace: React.FC = () => {
     };
   }, [selectedBlockId, blocks, handleDeleteBlock, handleExpandAll, handleCollapseAll, handleUpdateBlock]);
 
-  const handleApplySavedPattern = (pattern: SavedPattern) => {
-    const { regexString, groupInfos } = generateRegexStringAndGroupInfo(
-      [{ id: generateId(), type: BlockType.LITERAL, settings: { text: pattern.regexString }, children: [] }] // Create a temporary block structure
-    );
-    setRegexOutput({ regexString, groupInfos }); // Assuming we want fresh groupInfos for the applied regex
+  const handleApplySavedPattern = async (pattern: SavedPattern) => {
     setRegexFlags(pattern.flags);
     setTestText(pattern.testString || '');
-    setBlocks([{
-        id: generateId(),
-        type: BlockType.LITERAL, // Represent the entire pattern as a single literal block for simplicity initially
-        settings: { text: pattern.regexString },
-        children: [],
-        isExpanded: false,
-    }]);
     setSelectedBlockId(null);
-    toast({ title: "Паттерн применен!", description: `"${pattern.name}" загружен в рабочую область.` });
+
+    try {
+      const aiResult: NaturalLanguageRegexOutput = await generateRegexFromNaturalLanguage({ query: pattern.regexString });
+      if (aiResult.parsedBlocks && aiResult.parsedBlocks.length > 0) {
+        const parsedBlocksFromAI = processAiBlocks(aiResult.parsedBlocks);
+        setBlocks(parsedBlocksFromAI);
+        const { regexString: newRegex, groupInfos } = generateRegexStringAndGroupInfo(parsedBlocksFromAI);
+        setRegexOutput({ regexString: newRegex, groupInfos });
+        toast({ title: "Паттерн применен и разобран!", description: `"${pattern.name}" загружен и преобразован в блоки.` });
+      } else {
+        // Fallback: AI couldn't parse, or no blocks returned
+        const fallbackBlock = createLiteral(pattern.regexString, false); // false because it's already a regex
+        setBlocks([fallbackBlock]);
+        const { regexString: newRegex, groupInfos } = generateRegexStringAndGroupInfo([fallbackBlock]);
+        setRegexOutput({ regexString: newRegex, groupInfos });
+        toast({ title: "Паттерн применен (как литерал)", description: `"${pattern.name}" загружен. AI не смог разобрать его на блоки.` });
+      }
+    } catch (error) {
+      console.error("Error parsing pattern with AI:", error);
+      const fallbackBlock = createLiteral(pattern.regexString, false);
+      setBlocks([fallbackBlock]);
+      const { regexString: newRegex, groupInfos } = generateRegexStringAndGroupInfo([fallbackBlock]);
+      setRegexOutput({ regexString: newRegex, groupInfos });
+      toast({ title: "Паттерн применен (ошибка AI)", description: `"${pattern.name}" загружен. Произошла ошибка при попытке разбора AI.`, variant: "destructive" });
+    }
   };
 
   const handleBlockHover = (blockId: string | null) => {
@@ -741,7 +754,7 @@ const RegexVisionWorkspace: React.FC = () => {
                             onSelect={setSelectedBlockId}
                             parentId={null}
                             level={0}
-                            onBlockHover={handleBlockHover} // Pass hover handler
+                            onBlockHover={handleBlockHover} 
                           />
                         ))}
                       </div>
@@ -839,3 +852,4 @@ const RegexVisionWorkspace: React.FC = () => {
 };
 
 export default RegexVisionWorkspace;
+

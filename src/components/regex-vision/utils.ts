@@ -158,17 +158,6 @@ export const generateBlocksForNumbers = (): Block[] => {
   const oneOrMoreDigits = createQuantifier('+');
   const zeroOrMoreDigits = createQuantifier('*');
   const decimalPoint = createLiteral('\\.', false); 
-  const integerWithOptionalDecimalPart = createSequenceGroup([
-    digits,
-    oneOrMoreDigits,
-    createSequenceGroup([decimalPoint, digits, zeroOrMoreDigits], 'non-capturing'),
-    createQuantifier('?'), 
-  ], 'non-capturing');
-  const decimalOnlyPart = createSequenceGroup([
-    decimalPoint,
-    digits,
-    oneOrMoreDigits,
-  ], 'non-capturing');
   const numberCore = createAlternation([
     [digits, oneOrMoreDigits, createSequenceGroup([decimalPoint, digits, zeroOrMoreDigits], 'non-capturing'), createQuantifier('?')], 
     [decimalPoint, digits, oneOrMoreDigits] 
@@ -185,75 +174,12 @@ export const generateBlocksForNumbers = (): Block[] => {
   ];
 };
 
-// This is the existing function from your project code
 export const generateRegexString = (blocks: Block[]): string => {
-  const generate = (block: Block): string => {
-    const settings = block.settings;
-    let childrenRegex = block.children ? block.children.map(generate).join('') : '';
-
-    switch (block.type) {
-      case BlockType.LITERAL:
-        return (settings as LiteralSettings).text || '';
-      case BlockType.CHARACTER_CLASS:
-        const charClassSettings = settings as CharacterClassSettings;
-        return `[${charClassSettings.negated ? '^' : ''}${charClassSettings.pattern || ''}]`;
-      case BlockType.QUANTIFIER:
-        const qSettings = settings as QuantifierSettings;
-        const baseQuantifier = qSettings.type || '*';
-        let modeModifier = '';
-        if (qSettings.mode === 'lazy') modeModifier = '?';
-        else if (qSettings.mode === 'possessive') modeModifier = '+';
-        if (baseQuantifier.includes('{')) {
-          const min = qSettings.min ?? 0;
-          const max = qSettings.max;
-          if (baseQuantifier === '{n}') return `{${min}}${modeModifier}`;
-          if (baseQuantifier === '{n,}') return `{${min},}${modeModifier}`;
-          if (baseQuantifier === '{n,m}') return `{${min},${max ?? ''}}${modeModifier}`;
-        }
-        return baseQuantifier + modeModifier;
-      case BlockType.GROUP:
-        const gSettings = settings as GroupSettings;
-        if (gSettings.type === 'non-capturing') return `(?:${childrenRegex})`;
-        if (gSettings.type === 'named' && gSettings.name) return `(?<${gSettings.name}>${childrenRegex})`;
-        return `(${childrenRegex})`;
-      case BlockType.ANCHOR:
-        return (settings as AnchorSettings).type || '^';
-      case BlockType.ALTERNATION:
-        return block.children ? block.children.map(child => generate(child)).join('|') : '';
-      case BlockType.LOOKAROUND:
-        const lSettings = settings as LookaroundSettings;
-        const lookaroundMap = {
-          'positive-lookahead': `(?=${childrenRegex})`,
-          'negative-lookahead': `(?!${childrenRegex})`,
-          'positive-lookbehind': `(?<=${childrenRegex})`,
-          'negative-lookbehind': `(?<!${childrenRegex})`
-        };
-        return lookaroundMap[lSettings.type] || '';
-      case BlockType.BACKREFERENCE:
-        const brSettings = settings as BackreferenceSettings;
-        return `\\${brSettings.ref}`;
-      case BlockType.CONDITIONAL:
-        const condSettings = settings as ConditionalSettings;
-        let conditionalStr = `(?(${condSettings.condition})${condSettings.yesPattern}`;
-        if (condSettings.noPattern) {
-          conditionalStr += `|${condSettings.noPattern}`;
-        }
-        conditionalStr += `)`;
-        return conditionalStr;
-      default:
-        return childrenRegex;
-    }
-  };
-
-  let result = "";
-  for (let i = 0; i < blocks.length; i++) {
-    result += generate(blocks[i]);
-  }
-  return result;
+  const { regexString } = generateRegexStringAndGroupInfo(blocks);
+  return regexString;
 };
 
 
-// ---- NEW FUNCTION TO ADD ----
 export const generateRegexStringAndGroupInfo = (blocks: Block[]): { regexString: string; groupInfos: GroupInfo[] } => {
   const groupInfos: GroupInfo[] = [];
   let capturingGroupCount = 0;
@@ -306,14 +232,11 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): { regexString:
         } else if (gSettings.type === 'non-capturing') {
           groupOpen = "(?:";
         }
-        // Process children for this group before closing
         const groupChildrenRegex = block.children ? block.children.map(child => generateRecursiveWithGroupInfo(child)).join('') : '';
         return `${groupOpen}${groupChildrenRegex})`;
       case BlockType.ANCHOR:
         return (settings as AnchorSettings).type || '^';
       case BlockType.ALTERNATION:
-         // For ALTERNATION, children are direct alternatives. Their individual group counts are handled by recursive calls.
-         // The `childrenRegex` variable already holds the joined string of alternatives.
         return childrenRegex;
       case BlockType.LOOKAROUND:
         const lSettings = settings as LookaroundSettings;
@@ -323,22 +246,15 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): { regexString:
           'positive-lookbehind': `(?<=`,
           'negative-lookbehind': `(?<!`
         };
-        // Important: Capturing groups inside a lookaround DO NOT count towards the main regex group indices in JavaScript.
-        // To correctly handle this, the `capturingGroupCount` should NOT be passed or modified by calls
-        // for children of lookaround blocks. This is a complex change.
-        // For now, this implementation will incorrectly increment group counts if capturing groups are inside lookarounds.
-        // A proper fix would involve a more context-aware recursive generation.
         const lookaroundChildrenRegex = block.children ? block.children.map(child => generateRecursiveWithGroupInfo(child)).join('') : '';
         return `${lookaroundMap[lSettings.type]}${lookaroundChildrenRegex})`;
       case BlockType.BACKREFERENCE:
         return `\\${(settings as BackreferenceSettings).ref}`;
       case BlockType.CONDITIONAL:
         const condSettings = settings as ConditionalSettings;
-        // Similar to lookarounds, conditionals can have complex group counting implications.
-        // Simplifying for now.
-        let conditionalStr = `(?(${condSettings.condition})${generateRecursiveWithGroupInfo(createLiteral(condSettings.yesPattern,false))}`; // Assuming yesPattern is a regex string
+        let conditionalStr = `(?(${condSettings.condition})${generateRecursiveWithGroupInfo(createLiteral(condSettings.yesPattern,false))}`; 
         if (condSettings.noPattern) {
-          conditionalStr += `|${generateRecursiveWithGroupInfo(createLiteral(condSettings.noPattern,false))}`; // Assuming noPattern is a regex string
+          conditionalStr += `|${generateRecursiveWithGroupInfo(createLiteral(condSettings.noPattern,false))}`;
         }
         conditionalStr += `)`;
         return conditionalStr;
@@ -349,4 +265,62 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): { regexString:
 
   const regexString = blocks.map(block => generateRecursiveWithGroupInfo(block)).join('');
   return { regexString, groupInfos };
+};
+
+
+export const processAiBlocks = (aiBlocks: any[]): Block[] => {
+  if (!aiBlocks || !Array.isArray(aiBlocks)) {
+    return [];
+  }
+  return aiBlocks.map((aiBlock: any): Block => {
+    const newBlock: Partial<Block> = {
+      id: generateId(),
+      type: aiBlock.type as BlockType, // Trusting AI for now, validation could be added
+      settings: aiBlock.settings || {},
+      children: [],
+    };
+
+    if (aiBlock.children && Array.isArray(aiBlock.children)) {
+      newBlock.children = processAiBlocks(aiBlock.children);
+    }
+
+    const containerTypes: string[] = [ 
+      BlockType.GROUP,
+      BlockType.LOOKAROUND,
+      BlockType.ALTERNATION,
+      BlockType.CONDITIONAL,
+    ];
+    if (containerTypes.includes(newBlock.type!)) {
+      newBlock.isExpanded = true;
+    }
+    
+    switch (newBlock.type) {
+        case BlockType.LITERAL:
+            if (typeof newBlock.settings?.text !== 'string') newBlock.settings = { text: '' };
+            break;
+        case BlockType.CHARACTER_CLASS:
+            if (typeof newBlock.settings?.pattern !== 'string') newBlock.settings = { ...newBlock.settings, pattern: '' };
+            if (typeof newBlock.settings?.negated !== 'boolean') newBlock.settings = { ...newBlock.settings, negated: false };
+            break;
+        case BlockType.QUANTIFIER:
+            if (typeof newBlock.settings?.type !== 'string') newBlock.settings = { ...newBlock.settings, type: '*' };
+            if (!['greedy', 'lazy', 'possessive'].includes(newBlock.settings?.mode)) newBlock.settings = { ...newBlock.settings, mode: 'greedy' };
+            if (newBlock.settings?.type?.includes('{')) {
+                if (typeof newBlock.settings?.min !== 'number') newBlock.settings.min = 0;
+                if (newBlock.settings?.max === undefined) newBlock.settings.max = null; 
+            }
+            break;
+        case BlockType.GROUP:
+            if (!['capturing', 'non-capturing', 'named'].includes(newBlock.settings?.type)) newBlock.settings = { ...newBlock.settings, type: 'capturing' };
+            if (newBlock.settings?.type === 'named' && typeof newBlock.settings?.name !== 'string') newBlock.settings.name = '';
+            break;
+        case BlockType.ANCHOR:
+             if (typeof newBlock.settings?.type !== 'string') newBlock.settings = { ...newBlock.settings, type: '^' };
+            break;
+        default:
+            break;
+    }
+
+    return newBlock as Block;
+  });
 };
