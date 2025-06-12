@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, X, Search, Bot, ChevronRight, Sparkles, AlignLeft, Milestone, Combine, GitFork } from 'lucide-react';
+import { Plus, X, Search, Bot, ChevronRight, Sparkles, AlignLeft, Milestone, Combine, GitFork, Repeat, Eye } from 'lucide-react'; // Added Repeat, Eye
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -63,6 +63,8 @@ const WIZARD_CATEGORIES: WizardCategory[] = [
     actions: [
       { label: "Сгруппировать вместе (...)", type: BlockType.GROUP, description: "Объединяет несколько частей в одну группу." },
       { label: "Один из вариантов (или |)", type: BlockType.ALTERNATION, description: "Позволяет указать несколько альтернативных шаблонов." },
+      { label: "Квантификатор (повторение)", type: BlockType.QUANTIFIER, description: "Указывает, сколько раз должен повторяться предыдущий элемент. Например, a* (ноль или более 'a')." },
+      { label: "Просмотр (lookaround)", type: BlockType.LOOKAROUND, description: "Проверяет текст вокруг текущей позиции, не включая его в совпадение. Например, a(?=b)." },
     ],
   },
 ];
@@ -106,7 +108,12 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
   }, [searchTerm, fetchAiSuggestions]);
 
   const handleAddBlockFromWizard = (type: BlockType, settings?: any) => {
-    onAddBlock(type, settings, parentIdForNewBlock);
+    // For Quantifier and Lookaround from wizard, use their default settings from BLOCK_CONFIGS
+    let blockSettings = settings;
+    if (!settings && (type === BlockType.QUANTIFIER || type === BlockType.LOOKAROUND)) {
+        blockSettings = BLOCK_CONFIGS[type]?.defaultSettings;
+    }
+    onAddBlock(type, blockSettings, parentIdForNewBlock);
     onToggle();
     setSearchTerm('');
   };
@@ -117,6 +124,8 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
   };
 
   const handleAddAiSuggestion = (suggestion: string) => {
+    // AI suggestions are typically raw regex strings, so parse them as literals or specific types if possible.
+    // For simplicity, adding as a literal for now. Could be enhanced.
     onAddBlock(BlockType.LITERAL, { text: suggestion }, parentIdForNewBlock);
     onToggle();
     setSearchTerm('');
@@ -239,25 +248,9 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
                      {typeof config.icon === 'string' ? <span className="font-mono text-xs">{config.icon}</span> : config.icon}
                   </span>
                   <span className="font-medium text-sm">{config.name}</span>
+                   {type === BlockType.QUANTIFIER && <span className="text-xs text-muted-foreground ml-1">(применяется к предыдущему)</span>}
                 </Button>
               ))}
-              
-              {/* Кнопка для добавления Квантификатора, если пользователь ищет его или хочет найти в "продвинутом" списке */}
-              {showFilteredBlocks && BLOCK_CONFIGS[BlockType.QUANTIFIER].name.toLowerCase().includes(searchTerm.toLowerCase()) && (
-                 <Button
-                    key={BlockType.QUANTIFIER}
-                    variant="ghost"
-                    onClick={() => handleAddPredefinedBlock(BlockType.QUANTIFIER)}
-                    className="w-full justify-start h-auto py-2 px-3 text-left"
-                  >
-                    <span className={cn("p-1.5 rounded-sm mr-2 flex items-center justify-center h-7 w-7", "bg-primary/10 text-primary")}>
-                       {BLOCK_CONFIGS[BlockType.QUANTIFIER].icon}
-                    </span>
-                    <span className="font-medium text-sm">{BLOCK_CONFIGS[BlockType.QUANTIFIER].name} (добавляется после элемента)</span>
-                </Button>
-              )}
-
-
             </div>
           </ScrollArea>
         </CardContent>
