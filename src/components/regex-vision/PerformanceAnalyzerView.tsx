@@ -150,3 +150,5 @@ const PerformanceAnalyzerView: React.FC<PerformanceAnalyzerViewProps> = ({ regex
 };
 
 export default PerformanceAnalyzerView;
+
+    
