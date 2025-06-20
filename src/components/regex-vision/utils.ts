@@ -40,6 +40,21 @@ export const createBackreference = (ref: string | number): Block => ({
   id: generateId(), type: BlockType.BACKREFERENCE, settings: { ref } as BackreferenceSettings, children: [], isExpanded: false
 });
 
+export const cloneBlockForState = (block: Block): Block => {
+  const newBlock: Block = {
+    ...block,
+    id: generateId(),
+    settings: { ...block.settings },
+    children: block.children ? block.children.map(child => cloneBlockForState(child)) : [],
+    isExpanded: block.isExpanded,
+  };
+  // Ensure container blocks have a children array
+  if ([BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(newBlock.type)) {
+      newBlock.children = newBlock.children || [];
+  }
+  return newBlock;
+};
+
 export const generateBlocksForEmail = (forExtraction: boolean = false): Block[] => {
     const localPartChars = '[a-zA-Z0-9_!#$%&\'*+/=?`{|}~^.-]+'; 
     const domainChars = '[a-zA-Z0-9.-]+'; 

@@ -1,11 +1,12 @@
+
 "use client";
 import React, { useState, useEffect, useCallback } from 'react';
-import type { Block, RegexMatch, GroupInfo, SavedPattern, NaturalLanguageRegexOutput } from './types'; 
+import type { Block, RegexMatch, GroupInfo, SavedPattern } from './types'; 
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks } from './utils'; 
+import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks, cloneBlockForState } from './utils'; 
 import { useToast } from '@/hooks/use-toast';
-import { generateRegexFromNaturalLanguage } from '@/ai/flows/natural-language-regex-flow';
+import { generateRegexFromNaturalLanguage, type NaturalLanguageRegexOutput } from '@/ai/flows/natural-language-regex-flow';
 
 import AppHeader from './AppHeader';
 import BlockNode from './BlockNode';
@@ -23,35 +24,9 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Sparkles, Gauge, Library } from 'lucide-react'; 
+import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Sparkles, Gauge, Library, Lightbulb, Combine } from 'lucide-react'; 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { cn } from '@/lib/utils';
-
-const deepCloneBlock = (block: Block): Block => {
-  const newBlock: Block = {
-    ...block,
-    id: generateId(),
-    settings: { ...block.settings },
-    children: block.children ? block.children.map(child => deepCloneBlock(child)) : [],
-    isExpanded: block.isExpanded,
-  };
-  if ([BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(newBlock.type)) {
-      newBlock.children = newBlock.children || [];
-  }
-  return newBlock;
-};
-
-const cloneBlockForState = (block: Block): Block => {
-  const newBlock: Block = {
-    ...block,
-    settings: { ...block.settings },
-    children: block.children ? block.children.map(child => cloneBlockForState(child)) : [],
-  };
-  if ([BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(newBlock.type)) {
-      newBlock.children = newBlock.children || [];
-  }
-  return newBlock;
-}
 
 
 const duplicateAndInsertBlockRecursive = (currentBlocks: Block[], targetId: string): { updatedBlocks: Block[], success: boolean, newSelectedId?: string } => {
@@ -59,7 +34,7 @@ const duplicateAndInsertBlockRecursive = (currentBlocks: Block[], targetId: stri
     const block = currentBlocks[i];
     if (block.id === targetId) {
       const originalBlock = block;
-      const newBlock = deepCloneBlock(originalBlock);
+      const newBlock = cloneBlockForState(originalBlock);
       const updatedBlocks = [...currentBlocks];
       updatedBlocks.splice(i + 1, 0, newBlock);
 
@@ -69,7 +44,7 @@ const duplicateAndInsertBlockRecursive = (currentBlocks: Block[], targetId: stri
           // We should also duplicate the quantifier.
           const originalQuantifier = updatedBlocks[i+2]; // original quantifier is now at i+2 because newBlock was inserted at i+1
           if(originalQuantifier && originalQuantifier.type === BlockType.QUANTIFIER) {
-            const newQuantifier = deepCloneBlock(originalQuantifier);
+            const newQuantifier = cloneBlockForState(originalQuantifier);
             updatedBlocks.splice(i + 2, 0, newQuantifier); // insert new quantifier after newBlock
           }
       }
@@ -764,6 +739,43 @@ const RegexVisionWorkspace: React.FC = () => {
     setSelectedBlockId(blockId);
   };
 
+  const handleAutoGroupAlternation = useCallback((alternationId: string) => {
+    const processNodes = (nodes: Block[]): Block[] => {
+      const altIndex = nodes.findIndex(n => n.id === alternationId);
+
+      if (altIndex !== -1) {
+        const alternationBlock = nodes[altIndex];
+        const literalsToMove: Block[] = [];
+        let currentIndex = altIndex + 1;
+        
+        while (currentIndex < nodes.length && nodes[currentIndex].type === BlockType.LITERAL) {
+          literalsToMove.push(nodes[currentIndex]);
+          currentIndex++;
+        }
+
+        if (literalsToMove.length > 0) {
+          alternationBlock.children.push(...literalsToMove.map(cloneBlockForState));
+          alternationBlock.isExpanded = true;
+          nodes.splice(altIndex + 1, literalsToMove.length);
+          toast({ title: "Блоки объединены!", description: `Добавлено ${literalsToMove.length} вариант(а).` });
+        }
+        return nodes;
+      } else {
+        return nodes.map(node => {
+          if (node.children) {
+            return { ...node, children: processNodes(node.children) };
+          }
+          return node;
+        });
+      }
+    };
+
+    setBlocks(prevBlocks => {
+      const blocksCopy = prevBlocks.map(b => cloneBlockForState(b));
+      return processNodes(blocksCopy);
+    });
+  }, [toast]);
+
 
   const headerHeight = "60px";
 
@@ -798,6 +810,36 @@ const RegexVisionWorkspace: React.FC = () => {
             groupInfos={groupInfos}
           />
         );
+
+        // Suggestion logic for empty alternation
+        const isPotentiallyEmptyAlt = block.type === BlockType.ALTERNATION && (!block.children || block.children.length === 0);
+        if (isPotentiallyEmptyAlt) {
+            let subsequentLiteralsCount = 0;
+            let j = i + 1;
+            while (j < nodes.length && nodes[j].type === BlockType.LITERAL) {
+                subsequentLiteralsCount++;
+                j++;
+            }
+
+            if (subsequentLiteralsCount > 0) {
+                nodeList.push(
+                    <Card key={`${block.id}-suggestion`} className="my-2 p-3 border-amber-500/50 bg-amber-500/10">
+                        <div className="flex items-center gap-3">
+                            <Lightbulb className="h-6 w-6 text-amber-600 shrink-0" />
+                            <div className="flex-1">
+                                <h4 className="font-semibold text-sm">Объединить следующие {subsequentLiteralsCount} блок(а)?</h4>
+                                <p className="text-xs text-muted-foreground">Похоже, вы хотите создать выбор 'ИЛИ'.</p>
+                            </div>
+                            <Button size="sm" variant="outline" className="bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30" onClick={() => handleAutoGroupAlternation(block.id)}>
+                                <Combine size={16} className="mr-2"/>
+                                Объединить
+                            </Button>
+                        </div>
+                    </Card>
+                );
+            }
+        }
+
 
         if (quantifierToRender) {
             i++; 
