@@ -664,35 +664,42 @@ const RegexVisionWorkspace: React.FC = () => {
   const handleApplySavedPattern = async (pattern: SavedPattern) => {
     setRegexFlags(pattern.flags);
     setTestText(pattern.testString || '');
-    setSelectedBlockId(null);
+    setSelectedBlockId(null); // Deselect any block before applying new ones
+    setHoveredBlockId(null); // Clear hover state
 
     try {
       const aiResult: NaturalLanguageRegexOutput = await generateRegexFromNaturalLanguage({ query: pattern.regexString });
       if (aiResult.parsedBlocks && aiResult.parsedBlocks.length > 0) {
         const parsedBlocksFromAI = processAiBlocks(aiResult.parsedBlocks);
         setBlocks(parsedBlocksFromAI);
-        const { regexString: newRegex, groupInfos } = generateRegexStringAndGroupInfo(parsedBlocksFromAI);
-        setRegexOutput({ regexString: newRegex, groupInfos });
+        // No need to call setRegexOutput here, useEffect for blocks will handle it
         toast({ title: "Паттерн применен и разобран!", description: `"${pattern.name}" загружен и преобразован в блоки.` });
       } else {
         const fallbackBlock = createLiteral(pattern.regexString, false); 
         setBlocks([fallbackBlock]);
-        const { regexString: newRegex, groupInfos } = generateRegexStringAndGroupInfo([fallbackBlock]);
-        setRegexOutput({ regexString: newRegex, groupInfos });
         toast({ title: "Паттерн применен (как литерал)", description: `"${pattern.name}" загружен. AI не смог разобрать его на блоки.` });
       }
     } catch (error) {
       console.error("Error parsing pattern with AI:", error);
       const fallbackBlock = createLiteral(pattern.regexString, false);
       setBlocks([fallbackBlock]);
-      const { regexString: newRegex, groupInfos } = generateRegexStringAndGroupInfo([fallbackBlock]);
-      setRegexOutput({ regexString: newRegex, groupInfos });
       toast({ title: "Паттерн применен (ошибка AI)", description: `"${pattern.name}" загружен. Произошла ошибка при попытке разбора AI.`, variant: "destructive" });
     }
   };
 
   const handleBlockHover = (blockId: string | null) => {
     setHoveredBlockId(blockId);
+  };
+
+  const handleHoverBlockInOutput = (blockId: string | null) => {
+    setHoveredBlockId(blockId);
+  };
+
+  const handleSelectBlockInOutput = (blockId: string) => {
+    setSelectedBlockId(blockId);
+    // Optional: Scroll the selected block in the tree into view
+    // const element = document.getElementById(blockId); // Assuming BlockNode has an ID attribute on its root
+    // if (element) element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
 
 
@@ -728,7 +735,7 @@ const RegexVisionWorkspace: React.FC = () => {
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="p-3 flex-1 min-h-0"> {/* Added min-h-0 for flex child */}
+                <CardContent className="p-3 flex-1 min-h-0">
                   <ScrollArea className="h-full pr-2">
                     {blocks.length === 0 ? (
                       <div className="text-center text-muted-foreground py-10 flex flex-col items-center justify-center h-full">
@@ -788,6 +795,9 @@ const RegexVisionWorkspace: React.FC = () => {
                     regexFlags={regexFlags} 
                     onFlagsChange={setRegexFlags}
                     selectedBlockId={selectedBlockId} 
+                    hoveredBlockId={hoveredBlockId}
+                    onHoverBlockInOutput={handleHoverBlockInOutput}
+                    onSelectBlockInOutput={handleSelectBlockInOutput}
                 />
               </div>
               <Tabs defaultValue="testing" className="flex-1 flex flex-col min-h-0">
@@ -804,9 +814,6 @@ const RegexVisionWorkspace: React.FC = () => {
                     onTestTextChange={setTestText}
                     matches={matches}
                     generatedRegex={regexOutput.regexString}
-                    groupInfos={regexOutput.groupInfos}
-                    onGroupSelect={(blockId) => setSelectedBlockId(blockId)}
-                    highlightedGroupDetails={highlightedGroupInTestArea}
                   />
                 </TabsContent>
                 <TabsContent value="codegen" className="mt-2 flex-1 overflow-y-auto p-0.5">

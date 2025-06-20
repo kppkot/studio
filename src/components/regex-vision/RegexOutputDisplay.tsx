@@ -1,3 +1,4 @@
+
 "use client";
 import React from 'react';
 import { Input } from '@/components/ui/input';
@@ -15,9 +16,21 @@ interface RegexOutputDisplayProps {
   onFlagsChange: (flags: string) => void;
   generatedRegex: string;
   selectedBlockId: string | null;
+  hoveredBlockId: string | null; // New prop for hover state
+  onHoverBlockInOutput: (blockId: string | null) => void; // New callback
+  onSelectBlockInOutput: (blockId: string) => void; // New callback
 }
 
-const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({ blocks, regexFlags, onFlagsChange, generatedRegex, selectedBlockId }) => {
+const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
+  blocks,
+  regexFlags,
+  onFlagsChange,
+  generatedRegex,
+  selectedBlockId,
+  hoveredBlockId,
+  onHoverBlockInOutput,
+  onSelectBlockInOutput,
+}) => {
   const { toast } = useToast();
 
   const handleCopyRegex = () => {
@@ -31,31 +44,58 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({ blocks, regexFl
       });
   };
 
-  const renderBlockWithStructure = React.useCallback((block: Block, keyPrefix: string, currentSelectedBlockId: string | null): React.ReactNode => {
+  const renderBlockWithStructure = React.useCallback((
+    block: Block,
+    keyPrefix: string,
+    currentSelectedBlockId: string | null,
+    currentHoveredBlockId: string | null
+  ): React.ReactNode => {
     const settings = block.settings;
     const isSelected = block.id === currentSelectedBlockId;
-    const selectedHighlightClass = "ring-2 ring-primary ring-offset-1 dark:ring-offset-background rounded-sm";
+    const isHovered = block.id === currentHoveredBlockId;
+
+    const selectedHighlightClass = "bg-primary text-primary-foreground p-0.5 rounded-sm font-semibold shadow-md";
+    const hoverHighlightClass = "bg-accent/70 text-accent-foreground p-0.5 rounded-sm shadow-sm";
+    const interactiveCursorClass = "cursor-pointer";
+
+    const attachEvents = (children: React.ReactNode) => (
+      <span
+        onMouseEnter={() => onHoverBlockInOutput(block.id)}
+        onMouseLeave={() => onHoverBlockInOutput(null)}
+        onClick={(e) => { e.stopPropagation(); onSelectBlockInOutput(block.id); }}
+        className={cn(
+          interactiveCursorClass,
+          isSelected && selectedHighlightClass,
+          isHovered && !isSelected && hoverHighlightClass
+        )}
+      >
+        {children}
+      </span>
+    );
 
     const renderChildren = (children: Block[] | undefined, childKeyPrefix: string): React.ReactNode[] => {
       if (!children) return [];
-      return children.map((child, idx) => renderBlockWithStructure(child, `${childKeyPrefix}-child-${idx}`, currentSelectedBlockId));
+      return children.map((child, idx) => renderBlockWithStructure(child, `${childKeyPrefix}-child-${idx}`, currentSelectedBlockId, currentHoveredBlockId));
     };
 
     let contentNode: React.ReactNode;
+    let rawContent: React.ReactNode;
 
     switch (block.type) {
       case BlockType.LITERAL:
-        contentNode = <span className={cn("text-green-700 dark:text-green-400", isSelected && selectedHighlightClass)}>{(settings as LiteralSettings).text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') || ''}</span>;
+        rawContent = <span className={cn("text-green-700 dark:text-green-400")}>{(settings as LiteralSettings).text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') || ''}</span>;
+        contentNode = attachEvents(rawContent);
         break;
       
       case BlockType.CHARACTER_CLASS:
         const ccSettings = settings as CharacterClassSettings;
         const escapedPattern = ccSettings.pattern.replace(/[\]\\]/g, '\\$&');
-        contentNode = (
-          <span className={cn("bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 px-0.5 rounded-sm mx-px", isSelected && selectedHighlightClass)}>
+        rawContent = (
+          <span className={cn("bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 px-0.5 rounded-sm mx-px")}>
             [{ccSettings.negated && <span className="text-red-500 dark:text-red-400">^</span>}{escapedPattern || ''}]
           </span>
         );
+        contentNode = attachEvents(rawContent);
         break;
       
       case BlockType.QUANTIFIER:
@@ -74,7 +114,8 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({ blocks, regexFl
         } else {
           qText = baseQuantifier;
         }
-        contentNode = <span className={cn("text-orange-600 dark:text-orange-400", isSelected && selectedHighlightClass)}>{qText + modeModifier}</span>;
+        rawContent = <span className={cn("text-orange-600 dark:text-orange-400")}>{qText + modeModifier}</span>;
+        contentNode = attachEvents(rawContent);
         break;
       
       case BlockType.GROUP:
@@ -82,17 +123,19 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({ blocks, regexFl
         let groupOpen = "(";
         if (gSettings.type === 'non-capturing') groupOpen = "(?:";
         if (gSettings.type === 'named' && gSettings.name) groupOpen = `(?<${gSettings.name}>`;
-        contentNode = (
-          <span className={cn("bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-0.5 rounded-sm mx-px", isSelected && selectedHighlightClass)}>
+        rawContent = (
+          <span className={cn("bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-0.5 rounded-sm mx-px")}>
             {groupOpen}
             {renderChildren(block.children, `${keyPrefix}-grpchildren`)}
             )
           </span>
         );
+        contentNode = attachEvents(rawContent);
         break;
       
       case BlockType.ANCHOR:
-        contentNode = <span className={cn("text-red-600 dark:text-red-400", isSelected && selectedHighlightClass)}>{(settings as AnchorSettings).type || '^'}</span>;
+        rawContent = <span className={cn("text-red-600 dark:text-red-400")}>{(settings as AnchorSettings).type || '^'}</span>;
+        contentNode = attachEvents(rawContent);
         break;
       
       case BlockType.ALTERNATION:
@@ -101,13 +144,15 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({ blocks, regexFl
             break;
         }
         const alternatedNodes = renderChildren(block.children, `${keyPrefix}-altchildren`);
-        contentNode = (
-          <span className={cn(isSelected && selectedHighlightClass)}>
+        rawContent = (
+          <>
             {alternatedNodes.reduce((acc, curr, currIdx) => {
               return acc === null ? [curr] : [...(acc as React.ReactNode[]), <span key={`${keyPrefix}-alt-sep-${currIdx}`} className="text-pink-600 dark:text-pink-400 font-bold mx-0.5">|</span>, curr];
             }, null as React.ReactNode[] | null)}
-          </span>
+          </>
         );
+        // Alternation block itself is made interactive. Its children are already interactive from their own render.
+        contentNode = attachEvents(rawContent);
         break;
       
       case BlockType.LOOKAROUND:
@@ -118,18 +163,20 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({ blocks, regexFl
           'positive-lookbehind': "(?<=",
           'negative-lookbehind': "(?<!"
         };
-        contentNode = (
-          <span className={cn("bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 px-0.5 rounded-sm mx-px", isSelected && selectedHighlightClass)}>
+        rawContent = (
+          <span className={cn("bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 px-0.5 rounded-sm mx-px")}>
             {lookaroundMap[lSettings.type]}
             {renderChildren(block.children, `${keyPrefix}-lookchildren`)}
             )
           </span>
         );
+        contentNode = attachEvents(rawContent);
         break;
       
       case BlockType.BACKREFERENCE:
         const brSettings = settings as BackreferenceSettings;
-        contentNode = <span className={cn("text-cyan-600 dark:text-cyan-400", isSelected && selectedHighlightClass)}>\\{brSettings.ref}</span>;
+        rawContent = <span className={cn("text-cyan-600 dark:text-cyan-400")}>\\{brSettings.ref}</span>;
+        contentNode = attachEvents(rawContent);
         break;
 
       case BlockType.CONDITIONAL:
@@ -139,14 +186,26 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({ blocks, regexFl
           conditionalStr += `|${condSettings.noPattern}`;
         }
         conditionalStr += `)`;
-        contentNode = <span className={cn("text-indigo-600 dark:text-indigo-400", isSelected && selectedHighlightClass)}>{conditionalStr}</span>;
+        rawContent = <span className={cn("text-indigo-600 dark:text-indigo-400")}>{conditionalStr}</span>;
+        contentNode = attachEvents(rawContent);
         break;
 
       default:
-        contentNode = <>{renderChildren(block.children, `${keyPrefix}-defchildren`)}</>;
+        // For blocks that are just containers without their own visual regex part (should be rare for direct rendering)
+        // If they have children, those children are rendered and become interactive.
+        // If no children, it's effectively an empty, non-interactive fragment.
+        const defaultChildren = renderChildren(block.children, `${keyPrefix}-defchildren`);
+        if (defaultChildren.length > 0) {
+             contentNode = <>{defaultChildren}</>; // Let children handle their interactivity
+        } else {
+            // If a block type has no direct representation and no children, it won't be visible or interactive here.
+            // This case should be minimal. We can attach events to an empty span if necessary for selection.
+            contentNode = attachEvents(<span className="opacity-50">({block.type})</span>);
+        }
+        break;
     }
     return <React.Fragment key={`${keyPrefix}-${block.id}`}>{contentNode}</React.Fragment>;
-  }, []);
+  }, [onHoverBlockInOutput, onSelectBlockInOutput]);
   
   return (
     <div className="space-y-2">
@@ -155,7 +214,7 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({ blocks, regexFl
         <div className="flex-1 p-2.5 bg-muted rounded-lg font-mono text-sm min-h-[2.5rem] flex items-center overflow-x-auto flex-wrap leading-relaxed">
           <span className="text-muted-foreground">/</span>
           {blocks.length > 0 
-            ? blocks.map((block, index) => renderBlockWithStructure(block, `structured-${block.id}-${index}`, selectedBlockId))
+            ? blocks.map((block, index) => renderBlockWithStructure(block, `structured-${block.id}-${index}`, selectedBlockId, hoveredBlockId))
             : <span className="italic text-muted-foreground">Добавьте блоки для построения выражения</span>
           }
           <span className="text-muted-foreground">/</span>
