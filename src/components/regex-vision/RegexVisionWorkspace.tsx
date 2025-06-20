@@ -258,7 +258,7 @@ const RegexVisionWorkspace: React.FC = () => {
   }, [toast, blocks, selectedBlockId]);
 
 
-  const handleAddBlocksFromWizard = useCallback((newBlocks: Block[], parentIdFromWizard?: string | null) => {
+  const handleAddBlocksFromWizard = useCallback((newBlocks: Block[], parentIdFromWizard?: string | null, exampleTestText?: string) => {
     if (newBlocks.length === 0) return;
 
     let targetParentId = parentIdFromWizard;
@@ -288,6 +288,10 @@ const RegexVisionWorkspace: React.FC = () => {
       });
     } else {
       setBlocks(prev => [...prev, ...newBlocks]);
+    }
+
+    if (exampleTestText) {
+      setTestText(exampleTestText);
     }
 
     setSelectedBlockId(newBlocks[newBlocks.length - 1].id);
@@ -680,6 +684,9 @@ const RegexVisionWorkspace: React.FC = () => {
         setBlocks([fallbackBlock]);
         toast({ title: "Паттерн применен (как литерал)", description: `"${pattern.name}" загружен. AI не смог разобрать его на блоки.` });
       }
+      if (aiResult.exampleTestText) { // Apply example text from AI if available
+          setTestText(aiResult.exampleTestText);
+      }
     } catch (error) {
       console.error("Error parsing pattern with AI:", error);
       const fallbackBlock = createLiteral(pattern.regexString, false);
@@ -849,8 +856,8 @@ const RegexVisionWorkspace: React.FC = () => {
             setIsWizardModalOpen(false);
             setParentIdForNewBlock(null);
           }}
-          onComplete={(wizardBlocks) => {
-            handleAddBlocksFromWizard(wizardBlocks, parentIdForNewBlock);
+          onComplete={(wizardBlocks, parentId, exampleText) => { // Updated to accept exampleText
+            handleAddBlocksFromWizard(wizardBlocks, parentId, exampleText); // Pass exampleText
             setIsWizardModalOpen(false);
             setParentIdForNewBlock(null);
           }}

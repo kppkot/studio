@@ -17,7 +17,7 @@ const NaturalLanguageRegexInputSchema = z.object({
 });
 export type NaturalLanguageRegexInput = z.infer<typeof NaturalLanguageRegexInputSchema>;
 
-const BlockSchema: z.ZodTypeAny = z.lazy(() => // Используем z.lazy для рекурсивных схем
+const BlockSchema: z.ZodTypeAny = z.lazy(() =>
   z.object({
     type: z.string().describe('The type of the block (e.g., "LITERAL", "CHARACTER_CLASS", "GROUP", "QUANTIFIER", "ANCHOR", "ALTERNATION", "LOOKAROUND", "BACKREFERENCE", "CONDITIONAL").'),
     settings: z.any().describe('An object containing settings specific to the block type. Examples: LITERAL: {"text": "abc"}, CHARACTER_CLASS: {"pattern": "[a-z]", "negated": false}, QUANTIFIER: {"type": "*", "mode": "greedy"}, GROUP: {"type": "capturing", "name": "myGroup"}.'),
@@ -29,6 +29,7 @@ const NaturalLanguageRegexOutputSchema = z.object({
   regex: z.string().describe('The generated regular expression string.'),
   explanation: z.string().describe('A concise explanation of how the generated regex works.'),
   parsedBlocks: z.array(BlockSchema).optional().describe('An array of block objects representing the parsed regex structure. If parsing is not possible, this can be empty or omitted.'),
+  exampleTestText: z.string().optional().describe('An example text string that would match the generated regex or be relevant for testing it.'),
 });
 export type NaturalLanguageRegexOutput = z.infer<typeof NaturalLanguageRegexOutputSchema>;
 
@@ -42,6 +43,7 @@ const prompt = ai.definePrompt({
   output: {schema: NaturalLanguageRegexOutputSchema},
   prompt: `You are an expert Regex assistant. Based on the user's natural language query, generate an optimal and correct regular expression.
 Provide the regex string itself, a concise explanation of how it works, and if possible, a structured representation of the regex as an array of 'parsedBlocks'.
+Additionally, provide an 'exampleTestText' field containing a short, relevant example string that would be suitable for testing the generated regex. This text should ideally contain at least one match for the regex, but also some non-matching parts if appropriate for context.
 
 User Query: {{{query}}}
 
@@ -63,7 +65,8 @@ Example for "abc\\d+":
   { "type": "LITERAL", "settings": { "text": "abc" } },
   { "type": "CHARACTER_CLASS", "settings": { "pattern": "\\\\d", "negated": false } },
   { "type": "QUANTIFIER", "settings": { "type": "+", "mode": "greedy" } }
-]
+],
+"exampleTestText": "Some text abc123 and more text."
 
 Example for "(cat|dog)":
 "parsedBlocks": [
@@ -81,11 +84,12 @@ Example for "(cat|dog)":
       }
     ]
  }
-]
+],
+"exampleTestText": "My pet is a cat."
 
-Ensure the output is in the specified JSON format with "regex", "explanation", and optionally "parsedBlocks" fields.
-If the query is too vague or cannot be reasonably translated into a regex, or if parsing into blocks is too complex, please indicate that in the explanation, provide an empty or generic regex (like ".*"), and omit 'parsedBlocks' or provide an empty array for it.
-Always try to provide the "regex" string and "explanation".
+Ensure the output is in the specified JSON format with "regex", "explanation", "exampleTestText", and optionally "parsedBlocks" fields.
+If the query is too vague or cannot be reasonably translated into a regex, or if parsing into blocks is too complex, please indicate that in the explanation, provide an empty or generic regex (like ".*"), an empty or generic 'exampleTestText', and omit 'parsedBlocks' or provide an empty array for it.
+Always try to provide the "regex", "explanation", and "exampleTestText".
 `,
   config: {
     safetySettings: [
@@ -109,14 +113,18 @@ const naturalLanguageRegexFlow = ai.defineFlow(
         return {
             regex: ".*",
             explanation: "AI could not generate a specific regex for this query. Please try rephrasing or being more specific.",
-            parsedBlocks: []
+            parsedBlocks: [],
+            exampleTestText: "Some example text to test with."
         };
     }
     // Ensure parsedBlocks is at least an empty array if missing
+    // Ensure exampleTestText has a default if missing
     return {
         ...output,
-        parsedBlocks: output.parsedBlocks || []
+        parsedBlocks: output.parsedBlocks || [],
+        exampleTestText: output.exampleTestText || "Example text was not provided by AI."
     };
   }
 );
 
+    

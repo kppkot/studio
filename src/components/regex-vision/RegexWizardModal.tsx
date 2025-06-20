@@ -4,7 +4,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import type { Block, QuantifierSettings, CharacterClassSettings, GroupSettings, LiteralSettings, AnchorSettings, BackreferenceSettings, LookaroundSettings } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants'; 
-import { generateRegexFromNaturalLanguage, NaturalLanguageRegexOutput } from '@/ai/flows/natural-language-regex-flow';
+import { generateRegexFromNaturalLanguage, type NaturalLanguageRegexOutput } from '@/ai/flows/natural-language-regex-flow'; // Ensure type is imported
 import { useToast } from "@/hooks/use-toast";
 
 import {
@@ -33,7 +33,7 @@ import { generateId, createAnchor, createLiteral, createCharClass, createQuantif
 interface RegexWizardModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onComplete: (blocks: Block[], parentId?: string | null) => void;
+  onComplete: (blocks: Block[], parentId?: string | null, exampleTestText?: string) => void; // Added exampleTestText
   initialParentId: string | null;
 }
 
@@ -235,6 +235,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   const [formData, setFormData] = useState<WizardFormData>({mainCategory: 'ai_assisted'}); // Pre-select AI category
   const [generatedBlocks, setGeneratedBlocks] = useState<Block[]>([]);
   const [aiExplanation, setAiExplanation] = useState<string | null>(null);
+  const [aiExampleTestText, setAiExampleTestText] = useState<string | null>(null); // New state for AI example text
   const [replacementString, setReplacementString] = useState<string | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const { toast } = useToast();
@@ -245,6 +246,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         setFormData({mainCategory: 'ai_assisted'}); // Ensure AI is pre-selected
         setGeneratedBlocks([]);
         setAiExplanation(null);
+        setAiExampleTestText(null);
         setReplacementString(null);
         setIsLoadingAI(false);
     }
@@ -393,10 +395,11 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     setReplacementString(null);
     setGeneratedBlocks([]);
     setAiExplanation(null);
+    setAiExampleTestText(null); // Clear previous AI example text
 
     if (currentStepId === 'final_preview') {
         if (generatedBlocks.length > 0 || (formData.mainCategory === 'replacement' && replacementString)) {
-          onComplete(generatedBlocks, initialParentId);
+          onComplete(generatedBlocks, initialParentId, aiExampleTestText || undefined); // Pass AI example text
         }
         return;
     }
@@ -431,11 +434,13 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                 });
             }
             setAiExplanation(aiResult.explanation || "Объяснение не предоставлено.");
+            setAiExampleTestText(aiResult.exampleTestText || null); // Store AI example text
 
         } catch (error) {
             console.error("AI Regex Generation Error:", error);
             setGeneratedBlocks([createLiteral("Ошибка AI :(", false)]);
             setAiExplanation("Произошла ошибка при обращении к AI сервису.");
+            setAiExampleTestText("Не удалось загрузить пример текста от AI.");
             toast({
                 title: "Ошибка AI",
                 description: "Не удалось связаться с AI сервисом.",
@@ -473,6 +478,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     let prevStep: WizardStepId | null = null;
     setGeneratedBlocks([]);
     setAiExplanation(null);
+    setAiExampleTestText(null);
     setReplacementString(null);
     setIsLoadingAI(false);
 
@@ -517,6 +523,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     setFormData({mainCategory: 'ai_assisted'});
     setGeneratedBlocks([]);
     setAiExplanation(null);
+    setAiExampleTestText(null);
     setReplacementString(null);
     setIsLoadingAI(false);
     onClose();
@@ -799,6 +806,14 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                                     </Card>
                                 </div>
                             )}
+                             {aiExampleTestText && formData.mainCategory === 'ai_assisted' && (
+                                <div className="mt-3">
+                                    <Label className="text-sm font-medium">Пример текста от AI:</Label>
+                                    <Card className="p-3 bg-muted/30 text-xs max-h-20 overflow-y-auto">
+                                        <p className="whitespace-pre-wrap">{aiExampleTestText}</p>
+                                    </Card>
+                                </div>
+                            )}
                             {replacementString && (
                                 <div className="mt-2">
                                     <Label className="text-sm font-medium">Рекомендуемая строка для замены:</Label>
@@ -843,3 +858,5 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 };
 
 export default RegexWizardModal;
+
+    
