@@ -165,7 +165,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   const { title: descriptiveTitle, details: descriptiveDetails } = getDescriptiveBlockTitle(block, config);
   let quantifierTitle = "";
   let quantifierDetails = "";
-  let quantifierIcon: React.ReactNode = <Asterisk size={14}/>; // Default icon for quantifier
+  let quantifierIcon: React.ReactNode = <Asterisk size={14}/>;
 
   if (quantifierToRender) {
     const qConfig = BLOCK_CONFIGS[quantifierToRender.type];
@@ -198,7 +198,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     setIsInternallyHovered(true);
     if (onBlockHover) { 
       onBlockHover(block.id);
-      if (quantifierToRender) { // Hover main block also hovers its attached quantifier for combined effect
+      if (quantifierToRender) {
         onBlockHover(quantifierToRender.id);
       }
     }
@@ -215,8 +215,6 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
     e.stopPropagation();
-    // For now, drag-and-drop of combined block+quantifier is complex.
-    // We'll just drag the main block. The parent will need to handle moving the quantifier too.
     e.dataTransfer.setData('text/plain', block.id);
     e.dataTransfer.effectAllowed = 'move';
   };
@@ -260,32 +258,30 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     document.body.removeAttribute('data-drag-target-role');
   };
 
-  const cardMarginLeft = '0px'; // Wrapper div in RegexVisionWorkspace handles depth indentation
+  const cardMarginLeft = '0px';
 
   return (
     <div
-      draggable // Draggable is on the outer div that might contain block + quantifier
+      draggable
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className={cn(
-        "mb-0.5 transition-all relative group/blocknode", // Use group for opacity on hover for action buttons
-        // Apply selection outline to the whole visual unit (block + its quantifier)
+        "mb-0.5 transition-all relative group/blocknode",
         isSelected && "outline-primary outline-2 outline-dashed outline-offset-2 rounded-md",
-        isDraggingOver && !showAsParentDropTarget && "bg-accent/20 border-accent", // Visual feedback for dragging over
-        showAsParentDropTarget && "bg-green-100 dark:bg-green-800/30 border-green-500 ring-1 ring-green-500", // For parent drop target
+        isDraggingOver && !showAsParentDropTarget && "bg-accent/20 border-accent",
+        showAsParentDropTarget && "bg-green-100 dark:bg-green-800/30 border-green-500 ring-1 ring-green-500",
       )}
       style={{ marginLeft: cardMarginLeft }}
-      onMouseEnter={handleMouseEnter} // Hovering the whole unit
+      onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Main Block Card */}
       <Card 
         className={cn("shadow-sm hover:shadow-md", selectedId === block.id && "border-primary ring-2 ring-primary bg-primary/5")}
         onClick={(e) => handleSelectBlock(e, block.id)}
-        onMouseEnter={(e) => handleHoverBlock(e, block.id)} // Hover specific part
-        onMouseLeave={(e) => handleHoverBlock(e, null)}  // Clear hover when leaving specific part
+        onMouseEnter={(e) => handleHoverBlock(e, block.id)}
+        onMouseLeave={(e) => handleHoverBlock(e, null)}
       >
         <CardContent className="p-2">
           <div className="flex items-center gap-2">
@@ -296,13 +292,13 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                 {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
               </Button>
             )}
-            {!canHaveChildren && <div className="w-7 h-7 flex-shrink-0" /> /* Placeholder for alignment */}
+            {!canHaveChildren && <div className="w-7 h-7 flex-shrink-0" />}
 
 
             <div className="flex items-center gap-1.5 flex-1 min-w-0">
               <span className={cn(
                   "text-primary p-1 bg-primary/10 rounded-sm flex items-center justify-center h-7 w-7 flex-shrink-0",
-                  selectedId === block.id && "ring-1 ring-primary" // Highlight icon if main block selected
+                  selectedId === block.id && "ring-1 ring-primary"
                 )}>
                 {typeof config.icon === 'string' ? <span className="font-mono text-xs">{config.icon}</span> : config.icon}
               </span>
@@ -314,7 +310,6 @@ const BlockNode: React.FC<BlockNodeProps> = ({
               )}
             </div>
 
-            {/* Action buttons: only show on hover of the main card or if selected */}
             <div className={cn("flex items-center gap-0.5 transition-opacity flex-shrink-0", (isInternallyHovered && selectedId !== quantifierToRender?.id) || selectedId === block.id ? "opacity-100" : "opacity-0 focus-within:opacity-100 group-hover/blocknode:opacity-100")}>
               {canHaveChildren && (
                    <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onAddChild(block.id);}} title="Добавить дочерний элемент">
@@ -340,20 +335,19 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         </CardContent>
       </Card>
       
-      {/* Attached Quantifier Card */}
       {quantifierToRender && (
          <Card 
             className={cn(
-                "ml-8 my-0.5 shadow-sm hover:shadow-md border-l-4 border-orange-400 dark:border-orange-600", // Style to indicate attachment
-                selectedId === quantifierToRender.id && "border-primary ring-2 ring-primary bg-primary/5" // Highlight if quantifier selected
+                "ml-8 my-0.5 shadow-sm hover:shadow-md border-l-4 border-orange-400 dark:border-orange-600",
+                selectedId === quantifierToRender.id && "border-primary ring-2 ring-primary bg-primary/5"
             )}
             onClick={(e) => handleSelectBlock(e, quantifierToRender.id)}
-            onMouseEnter={(e) => handleHoverBlock(e, quantifierToRender.id)} // Hover specific part
-            onMouseLeave={(e) => handleHoverBlock(e, null)}  // Clear hover
+            onMouseEnter={(e) => handleHoverBlock(e, quantifierToRender.id)}
+            onMouseLeave={(e) => handleHoverBlock(e, null)}
           >
-            <CardContent className="p-1.5 pl-2"> {/* Reduced padding for compact look */}
+            <CardContent className="p-1.5 pl-2">
                  <div className="flex items-center gap-2">
-                    <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab flex-shrink-0 opacity-50" /> {/* Less prominent grip */}
+                    <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab flex-shrink-0 opacity-50" />
                     <span className={cn("text-orange-600 p-0.5 bg-orange-500/10 rounded-sm flex items-center justify-center h-6 w-6 flex-shrink-0", selectedId === quantifierToRender.id && "ring-1 ring-orange-500")}>
                         {quantifierIcon}
                     </span>
@@ -365,8 +359,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                             {quantifierDetails}
                         </span>
                     )}
-                    <div className="flex-grow"></div> {/* Pushes delete button to the right */}
-                    {/* Action buttons for quantifier: only show on hover of quantifier card or if selected */}
+                    <div className="flex-grow"></div>
                     <div className={cn("flex items-center transition-opacity", (isInternallyHovered && selectedId === quantifierToRender.id) || selectedId === quantifierToRender.id ? "opacity-100" : "opacity-0 focus-within:opacity-100 group-hover/blocknode:opacity-100")}>
                         <Button variant="ghost" size="iconSm" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); onDelete(quantifierToRender.id, false); }} title="Удалить квантификатор">
                             <Trash2 size={12} className="text-destructive/70 hover:text-destructive"/>
@@ -377,9 +370,29 @@ const BlockNode: React.FC<BlockNodeProps> = ({
          </Card>
       )}
 
-      {/* Children Area */}
-      {isCurrentlyExpanded && hasVisibleChildren && (
-        <div className="mt-1 pt-1 pl-3 border-l-2 border-primary/60 bg-primary/10 rounded-r-md ml-14 mr-px pr-2"> {/* Adjusted ml */}
+      {block.type === BlockType.ALTERNATION && isCurrentlyExpanded && hasVisibleChildren && (
+        <div className="mt-1 pt-1 border-l-2 border-primary/60 bg-primary/10 rounded-r-md ml-14 mr-px pr-2">
+          {block.children.map((altChild, index) => (
+            <React.Fragment key={altChild.id}>
+              <div className="py-1"> {/* Added padding around each alternative for spacing */}
+                {renderChildNodes([altChild], block.id, depth + 1)}
+              </div>
+              {index < block.children.length - 1 && (
+                <div className="alternation-separator my-1.5 flex items-center justify-center" aria-hidden="true">
+                  <hr className="flex-grow border-t-0 border-b border-dashed border-primary/40" />
+                  <span className="mx-2 px-1.5 py-0.5 text-xs font-semibold text-primary/80 bg-primary/10 border border-primary/20 rounded-full">
+                    ИЛИ
+                  </span>
+                  <hr className="flex-grow border-t-0 border-b border-dashed border-primary/40" />
+                </div>
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+      )}
+
+      {block.type !== BlockType.ALTERNATION && isCurrentlyExpanded && hasVisibleChildren && (
+        <div className="mt-1 pt-1 pl-3 border-l-2 border-primary/60 bg-primary/10 rounded-r-md ml-14 mr-px pr-2">
           {renderChildNodes(block.children, block.id, depth + 1)}
         </div>
       )}
@@ -388,4 +401,3 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 };
 
 export default BlockNode;
-
