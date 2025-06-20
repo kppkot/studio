@@ -1,3 +1,4 @@
+
 // regex-suggestion.ts
 'use server';
 
@@ -66,6 +67,12 @@ const regexSuggestionFlow = ai.defineFlow(
   },
   async input => {
     const {output} = await prompt(input);
-    return output!;
+    if (!output) {
+      // Handle cases where the AI might not return a valid output
+      // or if there was an error during the prompt execution.
+      return { suggestions: [] };
+    }
+    return output; // Output should conform to RegexSuggestionOutputSchema or be null/undefined
   }
 );
+
