@@ -1,7 +1,7 @@
 
 "use client";
 import React, { useState } from 'react';
-import type { Block, BlockConfig } from './types';
+import type { Block, BlockConfig, LiteralSettings, CharacterClassSettings, QuantifierSettings, GroupSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, ConditionalSettings } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
 import { ChevronDown, ChevronRight, PlusCircle, Trash2, GripVertical, Copy, Ungroup, PackagePlus } from 'lucide-react';
@@ -24,6 +24,104 @@ interface BlockNodeProps {
   level?: number;
   onBlockHover?: (blockId: string | null) => void;
 }
+
+const getDescriptiveBlockTitle = (block: Block, config: BlockConfig): { title: string, details: string } => {
+  const settings = block.settings;
+  let title = config.name;
+  let details = "";
+
+  switch (block.type) {
+    case BlockType.LITERAL:
+      const ls = settings as LiteralSettings;
+      title = `Текст: "${ls.text || '...'}"`;
+      if ((ls.text || '').length > 15) details = `"${ls.text.substring(0, 15)}..."`;
+      else details = `"${ls.text || '...'}"`;
+      break;
+    case BlockType.CHARACTER_CLASS:
+      const cs = settings as CharacterClassSettings;
+      let patternDesc = cs.pattern || '...';
+      if (cs.pattern === '\\d') patternDesc = 'любая цифра';
+      else if (cs.pattern === '\\w') patternDesc = 'любая буква/цифра';
+      else if (cs.pattern === '\\s') patternDesc = 'любой пробел';
+      else if (cs.pattern === '.') patternDesc = 'любой символ';
+      else if (cs.pattern?.length > 10) patternDesc = `[${cs.pattern.substring(0,10)}...]`;
+      else patternDesc = `[${cs.pattern || '...'}]`;
+      
+      title = cs.negated ? `Символы: НЕ ${patternDesc}` : `Символы: ${patternDesc}`;
+      details = `${cs.negated ? '[^' : '['}${cs.pattern || ''}${cs.negated ? ']' : ']'}`;
+      break;
+    case BlockType.QUANTIFIER:
+      const qs = settings as QuantifierSettings;
+      let quantType = qs.type;
+      if (quantType === '{n}') quantType = `ровно ${qs.min} раз`;
+      else if (quantType === '{n,}') quantType = `от ${qs.min} раз`;
+      else if (quantType === '{n,m}') quantType = `от ${qs.min} до ${qs.max ?? '∞'} раз`;
+      else if (quantType === '*') quantType = '0 или более раз';
+      else if (quantType === '+') quantType = '1 или более раз';
+      else if (quantType === '?') quantType = '0 или 1 раз';
+      
+      let modeDesc = '';
+      if (qs.mode === 'lazy') modeDesc = ', лениво';
+      else if (qs.mode === 'possessive') modeDesc = ', ревниво';
+      
+      title = `Повтор: ${quantType}${modeDesc}`;
+      details = `${qs.type}${qs.mode === 'lazy' ? '?' : qs.mode === 'possessive' ? '+' : ''}`;
+      if (qs.type?.includes('{')) {
+        details = `{${qs.min ?? 0}${qs.type === '{n,m}' ? ',' + (qs.max ?? '') : qs.type === '{n,}' ? ',' : ''}}`;
+        details += `${qs.mode === 'lazy' ? '?' : qs.mode === 'possessive' ? '+' : ''}`;
+      }
+      break;
+    case BlockType.GROUP:
+      const gs = settings as GroupSettings;
+      let groupTypeDesc = 'Группа';
+      if (gs.type === 'non-capturing') groupTypeDesc = 'Группа (без захвата)';
+      else if (gs.type === 'named') groupTypeDesc = `Группа (захват как "${gs.name || '...'}_")`;
+      else groupTypeDesc = 'Группа (захват)';
+      title = groupTypeDesc;
+      details = `(${gs.type === 'non-capturing' ? '?:' : ''}${gs.type === 'named' ? `?<${gs.name || ''}>` : ''}... )`;
+      break;
+    case BlockType.ANCHOR:
+      const as = settings as AnchorSettings;
+      let anchorDesc = '';
+      if (as.type === '^') anchorDesc = 'Начало строки/текста';
+      else if (as.type === '$') anchorDesc = 'Конец строки/текста';
+      else if (as.type === '\\b') anchorDesc = 'Граница слова';
+      else if (as.type === '\\B') anchorDesc = 'НЕ граница слова';
+      title = `Условие: ${anchorDesc}`;
+      details = as.type;
+      break;
+    case BlockType.LOOKAROUND:
+      const los = settings as LookaroundSettings;
+      let lookDesc = '';
+      let lookSymbol = '';
+      if (los.type === 'positive-lookahead') { lookDesc = 'Просмотр вперед (позитивный)'; lookSymbol = '(?=...)'; }
+      else if (los.type === 'negative-lookahead') { lookDesc = 'Просмотр вперед (негативный)'; lookSymbol = '(?!...)'; }
+      else if (los.type === 'positive-lookbehind') { lookDesc = 'Просмотр назад (позитивный)'; lookSymbol = '(?<=...)'; }
+      else if (los.type === 'negative-lookbehind') { lookDesc = 'Просмотр назад (негативный)'; lookSymbol = '(?<!...)'; }
+      title = lookDesc;
+      details = lookSymbol;
+      break;
+    case BlockType.ALTERNATION:
+      title = 'Чередование (ИЛИ)';
+      details = '(...|...)';
+      break;
+    case BlockType.BACKREFERENCE:
+      const brs = settings as BackreferenceSettings;
+      title = `Ссылка: На группу №${brs.ref}`;
+      details = `\\${brs.ref}`;
+      break;
+    case BlockType.CONDITIONAL:
+      const conds = settings as ConditionalSettings;
+      title = `Условие: Если "${conds.condition || '...'}"`;
+      details = `(?(...)...|...)`;
+      break;
+    default:
+      details = config.name; // Fallback
+      break;
+  }
+  return { title, details: details || title };
+};
+
 
 const BlockNode: React.FC<BlockNodeProps> = ({
   block,
@@ -59,6 +157,8 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   if (!config) {
     return <div className="text-destructive p-2">Ошибка: Неизвестный тип блока: {block.type}</div>;
   }
+  
+  const { title: descriptiveTitle, details: descriptiveDetails } = getDescriptiveBlockTitle(block, config);
 
   const handleToggleExpand = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -83,42 +183,6 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     setIsInternallyHovered(false);
     if (onBlockHover) { 
       onBlockHover(null);
-    }
-  };
-
-
-  const renderBlockContentPreview = (): string => {
-    switch (block.type) {
-      case BlockType.LITERAL:
-        return `"${(block.settings as any).text || '...'}"`;
-      case BlockType.CHARACTER_CLASS:
-        return `[${(block.settings as any).negated ? '^' : ''}${(block.settings as any).pattern || '...'}]`;
-      case BlockType.QUANTIFIER:
-        const qMode = (block.settings as any).mode;
-        let qSymbol = '';
-        if (qMode === 'lazy') qSymbol = '?';
-        if (qMode === 'possessive') qSymbol = '+';
-        return `${(block.settings as any).type || '*'}${qSymbol}`;
-      case BlockType.GROUP:
-        return `(${(block.settings as any).type === 'non-capturing' ? '?:' : ''}${(block.settings as any).name ? `?<${(block.settings as any).name}>` : ''}...)`;
-      case BlockType.ANCHOR:
-        return (block.settings as any).type;
-      case BlockType.LOOKAROUND:
-        const lookaroundMap: Record<string, string> = {
-          'positive-lookahead': '(?=...)',
-          'negative-lookahead': '(?!...)',
-          'positive-lookbehind': '(?<=...)',
-          'negative-lookbehind': '(?<!...)',
-        };
-        return lookaroundMap[(block.settings as any).type] || '(...)';
-      case BlockType.BACKREFERENCE:
-        return `\\${(block.settings as any).ref || '1'}`;
-      case BlockType.CONDITIONAL:
-        return `(?(...)да|нет)`;
-      case BlockType.ALTERNATION:
-        return `(...|...)`;
-      default:
-        return config.name;
     }
   };
 
@@ -169,10 +233,6 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     document.body.removeAttribute('data-drag-target-role');
   };
 
-  const selectedHighlightClass = "ring-2 ring-primary ring-offset-1 dark:ring-offset-background rounded-sm";
-  const hoverHighlightClass = "bg-accent/70 text-accent-foreground rounded-sm";
-
-
   return (
     <Card
       draggable
@@ -210,10 +270,12 @@ const BlockNode: React.FC<BlockNodeProps> = ({
               )}>
               {typeof config.icon === 'string' ? <span className="font-mono text-xs">{config.icon}</span> : config.icon}
             </span>
-            <span className={cn("font-medium text-sm whitespace-nowrap", isSelected && "text-primary font-semibold")}>{config.name}</span>
-            <span className="text-xs text-muted-foreground font-mono truncate">
-              {renderBlockContentPreview()}
-            </span>
+            <span className={cn("font-medium text-sm whitespace-nowrap", isSelected && "text-primary font-semibold")}>{descriptiveTitle}</span>
+            {descriptiveDetails && descriptiveTitle !== descriptiveDetails && (
+                <span className="text-xs text-muted-foreground font-mono truncate hidden md:inline">
+                    {descriptiveDetails}
+                </span>
+            )}
           </div>
 
           <div className={cn("flex items-center gap-0.5 transition-opacity flex-shrink-0", isInternallyHovered || isSelected ? "opacity-100" : "opacity-0 focus-within:opacity-100")}>
