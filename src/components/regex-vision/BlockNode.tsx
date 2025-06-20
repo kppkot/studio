@@ -1,9 +1,9 @@
 "use client";
 import React, { useState } from 'react';
-import type { Block, BlockConfig, LiteralSettings, CharacterClassSettings, QuantifierSettings, GroupSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, ConditionalSettings } from './types';
+import type { Block, BlockConfig, LiteralSettings, CharacterClassSettings, QuantifierSettings, GroupSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, ConditionalSettings, GroupInfo } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { ChevronDown, ChevronRight, PlusCircle, Trash2, GripVertical, Copy, Ungroup, PackagePlus, Asterisk } from 'lucide-react';
+import { ChevronDown, ChevronRight, PlusCircle, Trash2, GripVertical, Copy, Ungroup, PackagePlus, Asterisk, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -23,10 +23,11 @@ interface BlockNodeProps {
   parentId: string | null;
   depth?: number;
   onBlockHover?: (blockId: string | null) => void;
-  renderChildNodes: (nodes: Block[], parentId: string, depth: number) => React.ReactNode[];
+  renderChildNodes: (nodes: Block[], parentId: string, depth: number, groupInfos: GroupInfo[]) => React.ReactNode[];
+  groupInfos: GroupInfo[];
 }
 
-const getDescriptiveBlockTitle = (block: Block, config: BlockConfig): { title: string, details: string } => {
+const getDescriptiveBlockTitle = (block: Block, config: BlockConfig, groupInfo?: GroupInfo): { title: string, details: string } => {
   const settings = block.settings;
   let title = config.name;
   let details = "";
@@ -73,14 +74,21 @@ const getDescriptiveBlockTitle = (block: Block, config: BlockConfig): { title: s
       }
       break;
     case BlockType.GROUP:
-      const gs = settings as GroupSettings;
-      let groupTypeDesc = 'Группа';
-      if (gs.type === 'non-capturing') groupTypeDesc = 'Группа (без захвата)';
-      else if (gs.type === 'named') groupTypeDesc = `Группа (захват как "${gs.name || '...'}_")`;
-      else groupTypeDesc = 'Группа (захват)';
-      title = groupTypeDesc;
-      details = `(${gs.type === 'non-capturing' ? '?:' : ''}${gs.type === 'named' ? `?<${gs.name || ''}>` : ''}... )`;
-      break;
+        const gs = settings as GroupSettings;
+        if (gs.type === 'non-capturing') {
+            title = 'Группа (только для порядка)';
+        } else if (gs.type === 'named' && gs.name) {
+            title = `Группа (захват как "${gs.name}")`;
+        } else if (gs.type === 'capturing' && groupInfo) {
+            title = `Группа (захват №${groupInfo.groupIndex})`;
+        } else {
+            // Fallback titles
+            if (gs.type === 'named') title = 'Группа (именованный захват)';
+            else if (gs.type === 'capturing') title = 'Группа (захват)';
+            else title = 'Группа';
+        }
+        details = `(${gs.type === 'non-capturing' ? '?:' : ''}${gs.type === 'named' ? `?<${gs.name || ''}>` : ''}... )`;
+        break;
     case BlockType.ANCHOR:
       const as = settings as AnchorSettings;
       let anchorDesc = '';
@@ -140,6 +148,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   depth = 0, 
   onBlockHover,
   renderChildNodes,
+  groupInfos,
 }) => {
   const [isInternallyHovered, setIsInternallyHovered] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -161,7 +170,9 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     return <div className="text-destructive p-2">Ошибка: Неизвестный тип блока: {block.type}</div>;
   }
   
-  const { title: descriptiveTitle, details: descriptiveDetails } = getDescriptiveBlockTitle(block, config);
+  const groupInfo = block.type === BlockType.GROUP ? groupInfos.find(gi => gi.blockId === block.id) : undefined;
+  const { title: descriptiveTitle, details: descriptiveDetails } = getDescriptiveBlockTitle(block, config, groupInfo);
+
   let quantifierTitle = "";
   let quantifierDetails = "";
   let quantifierIcon: React.ReactNode = <Asterisk size={14}/>;
@@ -331,6 +342,12 @@ const BlockNode: React.FC<BlockNodeProps> = ({
               </Button>
             </div>
           </div>
+          {block.type === BlockType.GROUP && (!block.children || block.children.length === 0) && (
+            <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-500 border-t border-dashed mt-1.5 pt-1.5 mx-1">
+              <AlertTriangle size={14} />
+              <span>Пустая группа</span>
+            </div>
+          )}
         </CardContent>
       </Card>
       
@@ -382,7 +399,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           {block.children.map((altChild, index) => (
             <React.Fragment key={altChild.id}>
               <div className="py-1">
-                {renderChildNodes([altChild], block.id, depth + 1)}
+                {renderChildNodes([altChild], block.id, depth + 1, groupInfos)}
               </div>
               {index < block.children.length - 1 && (
                 <div className="alternation-separator my-1.5 flex items-center justify-center" aria-hidden="true">
@@ -400,7 +417,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
       {block.type !== BlockType.ALTERNATION && canHaveChildren && isCurrentlyExpanded && hasVisibleChildren && (
         <div className="mt-1 pt-1 pl-3 border-l-2 border-primary/60 bg-primary/10 rounded-r-md ml-14 mr-px pr-2">
-          {renderChildNodes(block.children, block.id, depth + 1)}
+          {renderChildNodes(block.children, block.id, depth + 1, groupInfos)}
         </div>
       )}
     </div>

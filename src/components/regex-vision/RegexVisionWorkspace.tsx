@@ -767,7 +767,7 @@ const RegexVisionWorkspace: React.FC = () => {
 
   const headerHeight = "60px";
 
-  const renderBlockNodes = (nodes: Block[], parentId: string | null, currentDepth: number): React.ReactNode[] => {
+  const renderBlockNodes = (nodes: Block[], parentId: string | null, depth: number, groupInfos: GroupInfo[]): React.ReactNode[] => {
     const nodeList: React.ReactNode[] = [];
     for (let i = 0; i < nodes.length; i++) {
         const block = nodes[i];
@@ -792,9 +792,10 @@ const RegexVisionWorkspace: React.FC = () => {
             selectedId={selectedBlockId}
             onSelect={setSelectedBlockId}
             parentId={parentId}
-            depth={currentDepth} 
+            depth={depth} 
             onBlockHover={handleBlockHover}
-            renderChildNodes={(childNodes, pId, nextDepth) => renderBlockNodes(childNodes, pId, nextDepth)}
+            renderChildNodes={(childNodes, pId, nextDepth, gInfos) => renderBlockNodes(childNodes, pId, nextDepth, gInfos)}
+            groupInfos={groupInfos}
           />
         );
 
@@ -844,7 +845,7 @@ const RegexVisionWorkspace: React.FC = () => {
                       </div>
                     ) : (
                       <div className="space-y-0"> 
-                         {renderBlockNodes(blocks, null, 0)}
+                         {renderBlockNodes(blocks, null, 0, regexOutput.groupInfos)}
                       </div>
                     )}
                   </ScrollArea>
