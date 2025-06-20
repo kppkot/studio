@@ -1,12 +1,12 @@
 
 "use client";
 import React, { useState, useEffect, useCallback } from 'react';
-import type { Block, RegexMatch, GroupInfo, SavedPattern } from './types'; 
+import type { Block, RegexMatch, GroupInfo, SavedPattern, NaturalLanguageRegexOutput } from './types'; 
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks } from './utils'; 
+import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks, createSequenceGroup, escapeRegexChars, createCharClass, createQuantifier, createAnchor, createAlternation, createLookaround, createBackreference } from './utils'; 
 import { useToast } from '@/hooks/use-toast';
-import { generateRegexFromNaturalLanguage, NaturalLanguageRegexOutput } from '@/ai/flows/natural-language-regex-flow';
+import { generateRegexFromNaturalLanguage } from '@/ai/flows/natural-language-regex-flow';
 
 import AppHeader from './AppHeader';
 import BlockNode from './BlockNode';
@@ -499,8 +499,10 @@ const RegexVisionWorkspace: React.FC = () => {
         };
         finalBlocks = addAsSiblingRecursiveFn(blocksWithoutDragged, parentOfDropOnBlockIdOrDropTargetId, dropOnBlockId, draggedBlockInstance);
       }
-
-      toast({ title: "Блок перемещен", description: "Порядок блоков обновлен." });
+      
+      setTimeout(() => {
+        toast({ title: "Блок перемещен", description: "Порядок блоков обновлен." });
+      }, 0);
       return finalBlocks;
     });
   }, [toast]);
@@ -664,15 +666,14 @@ const RegexVisionWorkspace: React.FC = () => {
   const handleApplySavedPattern = async (pattern: SavedPattern) => {
     setRegexFlags(pattern.flags);
     setTestText(pattern.testString || '');
-    setSelectedBlockId(null); // Deselect any block before applying new ones
-    setHoveredBlockId(null); // Clear hover state
+    setSelectedBlockId(null); 
+    setHoveredBlockId(null); 
 
     try {
       const aiResult: NaturalLanguageRegexOutput = await generateRegexFromNaturalLanguage({ query: pattern.regexString });
       if (aiResult.parsedBlocks && aiResult.parsedBlocks.length > 0) {
         const parsedBlocksFromAI = processAiBlocks(aiResult.parsedBlocks);
         setBlocks(parsedBlocksFromAI);
-        // No need to call setRegexOutput here, useEffect for blocks will handle it
         toast({ title: "Паттерн применен и разобран!", description: `"${pattern.name}" загружен и преобразован в блоки.` });
       } else {
         const fallbackBlock = createLiteral(pattern.regexString, false); 
@@ -697,9 +698,6 @@ const RegexVisionWorkspace: React.FC = () => {
 
   const handleSelectBlockInOutput = (blockId: string) => {
     setSelectedBlockId(blockId);
-    // Optional: Scroll the selected block in the tree into view
-    // const element = document.getElementById(blockId); // Assuming BlockNode has an ID attribute on its root
-    // if (element) element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
 
 
@@ -864,3 +862,5 @@ const RegexVisionWorkspace: React.FC = () => {
 };
 
 export default RegexVisionWorkspace;
+
+    
