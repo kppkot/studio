@@ -55,7 +55,7 @@ const cloneBlockForState = (block: Block): Block => {
 }
 
 
-const duplicateAndInsertBlockRecursive = (currentBlocks: Block[], targetId: string): { updatedBlocks: Block[], success: boolean } => {
+const duplicateAndInsertBlockRecursive = (currentBlocks: Block[], targetId: string): { updatedBlocks: Block[], success: boolean, newSelectedId?: string } => {
   for (let i = 0; i < currentBlocks.length; i++) {
     const block = currentBlocks[i];
     if (block.id === targetId) {
@@ -63,14 +63,26 @@ const duplicateAndInsertBlockRecursive = (currentBlocks: Block[], targetId: stri
       const newBlock = deepCloneBlock(originalBlock);
       const updatedBlocks = [...currentBlocks];
       updatedBlocks.splice(i + 1, 0, newBlock);
-      return { updatedBlocks, success: true };
+
+      // Check if the duplicated block has an attached quantifier
+      let nextBlockIsQuantifier = false;
+      if ((i + 1) < updatedBlocks.length && updatedBlocks[i+1].type === BlockType.QUANTIFIER && block.type !== BlockType.QUANTIFIER) {
+          // This condition means the original block was followed by a quantifier.
+          // We should also duplicate the quantifier.
+          const originalQuantifier = updatedBlocks[i+2]; // original quantifier is now at i+2 because newBlock was inserted at i+1
+          if(originalQuantifier && originalQuantifier.type === BlockType.QUANTIFIER) {
+            const newQuantifier = deepCloneBlock(originalQuantifier);
+            updatedBlocks.splice(i + 2, 0, newQuantifier); // insert new quantifier after newBlock
+          }
+      }
+      return { updatedBlocks, success: true, newSelectedId: newBlock.id };
     }
     if (block.children && block.children.length > 0) {
       const result = duplicateAndInsertBlockRecursive(block.children, targetId);
       if (result.success) {
         const updatedBlocks = [...currentBlocks];
         updatedBlocks[i] = { ...block, children: result.updatedBlocks };
-        return { updatedBlocks, success: true };
+        return { updatedBlocks, success: true, newSelectedId: result.newSelectedId };
       }
     }
   }
@@ -200,15 +212,56 @@ const RegexVisionWorkspace: React.FC = () => {
   };
 
 
-  const deleteBlockRecursive = (currentBlocks: Block[], targetId: string): Block[] => {
-    return currentBlocks.filter(block => {
-      if (block.id === targetId) return false;
-      if (block.children) {
-        block.children = deleteBlockRecursive(block.children, targetId);
-      }
-      return true;
-    });
-  };
+ const deleteBlockRecursive = (currentBlocks: Block[], targetId: string, deleteAttachedQuantifier: boolean): { updatedBlocks: Block[], blockWasSelected: boolean } => {
+    let blockWasSelected = false;
+    let idsToDelete = new Set<string>();
+    idsToDelete.add(targetId);
+
+    if (deleteAttachedQuantifier) {
+        const findInArray = (arr: Block[], id: string): {parentArr: Block[], index: number} | null => {
+            for(let i=0; i<arr.length; i++){
+                if(arr[i].id === id) return {parentArr: arr, index: i};
+            }
+            return null;
+        }
+        
+        const findRecursively = (nodes: Block[], id: string) : {parentArr: Block[], index: number} | null => {
+            const directFind = findInArray(nodes, id);
+            if(directFind) return directFind;
+            for(const node of nodes){
+                if(node.children){
+                    const childFind = findRecursively(node.children, id);
+                    if(childFind) return childFind;
+                }
+            }
+            return null;
+        }
+        
+        const foundInfo = findRecursively(currentBlocks, targetId);
+        if (foundInfo) {
+            const { parentArr, index } = foundInfo;
+            if (index + 1 < parentArr.length && parentArr[index + 1].type === BlockType.QUANTIFIER && parentArr[index].type !== BlockType.QUANTIFIER) {
+                idsToDelete.add(parentArr[index + 1].id);
+            }
+        }
+    }
+    
+    if (idsToDelete.has(selectedBlockId || "")) blockWasSelected = true;
+
+    const filterAndDelete = (nodes: Block[]): Block[] => {
+        const remainingNodes = nodes.filter(block => !idsToDelete.has(block.id));
+        return remainingNodes.map(block => {
+            if (block.children) {
+                return { ...block, children: filterAndDelete(block.children) };
+            }
+            return block;
+        });
+    };
+
+    const updatedBlocks = filterAndDelete(currentBlocks);
+    return { updatedBlocks, blockWasSelected };
+};
+
 
   const addChildRecursive = (currentBlocks: Block[], pId: string, newBlock: Block): Block[] => {
     return currentBlocks.map(block => {
@@ -306,12 +359,15 @@ const RegexVisionWorkspace: React.FC = () => {
   }, []);
 
 
-  const handleDeleteBlock = useCallback((id: string) => {
-    setBlocks(prev => deleteBlockRecursive(prev, id));
-    if (selectedBlockId === id) {
-      setSelectedBlockId(null);
-    }
-    toast({ title: "Блок удален", description: "Блок был успешно удален из дерева." });
+  const handleDeleteBlock = useCallback((id: string, deleteAttachedQuantifier: boolean = false) => {
+    setBlocks(prev => {
+        const result = deleteBlockRecursive(prev, id, deleteAttachedQuantifier);
+        if (result.blockWasSelected) {
+            setSelectedBlockId(null);
+        }
+        return result.updatedBlocks;
+    });
+    toast({ title: "Блок удален", description: "Блок был успешно удален." });
   }, [selectedBlockId, toast]);
 
   const handleDuplicateBlock = useCallback((id: string) => {
@@ -319,6 +375,9 @@ const RegexVisionWorkspace: React.FC = () => {
       const result = duplicateAndInsertBlockRecursive(prevBlocks, id);
       if (result.success) {
         toast({ title: "Блок скопирован", description: "Копия блока добавлена в дерево." });
+        if (result.newSelectedId) {
+            setSelectedBlockId(result.newSelectedId);
+        }
         return result.updatedBlocks;
       }
       toast({ title: "Ошибка копирования", description: "Не удалось найти блок для копирования.", variant: "destructive"});
@@ -351,36 +410,85 @@ const RegexVisionWorkspace: React.FC = () => {
       isExpanded: true,
     };
 
-    const wrapRecursively = (currentNodes: Block[]): {wrappedNodes: Block[], success: boolean} => {
-      let success = false;
-      const mappedNodes = currentNodes.map(node => {
-        if (node.id === blockIdToWrap) {
-          const wrappedNode = cloneBlockForState(node);
-          newGroupBlock.children = [wrappedNode];
-          success = true;
-          return newGroupBlock;
-        }
-        if (node.children) {
-          const childResult = wrapRecursively(node.children);
-          if (childResult.success) {
+    setBlocks(prevBlocks => {
+      const blocksCopy = prevBlocks.map(b => cloneBlockForState(b)); // Deep clone to avoid mutation issues
+
+      const wrapRecursively = (currentNodes: Block[], nodesToRemoveFromOriginalArray: Set<string>): {wrappedNodes: Block[], success: boolean} => {
+        let success = false;
+        const mappedNodes: Block[] = [];
+
+        for (let i = 0; i < currentNodes.length; i++) {
+          const node = currentNodes[i];
+          if (node.id === blockIdToWrap) {
+            newGroupBlock.children.push(cloneBlockForState(node));
+            // Check for attached quantifier
+            if (node.type !== BlockType.QUANTIFIER && (i + 1) < currentNodes.length && currentNodes[i + 1].type === BlockType.QUANTIFIER) {
+              newGroupBlock.children.push(cloneBlockForState(currentNodes[i + 1]));
+              nodesToRemoveFromOriginalArray.add(currentNodes[i + 1].id); // Mark quantifier for removal from original list
+              i++; // Skip the quantifier in this loop
+            }
+            mappedNodes.push(newGroupBlock);
             success = true;
-            return { ...node, children: childResult.wrappedNodes };
+          } else if (node.children) {
+            const childResult = wrapRecursively(node.children, nodesToRemoveFromOriginalArray);
+            if (childResult.success) {
+              // If success in children, it means the target was found and wrapped there.
+              // The structure of mappedNodes should reflect this.
+              mappedNodes.push({ ...node, children: childResult.wrappedNodes });
+              success = true; // Propagate success
+            } else {
+              mappedNodes.push(node);
+            }
+          } else {
+            mappedNodes.push(node);
           }
         }
-        return node;
-      });
-      return {wrappedNodes: mappedNodes, success};
-    };
+        return {wrappedNodes: mappedNodes, success};
+      };
+      
+      const nodesToRemove = new Set<string>();
+      const result = wrapRecursively(blocksCopy, nodesToRemove);
 
-    setBlocks(prevBlocks => {
-        const result = wrapRecursively(prevBlocks);
-        if(result.success){
-            setSelectedBlockId(newGroupBlock.id);
-            toast({ title: "Блок обернут", description: "Выбранный блок был обернут в новую группу." });
-            return result.wrappedNodes;
+      if (result.success) {
+        // Filter out original nodes that were wrapped (main block + its quantifier if any)
+        const finalBlocks = result.wrappedNodes.filter(b => b.id !== blockIdToWrap && !nodesToRemove.has(b.id));
+        // This logic is flawed. The wrapped block is *replaced* by the group, not just filtered out.
+        // Let's rethink the update.
+
+        // Corrected approach: Find the path to the wrapped block and replace it.
+        const replaceInTree = (nodes: Block[]): Block[] => {
+            for (let i=0; i < nodes.length; i++) {
+                if (nodes[i].id === blockIdToWrap) {
+                    const originalBlock = nodes[i];
+                    newGroupBlock.children.push(cloneBlockForState(originalBlock));
+                    let nextIndex = i + 1;
+                    if (originalBlock.type !== BlockType.QUANTIFIER && nextIndex < nodes.length && nodes[nextIndex].type === BlockType.QUANTIFIER) {
+                        newGroupBlock.children.push(cloneBlockForState(nodes[nextIndex]));
+                        // Create a new array excluding the wrapped block and its quantifier
+                        return [...nodes.slice(0, i), newGroupBlock, ...nodes.slice(nextIndex + 1)];
+                    }
+                    return [...nodes.slice(0, i), newGroupBlock, ...nodes.slice(i + 1)];
+                }
+                if (nodes[i].children) {
+                    const newChildren = replaceInTree(nodes[i].children);
+                    if (newChildren.length !== nodes[i].children.length || newChildren.some((nc, idx) => nc.id !== nodes[i].children[idx].id)) {
+                         // check if children array changed
+                        return [...nodes.slice(0,i), {...nodes[i], children: newChildren}, ...nodes.slice(i+1)];
+                    }
+                }
+            }
+            return nodes; // No change
         }
-        toast({ title: "Ошибка", description: "Не удалось обернуть блок.", variant: "destructive" });
-        return prevBlocks;
+        
+        const updatedTree = replaceInTree(blocksCopy);
+
+        setSelectedBlockId(newGroupBlock.id);
+        toast({ title: "Блок обернут", description: "Выбранный блок был обернут в новую группу." });
+        return updatedTree;
+      }
+      
+      toast({ title: "Ошибка", description: "Не удалось обернуть блок.", variant: "destructive" });
+      return prevBlocks;
     });
   }, [toast]);
 
@@ -388,33 +496,42 @@ const RegexVisionWorkspace: React.FC = () => {
   const handleReorderBlock = useCallback((draggedId: string, dropOnBlockId: string, parentOfDropOnBlockIdOrDropTargetId: string | null) => {
     setBlocks(prevBlocks => {
       let draggedBlockInstance: Block | null = null;
+      let draggedQuantifierInstance: Block | null = null;
 
-      const removeDraggedRecursive = (nodes: Block[], idToRemove: string): { updatedNodes: Block[], foundBlock: Block | null } => {
+      const removeDraggedRecursive = (nodes: Block[], idToRemove: string): { updatedNodes: Block[], foundBlock: Block | null, foundQuantifier: Block | null } => {
         let found: Block | null = null;
-        const filteredNodes = nodes.filter(b => {
-          if (b.id === idToRemove) {
-            found = b;
-            return false;
-          }
-          return true;
-        });
+        let foundQ: Block | null = null;
+        
+        const newNodes: Block[] = [];
+        for(let i=0; i<nodes.length; i++) {
+            const b = nodes[i];
+            if (b.id === idToRemove) {
+                found = b;
+                // Check for attached quantifier
+                if (b.type !== BlockType.QUANTIFIER && (i + 1) < nodes.length && nodes[i+1].type === BlockType.QUANTIFIER) {
+                    foundQ = nodes[i+1];
+                    i++; // also skip the quantifier
+                }
+            } else {
+                newNodes.push(b);
+            }
+        }
 
-        if (found) return { updatedNodes: filteredNodes, foundBlock: found };
+        if (found) return { updatedNodes: newNodes, foundBlock: found, foundQuantifier: foundQ };
 
-        for (let i = 0; i < nodes.length; i++) {
-          if (nodes[i].children && nodes[i].children.length > 0) {
-            const childResult = removeDraggedRecursive(nodes[i].children, idToRemove);
+        for (let i = 0; i < newNodes.length; i++) {
+          if (newNodes[i].children && newNodes[i].children.length > 0) {
+            const childResult = removeDraggedRecursive(newNodes[i].children, idToRemove);
             if (childResult.foundBlock) {
-              const newParentNodes = [...nodes];
-              newParentNodes[i] = { ...newParentNodes[i], children: childResult.updatedNodes };
-              return { updatedNodes: newParentNodes, foundBlock: childResult.foundBlock };
+              newNodes[i] = { ...newNodes[i], children: childResult.updatedNodes };
+              return { updatedNodes: newNodes, foundBlock: childResult.foundBlock, foundQuantifier: childResult.foundQuantifier };
             }
           }
         }
-        return { updatedNodes: nodes, foundBlock: null };
+        return { updatedNodes: nodes, foundBlock: null, foundQuantifier: null };
       };
 
-      const { updatedNodes: blocksWithoutDraggedOriginal, foundBlock } = removeDraggedRecursive(prevBlocks, draggedId);
+      const { updatedNodes: blocksWithoutDraggedOriginal, foundBlock, foundQuantifier } = removeDraggedRecursive(prevBlocks, draggedId);
 
       if (!foundBlock) {
         return prevBlocks;
@@ -423,6 +540,10 @@ const RegexVisionWorkspace: React.FC = () => {
 
 
       draggedBlockInstance = cloneBlockForState(foundBlock);
+      if (foundQuantifier) {
+        draggedQuantifierInstance = cloneBlockForState(foundQuantifier);
+      }
+
 
       const dropTargetNodeInfo = findBlockAndParentRecursive(blocksWithoutDragged, dropOnBlockId);
       if (!dropTargetNodeInfo.block) {
@@ -458,51 +579,54 @@ const RegexVisionWorkspace: React.FC = () => {
       }
 
       const dragTargetRole = document.body.getAttribute('data-drag-target-role');
+      const blocksToAdd = [draggedBlockInstance];
+      if (draggedQuantifierInstance) blocksToAdd.push(draggedQuantifierInstance);
+
 
       if (canDropTargetBeParent && dragTargetRole === 'parent') {
-        const addAsChildRecursiveFn = (nodes: Block[], targetParentId: string, childToAdd: Block): Block[] => {
+        const addAsChildRecursiveFn = (nodes: Block[], targetParentId: string, childrenToAdd: Block[]): Block[] => {
           return nodes.map(n => {
             if (n.id === targetParentId) {
               const existingChildren = n.children || [];
-              return { ...n, children: [...existingChildren, childToAdd], isExpanded: true };
+              return { ...n, children: [...existingChildren, ...childrenToAdd], isExpanded: true };
             }
             if (n.children) {
-              return { ...n, children: addAsChildRecursiveFn(n.children, targetParentId, childToAdd) };
+              return { ...n, children: addAsChildRecursiveFn(n.children, targetParentId, childrenToAdd) };
             }
             return n;
           });
         };
-        finalBlocks = addAsChildRecursiveFn(blocksWithoutDragged, dropOnBlockId, draggedBlockInstance);
+        finalBlocks = addAsChildRecursiveFn(blocksWithoutDragged, dropOnBlockId, blocksToAdd);
       } else {
         const addAsSiblingRecursiveFn = (
             nodes: Block[],
             parentToSearchInId: string | null,
             afterSiblingId: string,
-            blockToAdd: Block
+            newBlocks: Block[]
         ): Block[] => {
-            if (parentToSearchInId === null) { // Operating on root blocks
+            if (parentToSearchInId === null) { 
                 const targetIdx = nodes.findIndex(n => n.id === afterSiblingId);
-                const newRootNodes = [...nodes];
-                if (targetIdx !== -1) newRootNodes.splice(targetIdx + 1, 0, blockToAdd);
-                else newRootNodes.push(blockToAdd); // Fallback if targetId not found (should not happen)
-                return newRootNodes;
+                const resultNodes = [...nodes];
+                if (targetIdx !== -1) resultNodes.splice(targetIdx + 1, 0, ...newBlocks);
+                else resultNodes.push(...newBlocks);
+                return resultNodes;
             }
 
-            return nodes.map(n => { // Operating on children of a specific parent
+            return nodes.map(n => { 
                 if (n.id === parentToSearchInId) {
                     const targetIdx = (n.children || []).findIndex(child => child.id === afterSiblingId);
                     const newChildren = [...(n.children || [])];
-                    if (targetIdx !== -1) newChildren.splice(targetIdx + 1, 0, blockToAdd);
-                    else newChildren.push(blockToAdd); // Fallback
+                    if (targetIdx !== -1) newChildren.splice(targetIdx + 1, 0, ...newBlocks);
+                    else newChildren.push(...newBlocks);
                     return { ...n, children: newChildren, isExpanded: true };
                 }
-                if (n.children) { // Recurse if not the target parent yet
-                    return { ...n, children: addAsSiblingRecursiveFn(n.children, parentToSearchInId, afterSiblingId, blockToAdd) };
+                if (n.children) { 
+                    return { ...n, children: addAsSiblingRecursiveFn(n.children, parentToSearchInId, afterSiblingId, newBlocks) };
                 }
                 return n;
             });
         };
-        finalBlocks = addAsSiblingRecursiveFn(blocksWithoutDragged, parentOfDropOnBlockIdOrDropTargetId, dropOnBlockId, draggedBlockInstance);
+        finalBlocks = addAsSiblingRecursiveFn(blocksWithoutDragged, parentOfDropOnBlockIdOrDropTargetId, dropOnBlockId, blocksToAdd);
       }
       
       setTimeout(() => {
@@ -607,7 +731,9 @@ const RegexVisionWorkspace: React.FC = () => {
 
       if (selectedBlockId && (event.key === 'Delete' || event.key === 'Backspace')) {
         event.preventDefault();
-        handleDeleteBlock(selectedBlockId);
+        const block = findBlockRecursive(blocks,selectedBlockId);
+        const deleteAttached = block?.type !== BlockType.QUANTIFIER; // If selected is not quantifier, delete its attached.
+        handleDeleteBlock(selectedBlockId, deleteAttached);
       }
 
       if (event.ctrlKey && event.shiftKey) {
@@ -629,14 +755,22 @@ const RegexVisionWorkspace: React.FC = () => {
         if (event.key === 'ArrowUp') {
           event.preventDefault();
           const siblings = parent ? parent.children : blocks;
-          if (indexInParent > 0 && siblings) {
+          if(currentBlock.type === BlockType.QUANTIFIER && parent && parent.children.includes(currentBlock) && indexInParent > 0){
+            // If current is quantifier, ArrowUp should select its "parent" block from the visual pairing
+            setSelectedBlockId(siblings[indexInParent - 1].id);
+          } else if (indexInParent > 0 && siblings) {
             setSelectedBlockId(siblings[indexInParent - 1].id);
           }
         } else if (event.key === 'ArrowDown') {
           event.preventDefault();
           const siblings = parent ? parent.children : blocks;
           if (siblings && indexInParent < siblings.length - 1) {
-            setSelectedBlockId(siblings[indexInParent + 1].id);
+            // Check if current block is rendered with an attached quantifier
+            if(currentBlock.type !== BlockType.QUANTIFIER && (indexInParent + 1) < siblings.length && siblings[indexInParent+1].type === BlockType.QUANTIFIER){
+                 setSelectedBlockId(siblings[indexInParent + 1].id);
+            } else {
+                 setSelectedBlockId(siblings[indexInParent + 1].id);
+            }
           }
         } else if (event.key === 'ArrowRight') {
           event.preventDefault();
@@ -713,7 +847,47 @@ const RegexVisionWorkspace: React.FC = () => {
   const outputPanelMinHeight = "250px";
   const settingsHeaderHeight = "50px";
 
-  const CONNECTOR_X_OFFSET = '10px'; // X offset for the line from the edge of its padding container
+  const CONNECTOR_X_OFFSET = '10px'; 
+
+  const renderBlockNodes = (nodes: Block[], parentId: string | null, currentDepth: number): React.ReactNode[] => {
+    const nodeList: React.ReactNode[] = [];
+    for (let i = 0; i < nodes.length; i++) {
+        const block = nodes[i];
+        let quantifierToRender: Block | null = null;
+
+        if (block.type !== BlockType.QUANTIFIER && (i + 1) < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
+            quantifierToRender = nodes[i + 1];
+        }
+        
+        nodeList.push(
+          // Removed wrapper div to place BlockNode directly for flat list feel, quantifier is handled inside BlockNode
+          <BlockNode
+            key={block.id}
+            block={block}
+            quantifierToRender={quantifierToRender}
+            onUpdate={handleUpdateBlock}
+            onDelete={handleDeleteBlock}
+            onAddChild={handleOpenPaletteForChild}
+            onDuplicate={handleDuplicateBlock}
+            onUngroup={handleUngroupBlock}
+            onWrapBlock={handleWrapBlock}
+            onReorder={handleReorderBlock}
+            selectedId={selectedBlockId}
+            onSelect={setSelectedBlockId}
+            parentId={parentId}
+            depth={currentDepth} 
+            onBlockHover={handleBlockHover}
+            renderChildNodes={(childNodes, pId, nextDepth) => renderBlockNodes(childNodes, pId, nextDepth)}
+          />
+        );
+
+        if (quantifierToRender) {
+            i++; 
+        }
+    }
+    return nodeList;
+  };
+
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground" style={{ "--header-height": headerHeight, "--output-panel-min-height": outputPanelMinHeight, "--settings-header-height": settingsHeaderHeight } as React.CSSProperties}>
@@ -752,38 +926,8 @@ const RegexVisionWorkspace: React.FC = () => {
                         <p className="text-sm">Нажмите "Добавить блок" или используйте "AI Помощник".</p>
                       </div>
                     ) : (
-                      <div className="relative"> {/* Container for lines and blocks */}
-                        {blocks.map((block, index, arr) => (
-                          <div key={block.id} className="block-node-root-wrapper relative" style={{ paddingLeft: '20px' }}> {/* Indent all blocks to make space for lines */}
-                            {/* Vertical line passing through the block's vertical space */}
-                            <div
-                              className={cn(
-                                "absolute w-px bg-gray-300 dark:bg-gray-600 z-[-1]", // Line behind card
-                                // Line starts from mid-card height if it's the first block and has no expanded children
-                                index === 0 && (!block.isExpanded || !block.children || block.children.length === 0) ? 'top-1/2' : 'top-0',
-                                // Line ends at mid-card height if it's the last block AND has no expanded children
-                                index === arr.length - 1 && (!block.isExpanded || !block.children || block.children.length === 0) ? "bottom-1/2" : "bottom-0"
-                              )}
-                              style={{ left: CONNECTOR_X_OFFSET }}
-                            />
-                            <BlockNode
-                              key={block.id} // Key for BlockNode itself, wrapper has its own key
-                              block={block}
-                              onUpdate={handleUpdateBlock}
-                              onDelete={handleDeleteBlock}
-                              onAddChild={handleOpenPaletteForChild}
-                              onDuplicate={handleDuplicateBlock}
-                              onUngroup={handleUngroupBlock}
-                              onWrapBlock={handleWrapBlock}
-                              onReorder={handleReorderBlock}
-                              selectedId={selectedBlockId}
-                              onSelect={setSelectedBlockId}
-                              parentId={null}
-                              depth={0} // Root blocks have depth 0
-                              onBlockHover={handleBlockHover} 
-                            />
-                          </div>
-                        ))}
+                      <div className="space-y-0"> 
+                         {renderBlockNodes(blocks, null, 0)}
                       </div>
                     )}
                   </ScrollArea>
