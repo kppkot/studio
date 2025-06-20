@@ -78,7 +78,10 @@ const getDescriptiveBlockTitle = (block: Block, config: BlockConfig, groupInfo?:
     case BlockType.GROUP:
         const gs = settings as GroupSettings;
         if (!hasChildren) {
-            title = 'Пустой контейнер (Группа)';
+            if (gs.type === 'capturing' && groupInfo) title = `Пустая группа (захват №${groupInfo.groupIndex})`;
+            else if (gs.type === 'named' && gs.name) title = `Пустая группа (захват как "${gs.name}")`;
+            else if (gs.type === 'non-capturing') title = `Пустой контейнер (для группировки)`;
+            else title = 'Пустая группа';
             details = '(добавьте элементы внутрь)';
             break;
         }
@@ -207,7 +210,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   const handleToggleExpand = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (canHaveChildren) {
-      onUpdate(block.id, { ...block, isExpanded: !isCurrentlyExpanded });
+      onUpdate(block.id, { isExpanded: !isCurrentlyExpanded });
     }
   };
 
@@ -280,13 +283,10 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     const draggedId = e.dataTransfer.getData('text/plain');
     if (draggedId && draggedId !== block.id) {
       const dropTargetRole = document.body.getAttribute('data-drag-target-role');
-      const targetParentForReorder = dropTargetRole === 'parent' ? block.id : parentId;
-      onReorder(draggedId, block.id, targetParentForReorder);
+      onReorder(draggedId, block.id, dropTargetRole === 'parent' ? block.id : parentId);
     }
     document.body.removeAttribute('data-drag-target-role');
   };
-
-  const cardMarginLeft = '0px';
 
   return (
     <div
@@ -296,12 +296,11 @@ const BlockNode: React.FC<BlockNodeProps> = ({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className={cn(
-        "mb-0.5 transition-all relative group/blocknode",
+        "transition-all relative group/blocknode",
         isSelected && "outline-primary outline-2 outline-dashed outline-offset-2 rounded-md",
         isDraggingOver && !showAsParentDropTarget && "bg-accent/20 border-accent",
         showAsParentDropTarget && "bg-green-100 dark:bg-green-800/30 border-green-500 ring-1 ring-green-500",
       )}
-      style={{ marginLeft: cardMarginLeft }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -448,5 +447,3 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 };
 
 export default BlockNode;
-
-    

@@ -28,71 +28,6 @@ import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertic
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { cn } from '@/lib/utils';
 
-
-const duplicateAndInsertBlockRecursive = (currentBlocks: Block[], targetId: string): { updatedBlocks: Block[], success: boolean, newSelectedId?: string } => {
-  for (let i = 0; i < currentBlocks.length; i++) {
-    const block = currentBlocks[i];
-    if (block.id === targetId) {
-      const originalBlock = block;
-      const newBlock = cloneBlockForState(originalBlock);
-      const updatedBlocks = [...currentBlocks];
-      updatedBlocks.splice(i + 1, 0, newBlock);
-
-      // Check if the duplicated block has an attached quantifier
-      if (block.type !== BlockType.QUANTIFIER && (i + 1) < updatedBlocks.length && updatedBlocks[i+1].type === BlockType.QUANTIFIER) {
-          // This condition means the original block was followed by a quantifier.
-          // We should also duplicate the quantifier.
-          const originalQuantifier = updatedBlocks[i+2]; // original quantifier is now at i+2 because newBlock was inserted at i+1
-          if(originalQuantifier && originalQuantifier.type === BlockType.QUANTIFIER) {
-            const newQuantifier = cloneBlockForState(originalQuantifier);
-            updatedBlocks.splice(i + 2, 0, newQuantifier); // insert new quantifier after newBlock
-          }
-      }
-      return { updatedBlocks, success: true, newSelectedId: newBlock.id };
-    }
-    if (block.children && block.children.length > 0) {
-      const result = duplicateAndInsertBlockRecursive(block.children, targetId);
-      if (result.success) {
-        const updatedBlocks = [...currentBlocks];
-        updatedBlocks[i] = { ...block, children: result.updatedBlocks };
-        return { updatedBlocks, success: true, newSelectedId: result.newSelectedId };
-      }
-    }
-  }
-  return { updatedBlocks: currentBlocks, success: false };
-};
-
-const processUngroupRecursive = (nodes: Block[], targetId: string): Block[] => {
-  return nodes.flatMap(block => {
-    if (block.id === targetId) {
-      return block.children ? block.children.map(child => cloneBlockForState(child)) : [];
-    }
-    if (block.children && block.children.length > 0) {
-      return [{ ...block, children: processUngroupRecursive(block.children, targetId) }];
-    }
-    return [block];
-  });
-};
-
-const findBlockAndParentRecursive = (
-  nodes: Block[],
-  targetId: string,
-  currentParent: Block | null = null
-): { block: Block | null; parent: Block | null; indexInParent: number } => {
-  for (let i = 0; i < nodes.length; i++) {
-    const block = nodes[i];
-    if (block.id === targetId) {
-      return { block, parent: currentParent, indexInParent: i };
-    }
-    if (block.children) {
-      const found = findBlockAndParentRecursive(block.children, targetId, block);
-      if (found.block) return found;
-    }
-  }
-  return { block: null, parent: null, indexInParent: -1 };
-};
-
-
 const RegexVisionWorkspace: React.FC = () => {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
@@ -155,7 +90,6 @@ const RegexVisionWorkspace: React.FC = () => {
     });
   };
 
-
  const deleteBlockRecursive = (currentBlocks: Block[], targetId: string, deleteAttachedQuantifier: boolean): { updatedBlocks: Block[], blockWasSelected: boolean } => {
     let blockWasSelected = false;
     let idsToDelete = new Set<string>();
@@ -205,7 +139,6 @@ const RegexVisionWorkspace: React.FC = () => {
     const updatedBlocks = filterAndDelete(currentBlocks);
     return { updatedBlocks, blockWasSelected };
 };
-
 
   const addChildRecursive = (currentBlocks: Block[], pId: string, newBlock: Block): Block[] => {
     return currentBlocks.map(block => {
@@ -314,6 +247,34 @@ const RegexVisionWorkspace: React.FC = () => {
     toast({ title: "Блок удален", description: "Блок был успешно удален." });
   }, [selectedBlockId, toast]);
 
+  const duplicateAndInsertBlockRecursive = (currentBlocks: Block[], targetId: string): { updatedBlocks: Block[], success: boolean, newSelectedId?: string } => {
+    for (let i = 0; i < currentBlocks.length; i++) {
+      const block = currentBlocks[i];
+      if (block.id === targetId) {
+        const originalBlock = block;
+        const newBlock = cloneBlockForState(originalBlock);
+        const updatedBlocks = [...currentBlocks];
+        updatedBlocks.splice(i + 1, 0, newBlock);
+
+        if (originalBlock.type !== BlockType.QUANTIFIER && (i + 1) < currentBlocks.length && currentBlocks[i + 1].type === BlockType.QUANTIFIER) {
+          const originalQuantifier = currentBlocks[i + 1];
+          const newQuantifier = cloneBlockForState(originalQuantifier);
+          updatedBlocks.splice(i + 2, 0, newQuantifier);
+        }
+        return { updatedBlocks, success: true, newSelectedId: newBlock.id };
+      }
+      if (block.children && block.children.length > 0) {
+        const result = duplicateAndInsertBlockRecursive(block.children, targetId);
+        if (result.success) {
+          const updatedBlocks = [...currentBlocks];
+          updatedBlocks[i] = { ...block, children: result.updatedBlocks };
+          return { updatedBlocks, success: true, newSelectedId: result.newSelectedId };
+        }
+      }
+    }
+    return { updatedBlocks: currentBlocks, success: false };
+  };
+
   const handleDuplicateBlock = useCallback((id: string) => {
     setBlocks(prevBlocks => {
       const result = duplicateAndInsertBlockRecursive(prevBlocks, id);
@@ -328,6 +289,18 @@ const RegexVisionWorkspace: React.FC = () => {
       return prevBlocks;
     });
   }, [toast]);
+
+  const processUngroupRecursive = (nodes: Block[], targetId: string): Block[] => {
+    return nodes.flatMap(block => {
+      if (block.id === targetId) {
+        return block.children ? block.children.map(child => cloneBlockForState(child)) : [];
+      }
+      if (block.children && block.children.length > 0) {
+        return [{ ...block, children: processUngroupRecursive(block.children, targetId) }];
+      }
+      return [block];
+    });
+  };
 
   const handleUngroupBlock = useCallback((id: string) => {
     const blockToUngroup = findBlockRecursive(blocks, id);
@@ -355,33 +328,39 @@ const RegexVisionWorkspace: React.FC = () => {
     };
 
     setBlocks(prevBlocks => {
-      const blocksCopy = prevBlocks.map(b => cloneBlockForState(b)); // Deep clone to avoid mutation issues
+      const blocksCopy = prevBlocks.map(b => cloneBlockForState(b));
 
-      const replaceInTree = (nodes: Block[]): Block[] => {
+      const replaceInTree = (nodes: Block[]): Block[] | null => {
           for (let i=0; i < nodes.length; i++) {
               if (nodes[i].id === blockIdToWrap) {
                   const originalBlock = nodes[i];
                   newGroupBlock.children.push(cloneBlockForState(originalBlock));
-                  let nextIndex = i + 1;
-                  if (originalBlock.type !== BlockType.QUANTIFIER && nextIndex < nodes.length && nodes[nextIndex].type === BlockType.QUANTIFIER) {
-                      newGroupBlock.children.push(cloneBlockForState(nodes[nextIndex]));
-                      return [...nodes.slice(0, i), newGroupBlock, ...nodes.slice(nextIndex + 1)];
+                  const updatedNodes = [...nodes];
+
+                  if (originalBlock.type !== BlockType.QUANTIFIER && (i + 1) < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
+                      newGroupBlock.children.push(cloneBlockForState(nodes[i + 1]));
+                      updatedNodes.splice(i, 2, newGroupBlock);
+                  } else {
+                      updatedNodes.splice(i, 1, newGroupBlock);
                   }
-                  return [...nodes.slice(0, i), newGroupBlock, ...nodes.slice(i + 1)];
+                  return updatedNodes;
               }
               if (nodes[i].children) {
-                  const newChildren = replaceInTree(nodes[i].children);
-                  if (newChildren.length !== nodes[i].children.length || newChildren.some((nc, idx) => nc.id !== nodes[i].children[idx].id)) {
-                      return [...nodes.slice(0,i), {...nodes[i], children: newChildren}, ...nodes.slice(i+1)];
+                  const newChildren = replaceInTree(nodes[i].children!);
+                  if (newChildren) {
+                      const updatedNode = { ...nodes[i], children: newChildren };
+                      const finalNodes = [...nodes];
+                      finalNodes[i] = updatedNode;
+                      return finalNodes;
                   }
               }
           }
-          return nodes; // No change
+          return null;
       }
       
       const updatedTree = replaceInTree(blocksCopy);
 
-      if (updatedTree !== blocksCopy) {
+      if (updatedTree) {
         setSelectedBlockId(newGroupBlock.id);
         toast({ title: "Блок обернут", description: "Выбранный блок был обернут в новую группу." });
         return updatedTree;
@@ -391,6 +370,25 @@ const RegexVisionWorkspace: React.FC = () => {
       return prevBlocks;
     });
   }, [toast]);
+
+
+  const findBlockAndParentRecursive = (
+    nodes: Block[],
+    targetId: string,
+    currentParent: Block | null = null
+  ): { block: Block | null; parent: Block | null; indexInParent: number } => {
+    for (let i = 0; i < nodes.length; i++) {
+      const block = nodes[i];
+      if (block.id === targetId) {
+        return { block, parent: currentParent, indexInParent: i };
+      }
+      if (block.children) {
+        const found = findBlockAndParentRecursive(block.children, targetId, block);
+        if (found.block) return found;
+      }
+    }
+    return { block: null, parent: null, indexInParent: -1 };
+  };
 
 
   const handleReorderBlock = useCallback((draggedId: string, dropOnBlockId: string, parentOfDropOnBlockIdOrDropTargetId: string | null) => {
@@ -443,13 +441,11 @@ const RegexVisionWorkspace: React.FC = () => {
         draggedQuantifierInstance = cloneBlockForState(foundQuantifier);
       }
 
-
       const dropTargetNodeInfo = findBlockAndParentRecursive(blocksWithoutDragged, dropOnBlockId);
       if (!dropTargetNodeInfo.block) {
         return prevBlocks;
       }
       const dropTargetNode = dropTargetNodeInfo.block;
-
 
       const canDropTargetBeParent = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(dropTargetNode.type);
       let finalBlocks: Block[];
@@ -481,7 +477,6 @@ const RegexVisionWorkspace: React.FC = () => {
       const blocksToAdd = [draggedBlockInstance];
       if (draggedQuantifierInstance) blocksToAdd.push(draggedQuantifierInstance);
 
-
       if (canDropTargetBeParent && dragTargetRole === 'parent') {
         const addAsChildRecursiveFn = (nodes: Block[], targetParentId: string, childrenToAdd: Block[]): Block[] => {
           return nodes.map(n => {
@@ -497,35 +492,32 @@ const RegexVisionWorkspace: React.FC = () => {
         };
         finalBlocks = addAsChildRecursiveFn(blocksWithoutDragged, dropOnBlockId, blocksToAdd);
       } else {
-        const addAsSiblingRecursiveFn = (
-            nodes: Block[],
-            parentToSearchInId: string | null,
-            afterSiblingId: string,
-            newBlocks: Block[]
-        ): Block[] => {
-            if (parentToSearchInId === null) { 
-                const targetIdx = nodes.findIndex(n => n.id === afterSiblingId);
-                const resultNodes = [...nodes];
-                if (targetIdx !== -1) resultNodes.splice(targetIdx + 1, 0, ...newBlocks);
-                else resultNodes.push(...newBlocks);
-                return resultNodes;
-            }
+        const { parent: dropTargetParent, indexInParent: dropTargetIndex } = dropTargetNodeInfo;
+        const targetContainer = dropTargetParent ? dropTargetParent.children! : blocksWithoutDragged;
+        const adjustedDropIndex = targetContainer.findIndex(b => b.id === dropOnBlockId);
 
-            return nodes.map(n => { 
-                if (n.id === parentToSearchInId) {
-                    const targetIdx = (n.children || []).findIndex(child => child.id === afterSiblingId);
-                    const newChildren = [...(n.children || [])];
-                    if (targetIdx !== -1) newChildren.splice(targetIdx + 1, 0, ...newBlocks);
-                    else newChildren.push(...newBlocks);
-                    return { ...n, children: newChildren, isExpanded: true };
-                }
-                if (n.children) { 
-                    return { ...n, children: addAsSiblingRecursiveFn(n.children, parentToSearchInId, afterSiblingId, newBlocks) };
+        if (adjustedDropIndex !== -1) {
+            targetContainer.splice(adjustedDropIndex + 1, 0, ...blocksToAdd);
+        } else {
+            // Fallback: add to the end of the root if something goes wrong
+            blocksWithoutDragged.push(...blocksToAdd);
+        }
+
+        const updateParentRecursive = (nodes: Block[], parentToUpdate: Block): Block[] => {
+            return nodes.map(n => {
+                if (n.id === parentToUpdate.id) return parentToUpdate;
+                if (n.children) {
+                    return { ...n, children: updateParentRecursive(n.children, parentToUpdate) };
                 }
                 return n;
             });
         };
-        finalBlocks = addAsSiblingRecursiveFn(blocksWithoutDragged, parentOfDropOnBlockIdOrDropTargetId, dropOnBlockId, blocksToAdd);
+
+        if (dropTargetParent) {
+            finalBlocks = updateParentRecursive(blocksWithoutDragged, dropTargetParent);
+        } else {
+            finalBlocks = blocksWithoutDragged;
+        }
       }
       
       setTimeout(() => {
@@ -739,40 +731,55 @@ const RegexVisionWorkspace: React.FC = () => {
     setSelectedBlockId(blockId);
   };
 
+  const isCombinableBlock = (type: BlockType): boolean => {
+    // Defines which blocks can be automatically grouped into an alternation
+    return type === BlockType.LITERAL || type === BlockType.CHARACTER_CLASS;
+  };
+
   const handleAutoGroupAlternation = useCallback((alternationId: string) => {
-    const processNodes = (nodes: Block[]): Block[] => {
-      const altIndex = nodes.findIndex(n => n.id === alternationId);
-
-      if (altIndex !== -1) {
-        const alternationBlock = nodes[altIndex];
-        const literalsToMove: Block[] = [];
-        let currentIndex = altIndex + 1;
-        
-        while (currentIndex < nodes.length && nodes[currentIndex].type === BlockType.LITERAL) {
-          literalsToMove.push(nodes[currentIndex]);
-          currentIndex++;
-        }
-
-        if (literalsToMove.length > 0) {
-          alternationBlock.children.push(...literalsToMove.map(cloneBlockForState));
-          alternationBlock.isExpanded = true;
-          nodes.splice(altIndex + 1, literalsToMove.length);
-          toast({ title: "Блоки объединены!", description: `Добавлено ${literalsToMove.length} вариант(а).` });
-        }
-        return nodes;
-      } else {
-        return nodes.map(node => {
-          if (node.children) {
-            return { ...node, children: processNodes(node.children) };
+    const processNodes = (nodes: Block[]): Block[] | null => {
+      for (let i = 0; i < nodes.length; i++) {
+        if (nodes[i].id === alternationId) {
+          const alternationBlock = nodes[i];
+          const blocksToMove: Block[] = [];
+          let currentIndex = i + 1;
+          
+          while (currentIndex < nodes.length && isCombinableBlock(nodes[currentIndex].type)) {
+            blocksToMove.push(nodes[currentIndex]);
+            currentIndex++;
           }
-          return node;
-        });
+
+          if (blocksToMove.length > 0) {
+            const updatedAlternation = {
+              ...alternationBlock,
+              children: [...(alternationBlock.children || []), ...blocksToMove.map(cloneBlockForState)],
+              isExpanded: true,
+            };
+            const newNodes = [...nodes];
+            newNodes.splice(i, 1, updatedAlternation); // Replace original alternation
+            newNodes.splice(i + 1, blocksToMove.length); // Remove moved blocks
+            
+            toast({ title: "Блоки объединены!", description: `Добавлено ${blocksToMove.length} вариант(а).` });
+            return newNodes;
+          }
+          return null; // No changes made
+        }
+        
+        if (nodes[i].children) {
+          const updatedChildren = processNodes(nodes[i].children!);
+          if (updatedChildren) {
+            const newNodes = [...nodes];
+            newNodes[i] = { ...nodes[i], children: updatedChildren };
+            return newNodes;
+          }
+        }
       }
+      return null; // No changes made
     };
 
     setBlocks(prevBlocks => {
-      const blocksCopy = prevBlocks.map(b => cloneBlockForState(b));
-      return processNodes(blocksCopy);
+      const updatedBlocks = processNodes(prevBlocks);
+      return updatedBlocks || prevBlocks;
     });
   }, [toast]);
 
@@ -811,23 +818,22 @@ const RegexVisionWorkspace: React.FC = () => {
           />
         );
 
-        // Suggestion logic for empty alternation
         const isPotentiallyEmptyAlt = block.type === BlockType.ALTERNATION && (!block.children || block.children.length === 0);
         if (isPotentiallyEmptyAlt) {
-            let subsequentLiteralsCount = 0;
+            let subsequentBlocksToCombineCount = 0;
             let j = i + 1;
-            while (j < nodes.length && nodes[j].type === BlockType.LITERAL) {
-                subsequentLiteralsCount++;
+            while (j < nodes.length && isCombinableBlock(nodes[j].type)) {
+                subsequentBlocksToCombineCount++;
                 j++;
             }
 
-            if (subsequentLiteralsCount > 0) {
+            if (subsequentBlocksToCombineCount > 0) {
                 nodeList.push(
                     <Card key={`${block.id}-suggestion`} className="my-2 p-3 border-amber-500/50 bg-amber-500/10">
                         <div className="flex items-center gap-3">
                             <Lightbulb className="h-6 w-6 text-amber-600 shrink-0" />
                             <div className="flex-1">
-                                <h4 className="font-semibold text-sm">Объединить следующие {subsequentLiteralsCount} блок(а)?</h4>
+                                <h4 className="font-semibold text-sm">Объединить следующие {subsequentBlocksToCombineCount} блок(а)?</h4>
                                 <p className="text-xs text-muted-foreground">Похоже, вы хотите создать выбор 'ИЛИ'.</p>
                             </div>
                             <Button size="sm" variant="outline" className="bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30" onClick={() => handleAutoGroupAlternation(block.id)}>
@@ -886,7 +892,7 @@ const RegexVisionWorkspace: React.FC = () => {
                         <p className="text-sm">Нажмите "Добавить блок" или используйте "AI Помощник".</p>
                       </div>
                     ) : (
-                      <div className="space-y-0"> 
+                      <div className="space-y-0.5"> 
                          {renderBlockNodes(blocks, null, 0, regexOutput.groupInfos)}
                       </div>
                     )}
@@ -945,7 +951,7 @@ const RegexVisionWorkspace: React.FC = () => {
                   <CodeGenerationPanel generatedRegex={regexOutput.regexString} regexFlags={regexFlags} testText={testText} />
                 </TabsContent>
                 <TabsContent value="debug" className="mt-2 flex-1 overflow-y-auto p-0.5">
-                  <DebugView regexString={regexOutput.regexString} testString={testText} />
+                  <DebugView />
                 </TabsContent>
                 <TabsContent value="performance" className="mt-2 flex-1 overflow-y-auto p-0.5">
                   <PerformanceAnalyzerView regexString={regexOutput.regexString} />
