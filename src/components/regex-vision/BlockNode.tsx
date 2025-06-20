@@ -74,14 +74,14 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
   const handleMouseEnter = () => {
     setIsInternallyHovered(true);
-    if (onBlockHover) { // Hover for any block type, not just group
+    if (onBlockHover) { 
       onBlockHover(block.id);
     }
   };
 
   const handleMouseLeave = () => {
     setIsInternallyHovered(false);
-    if (onBlockHover) { // Hover for any block type
+    if (onBlockHover) { 
       onBlockHover(null);
     }
   };
@@ -186,7 +186,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         isDraggingOver && !showAsParentDropTarget && "bg-accent/20 border-accent",
         showAsParentDropTarget && "bg-green-100 dark:bg-green-800/30 border-green-500 ring-1 ring-green-500",
       )}
-      style={{ marginLeft: `${level * 20}px` }} // Reduced margin for deeper nesting
+      style={{ marginLeft: `${level * 20}px` }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onClick={handleSelect}
@@ -196,7 +196,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab flex-shrink-0" />
 
           {canHaveChildren && (
-            <Button variant="ghost" size="icon" onClick={handleToggleExpand} className="h-7 w-7 flex-shrink-0">
+            <Button variant="ghost" size="iconSm" onClick={handleToggleExpand} className="flex-shrink-0">
               {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
             </Button>
           )}
@@ -240,8 +240,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         </div>
 
         {isCurrentlyExpanded && hasVisibleChildren && (
-          <div className="mt-2 pt-2 pl-3 border-l-2 border-primary/30 bg-primary/5 rounded-r-md ml-[calc(1.25rem+8px)] mr-px">
-             {/* ml is 20px (grip) + 8px (gap after grip) approx. */}
+          <div className="mt-2 pt-2 pl-3 border-l-2 border-primary/60 bg-primary/10 rounded-r-md ml-14 mr-px pr-2">
             {block.children.map(child => (
               <BlockNode
                 key={child.id}
@@ -256,7 +255,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                 selectedId={selectedId}
                 onSelect={onSelect}
                 parentId={block.id}
-                level={0} // Children are inside a new styled container, so their relative level is 0
+                level={0} 
                 onBlockHover={onBlockHover}
               />
             ))}
@@ -268,6 +267,6 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 };
 
 export default BlockNode;
-
+    
 
     
