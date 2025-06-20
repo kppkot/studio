@@ -370,11 +370,19 @@ const BlockNode: React.FC<BlockNodeProps> = ({
          </Card>
       )}
 
+      {canHaveChildren && isCurrentlyExpanded && !hasVisibleChildren && (
+        <div className="mt-1 ml-14 mr-px pl-4 pr-2 py-4 border-l-2 border-dashed border-muted-foreground/50 bg-muted/30 rounded-r-md">
+          <div className="text-center text-muted-foreground text-xs italic">
+            <p>{block.type === BlockType.ALTERNATION ? 'Добавьте дочерний блок как первую альтернативу' : 'Добавьте или перетащите дочерние блоки сюда'}</p>
+          </div>
+        </div>
+      )}
+
       {block.type === BlockType.ALTERNATION && isCurrentlyExpanded && hasVisibleChildren && (
         <div className="mt-1 pt-1 border-l-2 border-primary/60 bg-primary/10 rounded-r-md ml-14 mr-px pr-2">
           {block.children.map((altChild, index) => (
             <React.Fragment key={altChild.id}>
-              <div className="py-1"> {/* Added padding around each alternative for spacing */}
+              <div className="py-1">
                 {renderChildNodes([altChild], block.id, depth + 1)}
               </div>
               {index < block.children.length - 1 && (
@@ -391,7 +399,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         </div>
       )}
 
-      {block.type !== BlockType.ALTERNATION && isCurrentlyExpanded && hasVisibleChildren && (
+      {block.type !== BlockType.ALTERNATION && canHaveChildren && isCurrentlyExpanded && hasVisibleChildren && (
         <div className="mt-1 pt-1 pl-3 border-l-2 border-primary/60 bg-primary/10 rounded-r-md ml-14 mr-px pr-2">
           {renderChildNodes(block.children, block.id, depth + 1)}
         </div>
