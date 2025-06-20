@@ -1,10 +1,9 @@
-
 "use client";
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Block, RegexMatch, GroupInfo, SavedPattern, NaturalLanguageRegexOutput } from './types'; 
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks, createSequenceGroup, escapeRegexChars, createCharClass, createQuantifier, createAnchor, createAlternation, createLookaround, createBackreference } from './utils'; 
+import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks } from './utils'; 
 import { useToast } from '@/hooks/use-toast';
 import { generateRegexFromNaturalLanguage } from '@/ai/flows/natural-language-regex-flow';
 
@@ -65,8 +64,7 @@ const duplicateAndInsertBlockRecursive = (currentBlocks: Block[], targetId: stri
       updatedBlocks.splice(i + 1, 0, newBlock);
 
       // Check if the duplicated block has an attached quantifier
-      let nextBlockIsQuantifier = false;
-      if ((i + 1) < updatedBlocks.length && updatedBlocks[i+1].type === BlockType.QUANTIFIER && block.type !== BlockType.QUANTIFIER) {
+      if (block.type !== BlockType.QUANTIFIER && (i + 1) < updatedBlocks.length && updatedBlocks[i+1].type === BlockType.QUANTIFIER) {
           // This condition means the original block was followed by a quantifier.
           // We should also duplicate the quantifier.
           const originalQuantifier = updatedBlocks[i+2]; // original quantifier is now at i+2 because newBlock was inserted at i+1
@@ -132,7 +130,6 @@ const RegexVisionWorkspace: React.FC = () => {
   const [regexFlags, setRegexFlags] = useState<string>('g');
   const [matches, setMatches] = useState<RegexMatch[]>([]);
   const [regexOutput, setRegexOutput] = useState<{ regexString: string; groupInfos: GroupInfo[] }>({ regexString: '', groupInfos: [] });
-  const [highlightedGroupInTestArea, setHighlightedGroupInTestArea] = useState<{ groupIndex: number } | null>(null);
 
 
   const { toast } = useToast();
@@ -160,34 +157,6 @@ const RegexVisionWorkspace: React.FC = () => {
       setMatches([]);
     }
   }, [blocks, testText, regexFlags]);
-
-
-  useEffect(() => {
-    let blockIdToProcess: string | null = null;
-    let isHoverSource = false;
-
-    if (hoveredBlockId) {
-        blockIdToProcess = hoveredBlockId;
-        isHoverSource = true;
-    } else if (selectedBlockId) {
-        blockIdToProcess = selectedBlockId;
-    }
-
-    if (blockIdToProcess) {
-        const block = findBlockRecursive(blocks, blockIdToProcess);
-        if (block && block.type === BlockType.GROUP) {
-            const foundGroupInfo = regexOutput.groupInfos.find(gi => gi.blockId === block.id);
-            if (foundGroupInfo) {
-                setHighlightedGroupInTestArea({ groupIndex: foundGroupInfo.groupIndex });
-                return;
-            }
-        }
-    }
-    
-    if (!isHoverSource || !blockIdToProcess) { 
-        setHighlightedGroupInTestArea(null);
-    }
-  }, [selectedBlockId, hoveredBlockId, blocks, regexOutput.groupInfos]);
 
 
   const findBlockRecursive = (searchBlocks: Block[], id: string): Block | null => {
@@ -413,75 +382,31 @@ const RegexVisionWorkspace: React.FC = () => {
     setBlocks(prevBlocks => {
       const blocksCopy = prevBlocks.map(b => cloneBlockForState(b)); // Deep clone to avoid mutation issues
 
-      const wrapRecursively = (currentNodes: Block[], nodesToRemoveFromOriginalArray: Set<string>): {wrappedNodes: Block[], success: boolean} => {
-        let success = false;
-        const mappedNodes: Block[] = [];
-
-        for (let i = 0; i < currentNodes.length; i++) {
-          const node = currentNodes[i];
-          if (node.id === blockIdToWrap) {
-            newGroupBlock.children.push(cloneBlockForState(node));
-            // Check for attached quantifier
-            if (node.type !== BlockType.QUANTIFIER && (i + 1) < currentNodes.length && currentNodes[i + 1].type === BlockType.QUANTIFIER) {
-              newGroupBlock.children.push(cloneBlockForState(currentNodes[i + 1]));
-              nodesToRemoveFromOriginalArray.add(currentNodes[i + 1].id); // Mark quantifier for removal from original list
-              i++; // Skip the quantifier in this loop
-            }
-            mappedNodes.push(newGroupBlock);
-            success = true;
-          } else if (node.children) {
-            const childResult = wrapRecursively(node.children, nodesToRemoveFromOriginalArray);
-            if (childResult.success) {
-              // If success in children, it means the target was found and wrapped there.
-              // The structure of mappedNodes should reflect this.
-              mappedNodes.push({ ...node, children: childResult.wrappedNodes });
-              success = true; // Propagate success
-            } else {
-              mappedNodes.push(node);
-            }
-          } else {
-            mappedNodes.push(node);
+      const replaceInTree = (nodes: Block[]): Block[] => {
+          for (let i=0; i < nodes.length; i++) {
+              if (nodes[i].id === blockIdToWrap) {
+                  const originalBlock = nodes[i];
+                  newGroupBlock.children.push(cloneBlockForState(originalBlock));
+                  let nextIndex = i + 1;
+                  if (originalBlock.type !== BlockType.QUANTIFIER && nextIndex < nodes.length && nodes[nextIndex].type === BlockType.QUANTIFIER) {
+                      newGroupBlock.children.push(cloneBlockForState(nodes[nextIndex]));
+                      return [...nodes.slice(0, i), newGroupBlock, ...nodes.slice(nextIndex + 1)];
+                  }
+                  return [...nodes.slice(0, i), newGroupBlock, ...nodes.slice(i + 1)];
+              }
+              if (nodes[i].children) {
+                  const newChildren = replaceInTree(nodes[i].children);
+                  if (newChildren.length !== nodes[i].children.length || newChildren.some((nc, idx) => nc.id !== nodes[i].children[idx].id)) {
+                      return [...nodes.slice(0,i), {...nodes[i], children: newChildren}, ...nodes.slice(i+1)];
+                  }
+              }
           }
-        }
-        return {wrappedNodes: mappedNodes, success};
-      };
+          return nodes; // No change
+      }
       
-      const nodesToRemove = new Set<string>();
-      const result = wrapRecursively(blocksCopy, nodesToRemove);
+      const updatedTree = replaceInTree(blocksCopy);
 
-      if (result.success) {
-        // Filter out original nodes that were wrapped (main block + its quantifier if any)
-        const finalBlocks = result.wrappedNodes.filter(b => b.id !== blockIdToWrap && !nodesToRemove.has(b.id));
-        // This logic is flawed. The wrapped block is *replaced* by the group, not just filtered out.
-        // Let's rethink the update.
-
-        // Corrected approach: Find the path to the wrapped block and replace it.
-        const replaceInTree = (nodes: Block[]): Block[] => {
-            for (let i=0; i < nodes.length; i++) {
-                if (nodes[i].id === blockIdToWrap) {
-                    const originalBlock = nodes[i];
-                    newGroupBlock.children.push(cloneBlockForState(originalBlock));
-                    let nextIndex = i + 1;
-                    if (originalBlock.type !== BlockType.QUANTIFIER && nextIndex < nodes.length && nodes[nextIndex].type === BlockType.QUANTIFIER) {
-                        newGroupBlock.children.push(cloneBlockForState(nodes[nextIndex]));
-                        // Create a new array excluding the wrapped block and its quantifier
-                        return [...nodes.slice(0, i), newGroupBlock, ...nodes.slice(nextIndex + 1)];
-                    }
-                    return [...nodes.slice(0, i), newGroupBlock, ...nodes.slice(i + 1)];
-                }
-                if (nodes[i].children) {
-                    const newChildren = replaceInTree(nodes[i].children);
-                    if (newChildren.length !== nodes[i].children.length || newChildren.some((nc, idx) => nc.id !== nodes[i].children[idx].id)) {
-                         // check if children array changed
-                        return [...nodes.slice(0,i), {...nodes[i], children: newChildren}, ...nodes.slice(i+1)];
-                    }
-                }
-            }
-            return nodes; // No change
-        }
-        
-        const updatedTree = replaceInTree(blocksCopy);
-
+      if (updatedTree !== blocksCopy) {
         setSelectedBlockId(newGroupBlock.id);
         toast({ title: "Блок обернут", description: "Выбранный блок был обернут в новую группу." });
         return updatedTree;
@@ -507,10 +432,9 @@ const RegexVisionWorkspace: React.FC = () => {
             const b = nodes[i];
             if (b.id === idToRemove) {
                 found = b;
-                // Check for attached quantifier
                 if (b.type !== BlockType.QUANTIFIER && (i + 1) < nodes.length && nodes[i+1].type === BlockType.QUANTIFIER) {
                     foundQ = nodes[i+1];
-                    i++; // also skip the quantifier
+                    i++; 
                 }
             } else {
                 newNodes.push(b);
@@ -732,7 +656,7 @@ const RegexVisionWorkspace: React.FC = () => {
       if (selectedBlockId && (event.key === 'Delete' || event.key === 'Backspace')) {
         event.preventDefault();
         const block = findBlockRecursive(blocks,selectedBlockId);
-        const deleteAttached = block?.type !== BlockType.QUANTIFIER; // If selected is not quantifier, delete its attached.
+        const deleteAttached = block?.type !== BlockType.QUANTIFIER;
         handleDeleteBlock(selectedBlockId, deleteAttached);
       }
 
@@ -756,7 +680,6 @@ const RegexVisionWorkspace: React.FC = () => {
           event.preventDefault();
           const siblings = parent ? parent.children : blocks;
           if(currentBlock.type === BlockType.QUANTIFIER && parent && parent.children.includes(currentBlock) && indexInParent > 0){
-            // If current is quantifier, ArrowUp should select its "parent" block from the visual pairing
             setSelectedBlockId(siblings[indexInParent - 1].id);
           } else if (indexInParent > 0 && siblings) {
             setSelectedBlockId(siblings[indexInParent - 1].id);
@@ -765,7 +688,6 @@ const RegexVisionWorkspace: React.FC = () => {
           event.preventDefault();
           const siblings = parent ? parent.children : blocks;
           if (siblings && indexInParent < siblings.length - 1) {
-            // Check if current block is rendered with an attached quantifier
             if(currentBlock.type !== BlockType.QUANTIFIER && (indexInParent + 1) < siblings.length && siblings[indexInParent+1].type === BlockType.QUANTIFIER){
                  setSelectedBlockId(siblings[indexInParent + 1].id);
             } else {
@@ -844,10 +766,6 @@ const RegexVisionWorkspace: React.FC = () => {
 
 
   const headerHeight = "60px";
-  const outputPanelMinHeight = "250px";
-  const settingsHeaderHeight = "50px";
-
-  const CONNECTOR_X_OFFSET = '10px'; 
 
   const renderBlockNodes = (nodes: Block[], parentId: string | null, currentDepth: number): React.ReactNode[] => {
     const nodeList: React.ReactNode[] = [];
@@ -860,7 +778,6 @@ const RegexVisionWorkspace: React.FC = () => {
         }
         
         nodeList.push(
-          // Removed wrapper div with flow line to simplify for now
           <BlockNode
             key={block.id}
             block={block}
@@ -890,7 +807,7 @@ const RegexVisionWorkspace: React.FC = () => {
 
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground" style={{ "--header-height": headerHeight, "--output-panel-min-height": outputPanelMinHeight, "--settings-header-height": settingsHeaderHeight } as React.CSSProperties}>
+    <div className="flex flex-col h-screen bg-background text-foreground" style={{ "--header-height": headerHeight } as React.CSSProperties}>
       <AppHeader onShare={handleShare} onExport={handleExport} onImport={handleImport} />
 
       <ResizablePanelGroup direction="vertical" className="flex-1 overflow-hidden">
@@ -941,7 +858,7 @@ const RegexVisionWorkspace: React.FC = () => {
                    <div className="h-full m-2 ml-0 shadow-md border-primary/20 rounded-lg overflow-hidden bg-card">
                      <SettingsPanel
                         block={selectedBlock}
-                        onUpdate={(id, data) => handleUpdateBlock(id, data as Partial<Block>)}
+                        onUpdate={handleUpdateBlock}
                         onClose={() => setSelectedBlockId(null)}
                       />
                    </div>

@@ -1,4 +1,3 @@
-
 "use client";
 import React, { useState } from 'react';
 import type { Block, BlockConfig, LiteralSettings, CharacterClassSettings, QuantifierSettings, GroupSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, ConditionalSettings } from './types';
@@ -12,7 +11,7 @@ import { cn } from '@/lib/utils';
 interface BlockNodeProps {
   block: Block;
   quantifierToRender?: Block | null; 
-  onUpdate: (id: string, updatedBlock: Block) => void;
+  onUpdate: (id: string, updatedBlock: Partial<Block>) => void;
   onDelete: (id: string, deleteAttachedQuantifier?: boolean) => void; 
   onAddChild: (parentId: string) => void;
   onDuplicate: (id: string) => void;
