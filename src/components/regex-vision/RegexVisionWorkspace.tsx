@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { Block, RegexMatch, GroupInfo, SavedPattern } from './types'; 
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { generateId, generateRegexStringAndGroupInfo, generateRegexString, processAiBlocks, createLiteral } from './utils'; 
+import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks } from './utils'; 
 import { useToast } from '@/hooks/use-toast';
 import { generateRegexFromNaturalLanguage, NaturalLanguageRegexOutput } from '@/ai/flows/natural-language-regex-flow';
 
@@ -171,7 +171,7 @@ const RegexVisionWorkspace: React.FC = () => {
         }
     }
     
-    if (!isHoverSource || !blockIdToProcess) { // Only clear if not actively hovering or selection is cleared
+    if (!isHoverSource || !blockIdToProcess) { 
         setHighlightedGroupInTestArea(null);
     }
   }, [selectedBlockId, hoveredBlockId, blocks, regexOutput.groupInfos]);
@@ -675,8 +675,7 @@ const RegexVisionWorkspace: React.FC = () => {
         setRegexOutput({ regexString: newRegex, groupInfos });
         toast({ title: "Паттерн применен и разобран!", description: `"${pattern.name}" загружен и преобразован в блоки.` });
       } else {
-        // Fallback: AI couldn't parse, or no blocks returned
-        const fallbackBlock = createLiteral(pattern.regexString, false); // false because it's already a regex
+        const fallbackBlock = createLiteral(pattern.regexString, false); 
         setBlocks([fallbackBlock]);
         const { regexString: newRegex, groupInfos } = generateRegexStringAndGroupInfo([fallbackBlock]);
         setRegexOutput({ regexString: newRegex, groupInfos });
@@ -709,7 +708,7 @@ const RegexVisionWorkspace: React.FC = () => {
         <ResizablePanel defaultSize={65} minSize={30}>
           <ResizablePanelGroup direction="horizontal" className="h-full">
             <ResizablePanel defaultSize={selectedBlockId ? 60 : 100} minSize={30} className="flex flex-col overflow-hidden">
-              <Card className="m-2 flex-1 flex flex-col shadow-md border-primary/20">
+              <Card className="m-2 flex-1 flex flex-col shadow-md border-primary/20 overflow-hidden">
                 <CardHeader className="py-2 px-3 border-b">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base flex items-center gap-2"><Edit3 size={18} className="text-primary"/> Дерево выражения</CardTitle>
@@ -729,7 +728,7 @@ const RegexVisionWorkspace: React.FC = () => {
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="p-3 flex-1 overflow-hidden">
+                <CardContent className="p-3 flex-1 min-h-0"> {/* Added min-h-0 for flex child */}
                   <ScrollArea className="h-full pr-2">
                     {blocks.length === 0 ? (
                       <div className="text-center text-muted-foreground py-10 flex flex-col items-center justify-center h-full">
@@ -783,7 +782,13 @@ const RegexVisionWorkspace: React.FC = () => {
         <ResizablePanel defaultSize={35} minSize={20} className="bg-card p-2 shadow-top">
             <div className="h-full flex flex-col">
               <div className="mb-3">
-                <RegexOutputDisplay blocks={blocks} generatedRegex={regexOutput.regexString} regexFlags={regexFlags} onFlagsChange={setRegexFlags} />
+                <RegexOutputDisplay 
+                    blocks={blocks} 
+                    generatedRegex={regexOutput.regexString} 
+                    regexFlags={regexFlags} 
+                    onFlagsChange={setRegexFlags}
+                    selectedBlockId={selectedBlockId} 
+                />
               </div>
               <Tabs defaultValue="testing" className="flex-1 flex flex-col min-h-0">
                 <TabsList className="grid w-full grid-cols-5">
@@ -852,4 +857,3 @@ const RegexVisionWorkspace: React.FC = () => {
 };
 
 export default RegexVisionWorkspace;
-

@@ -77,25 +77,29 @@ interface WizardFormData {
   replacementChoice?: 'multipleSpaces' | 'tabsToSpaces';
 }
 
+const aiPromptExamples: string[] = [
+    "Найти все email адреса",
+    "Извлечь URL из текста",
+    "Найти номера телефонов в формате +7 XXX XXX XX XX",
+    "Найти все даты в формате ДД.ММ.ГГГГ",
+    "Слова, начинающиеся с 'авто-'",
+    "Проверить, является ли строка валидным IPv4 адресом",
+    "Найти все слова, написанные КИРИЛЛИЦЕЙ",
+    "Извлечь числа с двумя знаками после запятой"
+];
 
 const wizardConfig: Record<WizardStepId, any> = {
   start: {
     title: "AI Помощник RegexVision",
-    description: "Как вы хотите создать регулярное выражение?",
-    type: 'card_choice',
+    description: "Опишите, что вы хотите найти, и AI предложит варианты. Ниже несколько примеров:",
+    type: 'card_choice_single_ai', // Новый тип для специального рендеринга
     options: [
-      { id: 'ai_assisted', label: "Ввести запрос на естественном языке", description: "Опишите, что вы хотите найти, и AI предложит варианты.", icon: Sparkles },
-      { id: 'validation', label: "Проверить Формат (по шагам)", description: "Валидация email, URL, дат и т.д.", icon: CheckSquare},
-      { id: 'extraction', label: "Найти и Извлечь (по шагам)", description: "Извлечение email, чисел, текста в кавычках.", icon: SearchCheck },
-      { id: 'replacement', label: "Заменить / Изменить (по шагам)", description: "Удаление пробелов, маскирование, замена.", icon: Replace },
-      { id: 'splitting', label: "Разделить Текст (по шагам)", description: "Разбивка по запятой, пробелу, символу.", icon: Split, disabled: true },
+      { id: 'ai_assisted', label: "Ввести запрос на естественном языке", description: "AI поможет вам составить Regex.", icon: Sparkles },
     ],
+    examples: aiPromptExamples,
     next: (choice: string) => {
       if (choice === 'ai_assisted') return 'ai_natural_language_input';
-      if (choice === 'validation') return 'validation_type_choice';
-      if (choice === 'extraction') return 'extraction_whatToExtract';
-      if (choice === 'replacement') return 'replacement_whatToReplace';
-      return 'start';
+      return 'start'; // Should not happen if only one option
     }
   },
   ai_natural_language_input: {
@@ -228,7 +232,7 @@ const wizardConfig: Record<WizardStepId, any> = {
 
 const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, onComplete, initialParentId }) => {
   const [currentStepId, setCurrentStepId] = useState<WizardStepId>('start');
-  const [formData, setFormData] = useState<WizardFormData>({});
+  const [formData, setFormData] = useState<WizardFormData>({mainCategory: 'ai_assisted'}); // Pre-select AI category
   const [generatedBlocks, setGeneratedBlocks] = useState<Block[]>([]);
   const [aiExplanation, setAiExplanation] = useState<string | null>(null);
   const [replacementString, setReplacementString] = useState<string | null>(null);
@@ -238,7 +242,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   useEffect(() => {
     if (isOpen) {
         setCurrentStepId('start');
-        setFormData({});
+        setFormData({mainCategory: 'ai_assisted'}); // Ensure AI is pre-selected
         setGeneratedBlocks([]);
         setAiExplanation(null);
         setReplacementString(null);
@@ -336,11 +340,11 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         return [];
     } else if (formData.mainCategory === 'replacement') {
         if (formData.replacementChoice === 'multipleSpaces') {
-             setReplacementString(" (один пробел)"); // Placeholder for replacement string info
+             setReplacementString(" (один пробел)"); 
              return generateBlocksForMultipleSpaces();
         } 
         if (formData.replacementChoice === 'tabsToSpaces') {
-             setReplacementString(" (один пробел)"); // Placeholder
+             setReplacementString(" (один пробел)"); 
              return generateBlocksForTabsToSpaces();
         } 
         return [];
@@ -443,9 +447,9 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         nextStepTargetId = 'final_preview';
 
     } else if ('next' in currentStepConfig && typeof currentStepConfig.next === 'function') {
-      if (choice || currentStepConfig.type !== 'radio' && currentStepConfig.type !== 'card_choice' && currentStepConfig.type !== 'radio_with_conditional_input' ) { 
+      if (choice || currentStepConfig.type !== 'radio' && currentStepConfig.type !== 'card_choice' && currentStepConfig.type !== 'card_choice_single_ai' && currentStepConfig.type !== 'radio_with_conditional_input' ) { 
         nextStepTargetId = currentStepConfig.next(choice) as WizardStepId;
-      } else if (!choice && (currentStepConfig.type === 'radio' || currentStepConfig.type === 'card_choice' || currentStepConfig.type === 'radio_with_conditional_input')) {
+      } else if (!choice && (currentStepConfig.type === 'radio' || currentStepConfig.type === 'card_choice' || currentStepConfig.type === 'card_choice_single_ai' || currentStepConfig.type === 'radio_with_conditional_input')) {
           console.warn("Wizard: No choice made on step", currentStepId);
           toast({ title: "Выбор не сделан", description: "Пожалуйста, выберите опцию.", variant: "destructive"});
           return; 
@@ -510,7 +514,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
   const resetWizardAndClose = () => {
     setCurrentStepId('start');
-    setFormData({});
+    setFormData({mainCategory: 'ai_assisted'});
     setGeneratedBlocks([]);
     setAiExplanation(null);
     setReplacementString(null);
@@ -523,7 +527,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     if (!currentStepConfig) return true;
     if (isLoadingAI) return true;
     
-    if ((currentStepConfig.type === 'radio' || currentStepConfig.type === 'card_choice') && !currentChoice) {
+    if ((currentStepConfig.type === 'radio' || currentStepConfig.type === 'card_choice' || currentStepConfig.type === 'card_choice_single_ai') && !currentChoice) {
       if (currentStepConfig.options?.every((opt:any) => opt.disabled)) return false;
       return true;
     }
@@ -550,12 +554,45 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         <DialogHeader>
           <DialogTitle>{currentStepConfig?.title || "AI Помощник"}</DialogTitle>
           {currentStepConfig?.description && (
-            <DialogDescription>{currentStepConfig.description}</DialogDescription>
+            <DialogDescription className="mt-1">{currentStepConfig.description}</DialogDescription>
           )}
         </DialogHeader>
 
         <ScrollArea className="flex-1 pr-4 -mr-4 py-2">
           <div className="space-y-6">
+            {currentStepConfig?.type === 'card_choice_single_ai' && currentStepConfig.options && (
+                <div className="space-y-4">
+                    {currentStepConfig.options.map((opt: any) => (
+                        <Button
+                            key={opt.id}
+                            variant="outline"
+                            className={cn(
+                                "flex-col h-auto p-4 items-start text-left space-y-1.5 transition-all w-full",
+                                formData.mainCategory === opt.id && "ring-2 ring-primary bg-accent text-accent-foreground",
+                                opt.disabled && "opacity-50 cursor-not-allowed"
+                            )}
+                            onClick={() => !opt.disabled && handleRadioChange(opt.id)}
+                            disabled={opt.disabled}
+                        >
+                            <div className="flex items-center gap-2">
+                                <opt.icon size={22} className="text-primary"/>
+                                <span className="font-semibold text-base">{opt.label}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground pl-1">{opt.description}</p>
+                             {opt.disabled && <span className="text-xs text-amber-600 dark:text-amber-400 mt-1">(скоро)</span>}
+                        </Button>
+                    ))}
+                    {currentStepConfig.examples && (
+                        <div className="text-xs text-muted-foreground space-y-1 px-1">
+                            {currentStepConfig.examples.map((ex: string, index: number) => (
+                                <div key={index} className="p-1.5 bg-muted/50 rounded-sm font-mono">
+                                   &raquo; {ex}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
             {currentStepConfig?.type === 'card_choice' && currentStepConfig.options && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {currentStepConfig.options.map((opt: any) => (
@@ -806,4 +843,3 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 };
 
 export default RegexWizardModal;
-
