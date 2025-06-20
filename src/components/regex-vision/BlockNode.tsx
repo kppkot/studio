@@ -1,3 +1,4 @@
+
 "use client";
 import React, { useState } from 'react';
 import type { Block, BlockConfig, LiteralSettings, CharacterClassSettings, QuantifierSettings, GroupSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, ConditionalSettings, GroupInfo } from './types';
@@ -29,6 +30,7 @@ interface BlockNodeProps {
 
 const getDescriptiveBlockTitle = (block: Block, config: BlockConfig, groupInfo?: GroupInfo): { title: string, details: string } => {
   const settings = block.settings;
+  const hasChildren = block.children && block.children.length > 0;
   let title = config.name;
   let details = "";
 
@@ -75,6 +77,11 @@ const getDescriptiveBlockTitle = (block: Block, config: BlockConfig, groupInfo?:
       break;
     case BlockType.GROUP:
         const gs = settings as GroupSettings;
+        if (!hasChildren) {
+            title = 'Пустой контейнер (Группа)';
+            details = '(добавьте элементы внутрь)';
+            break;
+        }
         if (gs.type === 'non-capturing') {
             title = 'Группа (только для порядка)';
         } else if (gs.type === 'named' && gs.name) {
@@ -82,13 +89,38 @@ const getDescriptiveBlockTitle = (block: Block, config: BlockConfig, groupInfo?:
         } else if (gs.type === 'capturing' && groupInfo) {
             title = `Группа (захват №${groupInfo.groupIndex})`;
         } else {
-            // Fallback titles
             if (gs.type === 'named') title = 'Группа (именованный захват)';
             else if (gs.type === 'capturing') title = 'Группа (захват)';
             else title = 'Группа';
         }
         details = `(${gs.type === 'non-capturing' ? '?:' : ''}${gs.type === 'named' ? `?<${gs.name || ''}>` : ''}... )`;
         break;
+    case BlockType.ALTERNATION:
+        if (!hasChildren) {
+            title = "Пустой выбор 'ИЛИ'";
+            details = '(добавьте 1-ю альтернативу)';
+            break;
+        }
+        title = 'Чередование (ИЛИ)';
+        details = '(...|...)';
+        break;
+    case BlockType.LOOKAROUND:
+      const los = settings as LookaroundSettings;
+      let lookDesc = '';
+      let lookSymbol = '';
+      if (los.type === 'positive-lookahead') { lookDesc = 'Просмотр вперед (позитивный)'; lookSymbol = '(?=...)'; }
+      else if (los.type === 'negative-lookahead') { lookDesc = 'Просмотр вперед (негативный)'; lookSymbol = '(?!...)'; }
+      else if (los.type === 'positive-lookbehind') { lookDesc = 'Просмотр назад (позитивный)'; lookSymbol = '(?<=...)'; }
+      else if (los.type === 'negative-lookbehind') { lookDesc = 'Просмотр назад (негативный)'; lookSymbol = '(?<!...)'; }
+      
+      if (!hasChildren) {
+          title = `Пустой контейнер (${lookDesc})`;
+          details = '(добавьте элементы внутрь)';
+          break;
+      }
+      title = lookDesc;
+      details = lookSymbol;
+      break;
     case BlockType.ANCHOR:
       const as = settings as AnchorSettings;
       let anchorDesc = '';
@@ -98,21 +130,6 @@ const getDescriptiveBlockTitle = (block: Block, config: BlockConfig, groupInfo?:
       else if (as.type === '\\B') anchorDesc = 'НЕ граница слова';
       title = `Условие: ${anchorDesc}`;
       details = as.type;
-      break;
-    case BlockType.LOOKAROUND:
-      const los = settings as LookaroundSettings;
-      let lookDesc = '';
-      let lookSymbol = '';
-      if (los.type === 'positive-lookahead') { lookDesc = 'Просмотр вперед (позитивный)'; lookSymbol = '(?=...)'; }
-      else if (los.type === 'negative-lookahead') { lookDesc = 'Просмотр вперед (негативный)'; lookSymbol = '(?!...)'; }
-      else if (los.type === 'positive-lookbehind') { lookDesc = 'Просмотр назад (позитивный)'; lookSymbol = '(?<=...)'; }
-      else if (los.type === 'negative-lookbehind') { lookDesc = 'Просмотр назад (негативный)'; lookSymbol = '(?<!...)'; }
-      title = lookDesc;
-      details = lookSymbol;
-      break;
-    case BlockType.ALTERNATION:
-      title = 'Чередование (ИЛИ)';
-      details = '(...|...)';
       break;
     case BlockType.BACKREFERENCE:
       const brs = settings as BackreferenceSettings;
@@ -163,6 +180,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
   const hasVisibleChildren = block.children && block.children.length > 0;
   const isCurrentlyExpanded = block.isExpanded ?? (canHaveChildren ? true : false);
+  const isEmptyContainer = canHaveChildren && !hasVisibleChildren;
 
   const isSelected = selectedId === block.id || (quantifierToRender && selectedId === quantifierToRender.id);
 
@@ -288,7 +306,11 @@ const BlockNode: React.FC<BlockNodeProps> = ({
       onMouseLeave={handleMouseLeave}
     >
       <Card 
-        className={cn("shadow-sm hover:shadow-md", selectedId === block.id && "border-primary ring-2 ring-primary bg-primary/5")}
+        className={cn(
+            "shadow-sm hover:shadow-md", 
+            selectedId === block.id && "border-primary ring-2 ring-primary bg-primary/5",
+            isEmptyContainer && "border-dashed bg-muted/30"
+        )}
         onClick={(e) => handleSelectBlock(e, block.id)}
         onMouseEnter={(e) => handleHoverBlock(e, block.id)}
         onMouseLeave={(e) => handleHoverBlock(e, null)}
@@ -308,11 +330,18 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             <div className="flex items-center gap-1.5 flex-1 min-w-0">
               <span className={cn(
                   "text-primary p-1 bg-primary/10 rounded-sm flex items-center justify-center h-7 w-7 flex-shrink-0",
-                  selectedId === block.id && "ring-1 ring-primary"
+                  selectedId === block.id && "ring-1 ring-primary",
+                  isEmptyContainer && "opacity-50"
                 )}>
                 {typeof config.icon === 'string' ? <span className="font-mono text-xs">{config.icon}</span> : config.icon}
               </span>
-              <span className={cn("font-medium text-sm whitespace-nowrap", selectedId === block.id && "text-primary font-semibold")}>{descriptiveTitle}</span>
+              <span className={cn(
+                  "font-medium text-sm whitespace-nowrap", 
+                  selectedId === block.id && "text-primary font-semibold",
+                  isEmptyContainer && "text-muted-foreground italic"
+              )}>
+                  {descriptiveTitle}
+              </span>
               {descriptiveDetails && descriptiveTitle !== descriptiveDetails && (
                   <span className="text-xs text-muted-foreground font-mono truncate hidden md:inline">
                       {descriptiveDetails}
@@ -342,12 +371,6 @@ const BlockNode: React.FC<BlockNodeProps> = ({
               </Button>
             </div>
           </div>
-          {block.type === BlockType.GROUP && (!block.children || block.children.length === 0) && (
-            <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-500 border-t border-dashed mt-1.5 pt-1.5 mx-1">
-              <AlertTriangle size={14} />
-              <span>Пустая группа</span>
-            </div>
-          )}
         </CardContent>
       </Card>
       
@@ -386,7 +409,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
          </Card>
       )}
 
-      {canHaveChildren && isCurrentlyExpanded && !hasVisibleChildren && (
+      {isEmptyContainer && isCurrentlyExpanded && (
         <div className="mt-1 ml-14 mr-px pl-4 pr-2 py-4 border-l-2 border-dashed border-muted-foreground/50 bg-muted/30 rounded-r-md">
           <div className="text-center text-muted-foreground text-xs italic">
             <p>{block.type === BlockType.ALTERNATION ? 'Добавьте дочерний блок как первую альтернативу' : 'Добавьте или перетащите дочерние блоки сюда'}</p>
@@ -425,3 +448,5 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 };
 
 export default BlockNode;
+
+    
