@@ -860,7 +860,7 @@ const RegexVisionWorkspace: React.FC = () => {
         }
         
         nodeList.push(
-          // Removed wrapper div to place BlockNode directly for flat list feel, quantifier is handled inside BlockNode
+          // Removed wrapper div with flow line to simplify for now
           <BlockNode
             key={block.id}
             block={block}
