@@ -21,7 +21,7 @@ interface BlockNodeProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
   parentId: string | null;
-  level?: number;
+  depth?: number; // Changed from level to depth
   onBlockHover?: (blockId: string | null) => void;
 }
 
@@ -116,7 +116,7 @@ const getDescriptiveBlockTitle = (block: Block, config: BlockConfig): { title: s
       details = `(?(...)...|...)`;
       break;
     default:
-      details = config.name; // Fallback
+      details = config.name; 
       break;
   }
   return { title, details: details || title };
@@ -135,7 +135,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   selectedId,
   onSelect,
   parentId,
-  level = 0,
+  depth = 0, 
   onBlockHover,
 }) => {
   const [isInternallyHovered, setIsInternallyHovered] = useState(false);
@@ -233,6 +233,10 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     document.body.removeAttribute('data-drag-target-role');
   };
 
+  // Card's own marginLeft is set to '0px' as the wrapper in RegexVisionWorkspace handles indentation for root blocks.
+  // Children's indentation is handled by their specific container's `ml-14`.
+  const cardMarginLeft = '0px';
+
   return (
     <Card
       draggable
@@ -241,12 +245,12 @@ const BlockNode: React.FC<BlockNodeProps> = ({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className={cn(
-        "mb-2 transition-all shadow-sm hover:shadow-md relative",
+        "mb-2 transition-all shadow-sm hover:shadow-md relative", // mb-2 for spacing between cards
         isSelected && "border-primary ring-2 ring-primary ring-offset-2 bg-primary/5",
         isDraggingOver && !showAsParentDropTarget && "bg-accent/20 border-accent",
         showAsParentDropTarget && "bg-green-100 dark:bg-green-800/30 border-green-500 ring-1 ring-green-500",
       )}
-      style={{ marginLeft: `${level * 20}px` }}
+      style={{ marginLeft: cardMarginLeft }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onClick={handleSelect}
@@ -317,7 +321,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                 selectedId={selectedId}
                 onSelect={onSelect}
                 parentId={block.id}
-                level={0} 
+                depth={0} // Children inside this container are at relative depth 0 to it
                 onBlockHover={onBlockHover}
               />
             ))}
@@ -329,6 +333,3 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 };
 
 export default BlockNode;
-    
-
-    

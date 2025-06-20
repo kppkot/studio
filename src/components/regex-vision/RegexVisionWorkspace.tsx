@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Sparkles, Gauge, Library } from 'lucide-react'; 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { cn } from '@/lib/utils';
 
 const deepCloneBlock = (block: Block): Block => {
   const newBlock: Block = {
@@ -479,23 +480,23 @@ const RegexVisionWorkspace: React.FC = () => {
             afterSiblingId: string,
             blockToAdd: Block
         ): Block[] => {
-            if (parentToSearchInId === null) {
+            if (parentToSearchInId === null) { // Operating on root blocks
                 const targetIdx = nodes.findIndex(n => n.id === afterSiblingId);
                 const newRootNodes = [...nodes];
                 if (targetIdx !== -1) newRootNodes.splice(targetIdx + 1, 0, blockToAdd);
-                else newRootNodes.push(blockToAdd);
+                else newRootNodes.push(blockToAdd); // Fallback if targetId not found (should not happen)
                 return newRootNodes;
             }
 
-            return nodes.map(n => {
+            return nodes.map(n => { // Operating on children of a specific parent
                 if (n.id === parentToSearchInId) {
                     const targetIdx = (n.children || []).findIndex(child => child.id === afterSiblingId);
                     const newChildren = [...(n.children || [])];
                     if (targetIdx !== -1) newChildren.splice(targetIdx + 1, 0, blockToAdd);
-                    else newChildren.push(blockToAdd);
+                    else newChildren.push(blockToAdd); // Fallback
                     return { ...n, children: newChildren, isExpanded: true };
                 }
-                if (n.children) {
+                if (n.children) { // Recurse if not the target parent yet
                     return { ...n, children: addAsSiblingRecursiveFn(n.children, parentToSearchInId, afterSiblingId, blockToAdd) };
                 }
                 return n;
@@ -684,7 +685,7 @@ const RegexVisionWorkspace: React.FC = () => {
         setBlocks([fallbackBlock]);
         toast({ title: "Паттерн применен (как литерал)", description: `"${pattern.name}" загружен. AI не смог разобрать его на блоки.` });
       }
-      if (aiResult.exampleTestText) { // Apply example text from AI if available
+      if (aiResult.exampleTestText) { 
           setTestText(aiResult.exampleTestText);
       }
     } catch (error) {
@@ -711,6 +712,8 @@ const RegexVisionWorkspace: React.FC = () => {
   const headerHeight = "60px";
   const outputPanelMinHeight = "250px";
   const settingsHeaderHeight = "50px";
+
+  const CONNECTOR_X_OFFSET = '10px'; // X offset for the line from the edge of its padding container
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground" style={{ "--header-height": headerHeight, "--output-panel-min-height": outputPanelMinHeight, "--settings-header-height": settingsHeaderHeight } as React.CSSProperties}>
@@ -749,24 +752,37 @@ const RegexVisionWorkspace: React.FC = () => {
                         <p className="text-sm">Нажмите "Добавить блок" или используйте "AI Помощник".</p>
                       </div>
                     ) : (
-                      <div className="space-y-1">
-                        {blocks.map(block => (
-                          <BlockNode
-                            key={block.id}
-                            block={block}
-                            onUpdate={handleUpdateBlock}
-                            onDelete={handleDeleteBlock}
-                            onAddChild={handleOpenPaletteForChild}
-                            onDuplicate={handleDuplicateBlock}
-                            onUngroup={handleUngroupBlock}
-                            onWrapBlock={handleWrapBlock}
-                            onReorder={handleReorderBlock}
-                            selectedId={selectedBlockId}
-                            onSelect={setSelectedBlockId}
-                            parentId={null}
-                            level={0}
-                            onBlockHover={handleBlockHover} 
-                          />
+                      <div className="relative"> {/* Container for lines and blocks */}
+                        {blocks.map((block, index, arr) => (
+                          <div key={block.id} className="block-node-root-wrapper relative" style={{ paddingLeft: '20px' }}> {/* Indent all blocks to make space for lines */}
+                            {/* Vertical line passing through the block's vertical space */}
+                            <div
+                              className={cn(
+                                "absolute w-px bg-gray-300 dark:bg-gray-600 z-[-1]", // Line behind card
+                                // Line starts from mid-card height if it's the first block and has no expanded children
+                                index === 0 && (!block.isExpanded || !block.children || block.children.length === 0) ? 'top-1/2' : 'top-0',
+                                // Line ends at mid-card height if it's the last block AND has no expanded children
+                                index === arr.length - 1 && (!block.isExpanded || !block.children || block.children.length === 0) ? "bottom-1/2" : "bottom-0"
+                              )}
+                              style={{ left: CONNECTOR_X_OFFSET }}
+                            />
+                            <BlockNode
+                              key={block.id} // Key for BlockNode itself, wrapper has its own key
+                              block={block}
+                              onUpdate={handleUpdateBlock}
+                              onDelete={handleDeleteBlock}
+                              onAddChild={handleOpenPaletteForChild}
+                              onDuplicate={handleDuplicateBlock}
+                              onUngroup={handleUngroupBlock}
+                              onWrapBlock={handleWrapBlock}
+                              onReorder={handleReorderBlock}
+                              selectedId={selectedBlockId}
+                              onSelect={setSelectedBlockId}
+                              parentId={null}
+                              depth={0} // Root blocks have depth 0
+                              onBlockHover={handleBlockHover} 
+                            />
+                          </div>
                         ))}
                       </div>
                     )}
@@ -856,8 +872,8 @@ const RegexVisionWorkspace: React.FC = () => {
             setIsWizardModalOpen(false);
             setParentIdForNewBlock(null);
           }}
-          onComplete={(wizardBlocks, parentId, exampleText) => { // Updated to accept exampleText
-            handleAddBlocksFromWizard(wizardBlocks, parentId, exampleText); // Pass exampleText
+          onComplete={(wizardBlocks, parentId, exampleText) => { 
+            handleAddBlocksFromWizard(wizardBlocks, parentId, exampleText); 
             setIsWizardModalOpen(false);
             setParentIdForNewBlock(null);
           }}
@@ -869,5 +885,3 @@ const RegexVisionWorkspace: React.FC = () => {
 };
 
 export default RegexVisionWorkspace;
-
-    
