@@ -58,8 +58,8 @@ const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
       const settings = block.settings as CharacterClassSettings;
       const pattern = settings.pattern;
       
-      // Don't break down simple predefined classes or single character patterns
-      if (!pattern || pattern.length < 2 || pattern.startsWith('\\')) {
+      // Do not break down negated classes, or simple predefined classes / single character patterns
+      if (settings.negated || !pattern || pattern.length < 2 || pattern.startsWith('\\')) {
          if (block.children && block.children.length > 0) {
             return { ...block, children: breakdownComplexCharClasses(block.children) };
          }
@@ -77,8 +77,11 @@ const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
         }
       });
 
+      // If there are leftover characters, treat each one as a separate literal component.
       if (remainingPattern.length > 0) {
-        components.push({ type: 'literal', value: remainingPattern });
+        for (const char of remainingPattern) {
+            components.push({ type: 'literal', value: char });
+        }
       }
       
       // Only breakdown if more than one component was found
