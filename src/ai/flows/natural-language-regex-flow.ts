@@ -11,6 +11,8 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import type { Block, CharacterClassSettings, GroupSettings, AlternationSettings } from '@/components/regex-vision/types';
+import { BlockType } from '@/components/regex-vision/types';
 
 const NaturalLanguageRegexInputSchema = z.object({
   query: z.string().describe('The natural language query describing the desired regex.'),
@@ -32,6 +34,70 @@ const NaturalLanguageRegexOutputSchema = z.object({
   exampleTestText: z.string().optional().describe('An example text string that would match the generated regex or be relevant for testing it.'),
 });
 export type NaturalLanguageRegexOutput = z.infer<typeof NaturalLanguageRegexOutputSchema>;
+
+
+// Helper functions to create block structures, avoiding imports from client-side utils.
+const generateId = (): string => Math.random().toString(36).substring(2, 11);
+
+const createCharClass = (pattern: string, negated = false): Block => ({
+  id: generateId(), type: BlockType.CHARACTER_CLASS, settings: {pattern, negated} as CharacterClassSettings, children: [], isExpanded: false
+});
+
+const createAlternation = (children: Block[]): Block => ({
+  id: generateId(), type: BlockType.ALTERNATION, settings: {} as AlternationSettings, children, isExpanded: true
+});
+
+const createSequenceGroup = (children: Block[], type: GroupSettings['type'] = 'non-capturing', name?:string): Block => ({
+  id: generateId(), type: BlockType.GROUP, settings: {type, name} as GroupSettings, children, isExpanded: true
+});
+
+
+const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
+  return blocks.map(block => {
+    if (block.type === BlockType.CHARACTER_CLASS) {
+      const settings = block.settings as CharacterClassSettings;
+      const pattern = settings.pattern;
+      
+      // Don't break down simple predefined classes or single character patterns
+      if (!pattern || pattern.length < 2 || pattern.startsWith('\\')) {
+         if (block.children && block.children.length > 0) {
+            return { ...block, children: breakdownComplexCharClasses(block.children) };
+         }
+        return block;
+      }
+      
+      const components: { type: 'range' | 'literal', value: string }[] = [];
+      const predefined = ['a-z', 'A-Z', '0-9'];
+      let remainingPattern = pattern;
+
+      predefined.forEach(pre => {
+        if (remainingPattern.includes(pre)) {
+          components.push({ type: 'range', value: pre });
+          remainingPattern = remainingPattern.replace(pre, '');
+        }
+      });
+
+      if (remainingPattern.length > 0) {
+        components.push({ type: 'literal', value: remainingPattern });
+      }
+      
+      // Only breakdown if more than one component was found
+      if (components.length > 1) {
+        const alternationChildren = components.map(comp => createCharClass(comp.value, false));
+        const alternationBlock = createAlternation(alternationChildren);
+        // Wrap in a non-capturing group to keep it as a single logical unit
+        return createSequenceGroup([alternationBlock], 'non-capturing');
+      }
+    }
+
+    if (block.children && block.children.length > 0) {
+      return { ...block, children: breakdownComplexCharClasses(block.children) };
+    }
+
+    return block;
+  });
+};
+
 
 export async function generateRegexFromNaturalLanguage(input: NaturalLanguageRegexInput): Promise<NaturalLanguageRegexOutput> {
   return naturalLanguageRegexFlow(input);
@@ -117,14 +183,14 @@ const naturalLanguageRegexFlow = ai.defineFlow(
             exampleTestText: "Some example text to test with."
         };
     }
-    // Ensure parsedBlocks is at least an empty array if missing
-    // Ensure exampleTestText has a default if missing
+    
+    // Post-process the blocks for better visual clarity
+    const processedBlocks = output.parsedBlocks ? breakdownComplexCharClasses(output.parsedBlocks) : [];
+
     return {
         ...output,
-        parsedBlocks: output.parsedBlocks || [],
+        parsedBlocks: processedBlocks,
         exampleTestText: output.exampleTestText || "Example text was not provided by AI."
     };
   }
 );
-
-    
