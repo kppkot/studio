@@ -89,12 +89,27 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
       
       case BlockType.CHARACTER_CLASS:
         const ccSettings = settings as CharacterClassSettings;
-        const escapedPattern = ccSettings.pattern.replace(/[\]\\]/g, '\\$&');
-        rawContent = (
-          <span className={cn("bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 px-0.5 rounded-sm mx-px")}>
-            [{ccSettings.negated && <span className="text-red-500 dark:text-red-400">^</span>}{escapedPattern || ''}]
-          </span>
-        );
+        const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];
+
+        if (!ccSettings.negated && specialShorthands.includes(ccSettings.pattern)) {
+          if (ccSettings.pattern.startsWith('\\')) {
+            rawContent = (
+              <span className={cn("text-purple-700 dark:text-purple-300 font-semibold")}>
+                <span className="text-red-600 dark:text-red-400">{ccSettings.pattern[0]}</span>
+                <span>{ccSettings.pattern.substring(1)}</span>
+              </span>
+            );
+          } else {
+            rawContent = <span className={cn("text-purple-700 dark:text-purple-300 font-semibold")}>{ccSettings.pattern}</span>;
+          }
+        } else {
+          const escapedPattern = ccSettings.pattern.replace(/[\]\\]/g, '\\$&');
+          rawContent = (
+            <span className={cn("bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 px-0.5 rounded-sm mx-px")}>
+              [{ccSettings.negated && <span className="text-red-500 dark:text-red-400">^</span>}{escapedPattern || ''}]
+            </span>
+          );
+        }
         contentNode = attachEvents(rawContent);
         break;
       

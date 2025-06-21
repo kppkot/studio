@@ -45,14 +45,23 @@ const getDescriptiveBlockTitle = (block: Block, config: BlockConfig, groupInfo?:
       const cs = settings as CharacterClassSettings;
       let patternDesc = cs.pattern || '...';
       if (cs.pattern === '\\d') patternDesc = 'любая цифра';
+      else if (cs.pattern === '\\D') patternDesc = 'НЕ цифра';
       else if (cs.pattern === '\\w') patternDesc = 'любая буква/цифра';
+      else if (cs.pattern === '\\W') patternDesc = 'НЕ буква/цифра';
       else if (cs.pattern === '\\s') patternDesc = 'любой пробел';
+      else if (cs.pattern === '\\S') patternDesc = 'НЕ пробел';
       else if (cs.pattern === '.') patternDesc = 'любой символ';
       else if (cs.pattern?.length > 10) patternDesc = `[${cs.pattern.substring(0,10)}...]`;
       else patternDesc = `[${cs.pattern || '...'}]`;
       
       title = cs.negated ? `Символы: НЕ ${patternDesc}` : `Символы: ${patternDesc}`;
-      details = `${cs.negated ? '[^' : '['}${cs.pattern || ''}${cs.negated ? ']' : ']'}`;
+      
+      const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];
+      if (!cs.negated && specialShorthands.includes(cs.pattern)) {
+          details = cs.pattern;
+      } else {
+        details = `${cs.negated ? '[^' : '['}${cs.pattern || ''}${cs.negated ? ']' : ']'}`;
+      }
       break;
     case BlockType.QUANTIFIER:
       const qs = settings as QuantifierSettings;
