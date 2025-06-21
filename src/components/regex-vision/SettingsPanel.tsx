@@ -12,10 +12,12 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { X } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
 
 interface SettingsPanelProps {
   block: Block | null;
-  onUpdate: (id: string, updatedBlock: Block) => void;
+  onUpdate: (id: string, updatedBlock: Partial<Block>) => void;
   onClose: () => void;
 }
 
@@ -55,24 +57,65 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
               placeholder="Введите литеральный текст"
               className="mt-1"
             />
+             <p className="text-xs text-muted-foreground mt-1.5 px-1">
+                Специальные символы (например, `.`, `+`, `*`) будут автоматически экранированы.
+             </p>
           </div>
         );
       
       case BlockType.CHARACTER_CLASS:
         const ccSettings = settings as CharacterClassSettings;
+        const pattern = ccSettings.pattern || '';
+        const isShorthand = (pattern.startsWith('\\') && pattern.length === 2);
+        const isDotShorthand = pattern === '.';
+
+        const handleShorthandCharChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+          const char = e.target.value.slice(0, 1);
+          handleSettingChange('pattern', `\\${char}`);
+        };
+
+        const handleFullPatternChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+          handleSettingChange('pattern', e.target.value);
+        };
+        
         return (
           <>
             <div>
               <Label htmlFor="pattern" className="text-sm font-medium">Шаблон</Label>
-              <Input
-                id="pattern"
-                type="text"
-                value={ccSettings.pattern || ''}
-                onChange={(e) => handleSettingChange('pattern', e.target.value)}
-                placeholder="например, a-z, 0-9, \\d"
-                className="mt-1"
-              />
+              {isShorthand ? (
+                <div className="flex items-stretch mt-1">
+                  <span className="flex items-center justify-center w-10 rounded-l-md border border-r-0 border-input bg-muted text-red-500 font-bold text-lg">
+                    \
+                  </span>
+                  <Input
+                    id="pattern-shorthand"
+                    type="text"
+                    value={pattern.substring(1)}
+                    onChange={handleShorthandCharChange}
+                    className="rounded-l-none text-lg font-mono focus:ring-inset focus:ring-2"
+                    maxLength={1}
+                    onBlur={(e) => { if(!e.target.value) handleSettingChange('pattern', ''); }}
+                    autoFocus
+                  />
+                </div>
+              ) : (
+                <Input
+                  id="pattern"
+                  type="text"
+                  value={pattern}
+                  onChange={handleFullPatternChange}
+                  placeholder="например, a-z0-9"
+                  className="mt-1 font-mono"
+                />
+              )}
+               <p className="text-xs text-muted-foreground mt-1.5 px-1">
+                {isShorthand || isDotShorthand
+                  ? "Специальный символьный класс."
+                  : "Для спец. класса введите '\\' и символ (например, \\d, \\w)."
+                }
+              </p>
             </div>
+            
             <div className="flex items-center gap-2 mt-3">
               <Checkbox
                 id="negated"
@@ -81,6 +124,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
               />
               <Label htmlFor="negated" className="text-sm">Отрицание (например, [^abc])</Label>
             </div>
+
             {config.presets && (
               <div className="mt-3">
                 <Label className="text-sm font-medium">Предустановки</Label>
