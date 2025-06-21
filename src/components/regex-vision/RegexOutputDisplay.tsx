@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Block, CharacterClassSettings, GroupSettings, LiteralSettings, QuantifierSettings, AnchorSettings, BackreferenceSettings, LookaroundSettings, ConditionalSettings } from './types';
 import { BlockType } from './types';
 import { cn } from '@/lib/utils';
+import { escapeRegexChars } from './utils';
 
 interface RegexOutputDisplayProps {
   blocks: Block[];
@@ -83,25 +84,51 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
 
     switch (block.type) {
       case BlockType.LITERAL:
-        rawContent = <span className={cn("text-green-700 dark:text-green-400")}>{(settings as LiteralSettings).text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') || ''}</span>;
+        const literalText = (settings as LiteralSettings).text || '';
+        const escapedText = escapeRegexChars(literalText);
+
+        const parts: React.ReactNode[] = [];
+        let i = 0;
+        while (i < escapedText.length) {
+            if (escapedText[i] === '\\') {
+                if (i + 1 < escapedText.length) {
+                    parts.push(
+                        <span key={i} className="text-green-700 dark:text-green-400">
+                            <span className="text-red-600 dark:text-red-400">\\</span>
+                            <span>{escapedText[i + 1]}</span>
+                        </span>
+                    );
+                    i += 2;
+                } else {
+                    parts.push(<span key={i} className="text-green-700 dark:text-green-400">{escapedText[i]}</span>);
+                    i++;
+                }
+            } else {
+                parts.push(<span key={i} className="text-green-700 dark:text-green-400">{escapedText[i]}</span>);
+                i++;
+            }
+        }
+        rawContent = <span>{parts}</span>;
         contentNode = attachEvents(rawContent);
         break;
       
       case BlockType.CHARACTER_CLASS:
         const ccSettings = settings as CharacterClassSettings;
-        const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];
+        const specialCharShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];
 
-        if (!ccSettings.negated && specialShorthands.includes(ccSettings.pattern)) {
-          if (ccSettings.pattern.startsWith('\\')) {
+        if (!ccSettings.negated && specialCharShorthands.includes(ccSettings.pattern)) {
             rawContent = (
               <span className={cn("text-purple-700 dark:text-purple-300 font-semibold")}>
-                <span className="text-red-600 dark:text-red-400">{ccSettings.pattern[0]}</span>
-                <span>{ccSettings.pattern.substring(1)}</span>
+                {ccSettings.pattern.startsWith('\\') ? (
+                  <>
+                    <span className="text-red-600 dark:text-red-400">{ccSettings.pattern[0]}</span>
+                    <span>{ccSettings.pattern.substring(1)}</span>
+                  </>
+                ) : (
+                  ccSettings.pattern
+                )}
               </span>
             );
-          } else {
-            rawContent = <span className={cn("text-purple-700 dark:text-purple-300 font-semibold")}>{ccSettings.pattern}</span>;
-          }
         } else {
           const escapedPattern = ccSettings.pattern.replace(/[\]\\]/g, '\\$&');
           rawContent = (
@@ -149,7 +176,19 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
         break;
       
       case BlockType.ANCHOR:
-        rawContent = <span className={cn("text-red-600 dark:text-red-400")}>{(settings as AnchorSettings).type || '^'}</span>;
+        const anchorType = (settings as AnchorSettings).type || '^';
+        rawContent = (
+          <span className={cn("text-red-600 dark:text-red-400")}>
+            {anchorType.startsWith('\\') ? (
+              <>
+                <span className="text-red-600 dark:text-red-400">{anchorType[0]}</span>
+                <span>{anchorType.substring(1)}</span>
+              </>
+            ) : (
+              anchorType
+            )}
+          </span>
+        );
         contentNode = attachEvents(rawContent);
         break;
       
@@ -166,7 +205,6 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
             }, null as React.ReactNode[] | null)}
           </>
         );
-        // Alternation block itself is made interactive. Its children are already interactive from their own render.
         contentNode = attachEvents(rawContent);
         break;
       
@@ -206,15 +244,10 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
         break;
 
       default:
-        // For blocks that are just containers without their own visual regex part (should be rare for direct rendering)
-        // If they have children, those children are rendered and become interactive.
-        // If no children, it's effectively an empty, non-interactive fragment.
         const defaultChildren = renderChildren(block.children, `${keyPrefix}-defchildren`);
         if (defaultChildren.length > 0) {
-             contentNode = <>{defaultChildren}</>; // Let children handle their interactivity
+             contentNode = <>{defaultChildren}</>;
         } else {
-            // If a block type has no direct representation and no children, it won't be visible or interactive here.
-            // This case should be minimal. We can attach events to an empty span if necessary for selection.
             contentNode = attachEvents(<span className="opacity-50">({block.type})</span>);
         }
         break;
