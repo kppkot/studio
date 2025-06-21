@@ -820,26 +820,43 @@ const RegexVisionWorkspace: React.FC = () => {
 
         const isPotentiallyEmptyAlt = block.type === BlockType.ALTERNATION && (!block.children || block.children.length === 0);
         if (isPotentiallyEmptyAlt) {
-            let subsequentBlocksToCombineCount = 0;
+            const blocksToCombine: Block[] = [];
             let j = i + 1;
             while (j < nodes.length && isCombinableBlock(nodes[j].type)) {
-                subsequentBlocksToCombineCount++;
+                blocksToCombine.push(nodes[j]);
                 j++;
             }
 
-            if (subsequentBlocksToCombineCount > 0) {
+            if (blocksToCombine.length > 0) {
                 nodeList.push(
                     <Card key={`${block.id}-suggestion`} className="my-2 p-3 border-amber-500/50 bg-amber-500/10">
-                        <div className="flex items-center gap-3">
-                            <Lightbulb className="h-6 w-6 text-amber-600 shrink-0" />
-                            <div className="flex-1">
-                                <h4 className="font-semibold text-sm">Объединить следующие {subsequentBlocksToCombineCount} блок(а)?</h4>
-                                <p className="text-xs text-muted-foreground">Похоже, вы хотите создать выбор 'ИЛИ'.</p>
+                        <div className="flex flex-col gap-2">
+                             <div className="flex items-center gap-3">
+                                <Lightbulb className="h-6 w-6 text-amber-600 shrink-0" />
+                                <div className="flex-1">
+                                    <h4 className="font-semibold text-sm">Обнаружен паттерн для "ИЛИ"</h4>
+                                    <p className="text-xs text-muted-foreground">Следующие блоки выглядят как варианты для чередования:</p>
+                                </div>
+                                <Button size="sm" variant="outline" className="bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30" onClick={() => handleAutoGroupAlternation(block.id)}>
+                                    <Combine size={16} className="mr-2"/>
+                                    Объединить
+                                </Button>
                             </div>
-                            <Button size="sm" variant="outline" className="bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30" onClick={() => handleAutoGroupAlternation(block.id)}>
-                                <Combine size={16} className="mr-2"/>
-                                Объединить
-                            </Button>
+                            <div className="pl-9 flex flex-wrap gap-2">
+                                {blocksToCombine.map(b => {
+                                    const config = BLOCK_CONFIGS[b.type];
+                                    let previewText = "";
+                                    if(b.type === BlockType.LITERAL) previewText = `"${(b.settings as any).text}"`;
+                                    if(b.type === BlockType.CHARACTER_CLASS) previewText = `[${(b.settings as any).pattern}]`;
+
+                                    return (
+                                    <span key={b.id} className="flex items-center gap-1.5 text-xs px-2 py-1 bg-background rounded-md border shadow-sm">
+                                        {typeof config.icon === 'string' ? <span>{config.icon}</span> : React.cloneElement(config.icon as React.ReactElement, { size: 14, className: "text-muted-foreground"})}
+                                        <span className="font-mono">{previewText}</span>
+                                    </span>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </Card>
                 );
