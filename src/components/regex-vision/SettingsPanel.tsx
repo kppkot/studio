@@ -87,13 +87,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
                 <div className="grid grid-cols-2 gap-2 mt-1">
                   {config.presets.map(preset => (
                     <Button
-                      key={preset}
+                      key={preset.value}
                       variant="outline"
                       size="sm"
-                      onClick={() => handleSettingChange('pattern', preset)}
-                      className="font-mono"
+                      onClick={() => handleSettingChange('pattern', preset.value)}
+                      className="justify-start text-left"
                     >
-                      {preset}
+                      {preset.label}
                     </Button>
                   ))}
                 </div>

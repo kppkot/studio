@@ -1,3 +1,4 @@
+
 import type { BlockConfigs } from './types';
 import { BlockType } from './types';
 import { Group, Asterisk, CaseSensitive, AnchorIcon, SplitSquareHorizontal, SearchCode, Repeat, HelpCircleIcon } from 'lucide-react';
@@ -20,7 +21,15 @@ export const BLOCK_CONFIGS: BlockConfigs = {
     name: 'Символьный класс',
     icon: <span className="font-mono text-sm">[ ]</span>,
     defaultSettings: { pattern: 'a-z', negated: false },
-    presets: ['a-z', 'A-Z', '0-9', '\\d', '\\w', '\\s', '.'],
+    presets: [
+      { value: 'a-z', label: 'a-z (строчные)' },
+      { value: 'A-Z', label: 'A-Z (заглавные)' },
+      { value: '0-9', label: '0-9 (цифры)' },
+      { value: '\\d', label: '\\d (любая цифра)' },
+      { value: '\\w', label: '\\w (буква, цифра, _)' },
+      { value: '\\s', label: '\\s (любой пробел)' },
+      { value: '.', label: '. (любой символ)' },
+    ],
   },
   [BlockType.LITERAL]: {
     name: 'Литерал',

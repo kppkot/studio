@@ -80,7 +80,7 @@ export interface BlockConfig {
   defaultSettings: BlockSettings;
   types?: string[]; // For sub-types like in Group or Quantifier
   modes?: string[]; // For Quantifier modes
-  presets?: string[]; // For CharacterClass presets
+  presets?: { value: string; label: string }[];
 }
 
 export type BlockConfigs = {
