@@ -27,7 +27,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card } from "@/components/ui/card";
 import { Lightbulb, CheckSquare, TextCursorInput, Replace, Eraser, Split, Wand2, Phone, AtSign, Globe, KeyRound, Shuffle, MessageSquareQuote, CaseSensitive, SearchCheck, Route, Workflow, FileText, CalendarClock, BadgeCheck, AlignLeft, Calculator, Sparkles, Bot, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { generateId, createAnchor, createLiteral, createCharClass, createQuantifier, createSequenceGroup, createAlternation, createLookaround, createBackreference, escapeRegexChars, generateBlocksForEmail, generateBlocksForURL, generateBlocksForIPv4, generateBlocksForIPv6, generateBlocksForDuplicateWords, generateBlocksForMultipleSpaces, generateBlocksForTabsToSpaces, generateBlocksForNumbers, processAiBlocks } from './utils';
+import { generateId, createAnchor, createLiteral, createCharClass, createQuantifier, createSequenceGroup, createAlternation, createLookaround, createBackreference, generateBlocksForEmail, generateBlocksForURL, generateBlocksForIPv4, generateBlocksForIPv6, generateBlocksForDuplicateWords, generateBlocksForMultipleSpaces, generateBlocksForTabsToSpaces, generateBlocksForNumbers, processAiBlocks } from './utils';
 
 
 interface RegexWizardModalProps {
@@ -229,6 +229,11 @@ const wizardConfig: Record<WizardStepId, any> = {
   }
 };
 
+const escapeCharsForCharClass = (str: string): string => {
+  // Inside a character set [], only ], \, ^, and - need escaping.
+  return str.replace(/[\\\]\-\^]/g, '\\$&');
+};
+
 
 const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, onComplete, initialParentId }) => {
   const [currentStepId, setCurrentStepId] = useState<WizardStepId>('start');
@@ -363,7 +368,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     if (formData.basicPattern_contains_letters_AZ) patternChars += 'A-Z';
     if (formData.basicPattern_contains_space) patternChars += '\\s';
     if (formData.basicPattern_contains_otherChars) {
-      patternChars += escapeRegexChars(formData.basicPattern_contains_otherChars);
+      patternChars += escapeCharsForCharClass(formData.basicPattern_contains_otherChars);
     }
 
     if (!patternChars) return [];
@@ -858,5 +863,3 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 };
 
 export default RegexWizardModal;
-
-    

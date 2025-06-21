@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Block, CharacterClassSettings, GroupSettings, LiteralSettings, QuantifierSettings, AnchorSettings, BackreferenceSettings, LookaroundSettings, ConditionalSettings } from './types';
 import { BlockType } from './types';
 import { cn } from '@/lib/utils';
-import { escapeRegexChars } from './utils';
+import { generateRegexStringAndGroupInfo } from './utils';
 
 interface RegexOutputDisplayProps {
   blocks: Block[];
@@ -45,215 +45,126 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
       });
   };
 
-  const renderBlockWithStructure = React.useCallback((
-    block: Block,
-    keyPrefix: string,
-    currentSelectedBlockId: string | null,
-    currentHoveredBlockId: string | null
-  ): React.ReactNode => {
-    const settings = block.settings;
-    const isSelected = block.id === currentSelectedBlockId;
-    const isHovered = block.id === currentHoveredBlockId;
+  const renderStructuredRegex = () => {
+    const { groupInfos } = generateRegexStringAndGroupInfo(blocks);
 
-    const selectedHighlightClass = "bg-primary text-primary-foreground p-0.5 rounded-sm font-semibold shadow-md";
-    const hoverHighlightClass = "bg-accent/70 text-accent-foreground p-0.5 rounded-sm shadow-sm";
-    const interactiveCursorClass = "cursor-pointer";
+    // Map block IDs to their group info if they are a capturing group
+    const blockIdToGroupInfoMap = new Map<string, { groupIndex: number, groupName?: string }>();
+    groupInfos.forEach(info => {
+      blockIdToGroupInfoMap.set(info.blockId, { groupIndex: info.groupIndex, groupName: info.groupName });
+    });
+    
+    // This recursive function will now also be responsible for syntax highlighting
+    const renderNode = (block: Block): React.ReactNode => {
+      const isSelected = block.id === selectedBlockId;
+      const isHovered = block.id === hoveredBlockId;
 
-    const attachEvents = (children: React.ReactNode) => (
-      <span
-        onMouseEnter={() => onHoverBlockInOutput(block.id)}
-        onMouseLeave={() => onHoverBlockInOutput(null)}
-        onClick={(e) => { e.stopPropagation(); onSelectBlockInOutput(block.id); }}
-        className={cn(
-          interactiveCursorClass,
-          isSelected && selectedHighlightClass,
-          isHovered && !isSelected && hoverHighlightClass
-        )}
-      >
-        {children}
-      </span>
-    );
+      const interactiveProps = {
+        onMouseEnter: () => onHoverBlockInOutput(block.id),
+        onMouseLeave: () => onHoverBlockInOutput(null),
+        onClick: (e: React.MouseEvent) => {
+          e.stopPropagation();
+          onSelectBlockInOutput(block.id);
+        },
+        className: cn(
+          "cursor-pointer rounded-sm p-0.5",
+          isSelected && "bg-primary text-primary-foreground shadow-md",
+          isHovered && !isSelected && "bg-accent/70 text-accent-foreground shadow-sm"
+        ),
+      };
 
-    const renderChildren = (children: Block[] | undefined, childKeyPrefix: string): React.ReactNode[] => {
-      if (!children) return [];
-      return children.map((child, idx) => renderBlockWithStructure(child, `${childKeyPrefix}-child-${idx}`, currentSelectedBlockId, currentHoveredBlockId));
-    };
+      const renderChildren = (children: Block[], separator: string = ''): React.ReactNode => {
+        const childNodes = children.map(child => renderNode(child));
+        return childNodes.reduce((acc, curr, idx) => [acc, <span key={`sep-${idx}`} className="text-pink-600 dark:text-pink-400 font-bold mx-px">{separator}</span>, curr]);
+      };
 
-    let contentNode: React.ReactNode;
-    let rawContent: React.ReactNode;
-
-    switch (block.type) {
-      case BlockType.LITERAL:
-        const literalText = (settings as LiteralSettings).text || '';
-        const escapedText = escapeRegexChars(literalText);
-
+      const renderEscaped = (text: string) => {
         const parts: React.ReactNode[] = [];
         let i = 0;
-        while (i < escapedText.length) {
-            if (escapedText[i] === '\\') {
-                if (i + 1 < escapedText.length) {
-                    parts.push(
-                        <span key={i} className="text-green-700 dark:text-green-400">
-                            <span className="text-red-600 dark:text-red-400">\\</span>
-                            <span>{escapedText[i + 1]}</span>
-                        </span>
-                    );
-                    i += 2;
-                } else {
-                    parts.push(<span key={i} className="text-green-700 dark:text-green-400">{escapedText[i]}</span>);
-                    i++;
-                }
+        while (i < text.length) {
+            const char = text[i];
+            if ('.*+?^${}()|[]\\'.includes(char)) {
+                parts.push(
+                    <span key={i} className="text-green-700 dark:text-green-400">
+                        <span className="text-red-600 dark:text-red-400">\\</span>
+                        <span>{char}</span>
+                    </span>
+                );
             } else {
-                parts.push(<span key={i} className="text-green-700 dark:text-green-400">{escapedText[i]}</span>);
-                i++;
+                parts.push(<span key={i} className="text-green-700 dark:text-green-400">{char}</span>);
             }
+            i++;
         }
-        rawContent = <span>{parts}</span>;
-        contentNode = attachEvents(rawContent);
-        break;
-      
-      case BlockType.CHARACTER_CLASS:
-        const ccSettings = settings as CharacterClassSettings;
-        const specialCharShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];
+        return <span>{parts}</span>;
+      };
 
-        if (!ccSettings.negated && specialCharShorthands.includes(ccSettings.pattern)) {
-            rawContent = (
-              <span className={cn("text-purple-700 dark:text-purple-300 font-semibold")}>
-                {ccSettings.pattern.startsWith('\\') ? (
-                  <>
-                    <span className="text-red-600 dark:text-red-400">{ccSettings.pattern[0]}</span>
-                    <span>{ccSettings.pattern.substring(1)}</span>
-                  </>
-                ) : (
-                  ccSettings.pattern
-                )}
-              </span>
-            );
-        } else {
-          const escapedPattern = ccSettings.pattern.replace(/[\]\\]/g, '\\$&');
-          rawContent = (
-            <span className={cn("bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 px-0.5 rounded-sm mx-px")}>
-              [{ccSettings.negated && <span className="text-red-500 dark:text-red-400">^</span>}{escapedPattern || ''}]
-            </span>
-          );
-        }
-        contentNode = attachEvents(rawContent);
-        break;
-      
-      case BlockType.QUANTIFIER:
-        const qSettings = settings as QuantifierSettings;
-        const baseQuantifier = qSettings.type || '*';
-        let modeModifier = '';
-        if (qSettings.mode === 'lazy') modeModifier = '?';
-        else if (qSettings.mode === 'possessive') modeModifier = '+';
-        let qText = '';
-        if (baseQuantifier.includes('{')) {
-          const min = qSettings.min ?? 0;
-          const max = qSettings.max;
-          if (baseQuantifier === '{n}') qText = `{${min}}`;
-          else if (baseQuantifier === '{n,}') qText = `{${min},}`;
-          else if (baseQuantifier === '{n,m}') qText = `{${min},${max ?? ''}}`;
-        } else {
-          qText = baseQuantifier;
-        }
-        rawContent = <span className={cn("text-orange-600 dark:text-orange-400")}>{qText + modeModifier}</span>;
-        contentNode = attachEvents(rawContent);
-        break;
-      
-      case BlockType.GROUP:
-        const gSettings = settings as GroupSettings;
-        let groupOpen = "(";
-        if (gSettings.type === 'non-capturing') groupOpen = "(?:";
-        if (gSettings.type === 'named' && gSettings.name) groupOpen = `(?<${gSettings.name}>`;
-        rawContent = (
-          <span className={cn("bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-0.5 rounded-sm mx-px")}>
-            {groupOpen}
-            {renderChildren(block.children, `${keyPrefix}-grpchildren`)}
-            )
-          </span>
-        );
-        contentNode = attachEvents(rawContent);
-        break;
-      
-      case BlockType.ANCHOR:
-        const anchorType = (settings as AnchorSettings).type || '^';
-        rawContent = (
-          <span className={cn("text-red-600 dark:text-red-400")}>
-            {anchorType.startsWith('\\') ? (
-              <>
-                <span className="text-red-600 dark:text-red-400">{anchorType[0]}</span>
-                <span>{anchorType.substring(1)}</span>
-              </>
-            ) : (
-              anchorType
-            )}
-          </span>
-        );
-        contentNode = attachEvents(rawContent);
-        break;
-      
-      case BlockType.ALTERNATION:
-        if (!block.children || block.children.length === 0) {
-            contentNode = null;
+
+      let content: React.ReactNode;
+      switch (block.type) {
+        case BlockType.LITERAL:
+          content = renderEscaped((block.settings as LiteralSettings).text);
+          break;
+        case BlockType.CHARACTER_CLASS:
+          const { pattern, negated } = block.settings as CharacterClassSettings;
+          const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];
+          if (!negated && specialShorthands.includes(pattern)) {
+              content = (
+                  <span className="text-purple-700 dark:text-purple-300 font-semibold">
+                      {pattern === '.' ? '.' : <><span className="text-red-600 dark:text-red-400">\</span>{pattern.slice(1)}</>}
+                  </span>
+              );
+          } else {
+              content = (
+                  <span className="bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 px-0.5 rounded-sm">
+                      [{negated && <span className="text-red-500 dark:text-red-400">^</span>}{pattern}]
+                  </span>
+              );
+          }
+          break;
+        case BlockType.QUANTIFIER:
+            const qs = block.settings as QuantifierSettings;
+            let qText = qs.type;
+             if (qText.includes('{')) {
+                if (qs.type === '{n}') qText = `{${qs.min ?? 0}}`;
+                else if (qs.type === '{n,}') qText = `{${qs.min ?? 0},}`;
+                else if (qs.type === '{n,m}') qText = `{${qs.min ?? 0},${qs.max ?? ''}}`;
+            }
+            content = <span className="text-orange-600 dark:text-orange-400">{qText}{(qs.mode === 'lazy' ? '?' : qs.mode === 'possessive' ? '+' : '')}</span>;
             break;
-        }
-        const alternatedNodes = renderChildren(block.children, `${keyPrefix}-altchildren`);
-        rawContent = (
-          <>
-            {alternatedNodes.reduce((acc, curr, currIdx) => {
-              return acc === null ? [curr] : [...(acc as React.ReactNode[]), <span key={`${keyPrefix}-alt-sep-${currIdx}`} className="text-pink-600 dark:text-pink-400 font-bold mx-0.5">|</span>, curr];
-            }, null as React.ReactNode[] | null)}
-          </>
-        );
-        contentNode = attachEvents(rawContent);
-        break;
-      
-      case BlockType.LOOKAROUND:
-        const lSettings = settings as LookaroundSettings;
-        const lookaroundMap = {
-          'positive-lookahead': "(?=",
-          'negative-lookahead': "(?!",
-          'positive-lookbehind': "(?<=",
-          'negative-lookbehind': "(?<!"
-        };
-        rawContent = (
-          <span className={cn("bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 px-0.5 rounded-sm mx-px")}>
-            {lookaroundMap[lSettings.type]}
-            {renderChildren(block.children, `${keyPrefix}-lookchildren`)}
-            )
-          </span>
-        );
-        contentNode = attachEvents(rawContent);
-        break;
-      
-      case BlockType.BACKREFERENCE:
-        const brSettings = settings as BackreferenceSettings;
-        rawContent = <span className={cn("text-cyan-600 dark:text-cyan-400")}>\\{brSettings.ref}</span>;
-        contentNode = attachEvents(rawContent);
-        break;
+        case BlockType.GROUP:
+          const gs = block.settings as GroupSettings;
+          let open = '(', close = ')';
+          if (gs.type === 'non-capturing') open = '(?:';
+          else if (gs.type === 'named') open = `(?<${gs.name || ''}>`;
+          content = <span className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-0.5 rounded-sm">{open}{block.children.map(renderNode)}{close}</span>;
+          break;
+        case BlockType.ANCHOR:
+          const as = block.settings as AnchorSettings;
+          content = <span className="text-red-600 dark:text-red-400">{as.type.startsWith('\\') ? <><span className="text-red-600 dark:text-red-400">\</span>{as.type.slice(1)}</> : as.type}</span>;
+          break;
+        case BlockType.ALTERNATION:
+            content = <>{renderChildren(block.children, '|')}</>;
+            break;
+        case BlockType.LOOKAROUND:
+            const ls = block.settings as LookaroundSettings;
+            const lookaroundMap = {
+                'positive-lookahead': '(?=', 'negative-lookahead': '(?!',
+                'positive-lookbehind': '(?<=', 'negative-lookbehind': '(?<!'
+            };
+            content = <span className="bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 px-0.5 rounded-sm">{lookaroundMap[ls.type]}{block.children.map(renderNode)}{')'}</span>;
+            break;
+        case BlockType.BACKREFERENCE:
+            content = <span className="text-cyan-600 dark:text-cyan-400">\k&lt;{(block.settings as BackreferenceSettings).ref}&gt;</span>;
+            break;
+        default:
+          content = <>{block.children.map(renderNode)}</>;
+      }
 
-      case BlockType.CONDITIONAL:
-        const condSettings = settings as ConditionalSettings;
-        let conditionalStr = `(?(${condSettings.condition})${condSettings.yesPattern}`;
-        if (condSettings.noPattern) {
-          conditionalStr += `|${condSettings.noPattern}`;
-        }
-        conditionalStr += `)`;
-        rawContent = <span className={cn("text-indigo-600 dark:text-indigo-400")}>{conditionalStr}</span>;
-        contentNode = attachEvents(rawContent);
-        break;
+      return <span {...interactiveProps} key={block.id}>{content}</span>;
+    };
 
-      default:
-        const defaultChildren = renderChildren(block.children, `${keyPrefix}-defchildren`);
-        if (defaultChildren.length > 0) {
-             contentNode = <>{defaultChildren}</>;
-        } else {
-            contentNode = attachEvents(<span className="opacity-50">({block.type})</span>);
-        }
-        break;
-    }
-    return <React.Fragment key={`${keyPrefix}-${block.id}`}>{contentNode}</React.Fragment>;
-  }, [onHoverBlockInOutput, onSelectBlockInOutput]);
+    return blocks.map(renderNode);
+  };
   
   return (
     <div className="space-y-2">
@@ -262,7 +173,7 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
         <div className="flex-1 p-2.5 bg-muted rounded-lg font-mono text-sm min-h-[2.5rem] flex items-center overflow-x-auto flex-wrap leading-relaxed">
           <span className="text-muted-foreground">/</span>
           {blocks.length > 0 
-            ? blocks.map((block, index) => renderBlockWithStructure(block, `structured-${block.id}-${index}`, selectedBlockId, hoveredBlockId))
+            ? renderStructuredRegex()
             : <span className="italic text-muted-foreground">Добавьте блоки для построения выражения</span>
           }
           <span className="text-muted-foreground">/</span>

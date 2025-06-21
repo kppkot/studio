@@ -21,7 +21,7 @@ export type NaturalLanguageRegexInput = z.infer<typeof NaturalLanguageRegexInput
 
 const BlockSchema: z.ZodTypeAny = z.lazy(() =>
   z.object({
-    type: z.string().describe('The type of the block (e.g., "LITERAL", "CHARACTER_CLASS", "GROUP", "QUANTIFIER", "ANCHOR", "ALTERNATION", "LOOKAROUND", "BACKREFERENCE", "CONDITIONAL").'),
+    type: z.nativeEnum(BlockType).describe('The type of the block.'),
     settings: z.any().describe('An object containing settings specific to the block type. Examples: LITERAL: {"text": "abc"}, CHARACTER_CLASS: {"pattern": "[a-z]", "negated": false}, QUANTIFIER: {"type": "*", "mode": "greedy"}, GROUP: {"type": "capturing", "name": "myGroup"}.'),
     children: z.array(BlockSchema).optional().describe('An array of child block objects, used for container types like GROUP, ALTERNATION, LOOKAROUND, CONDITIONAL.'),
   })
@@ -35,22 +35,18 @@ const NaturalLanguageRegexOutputSchema = z.object({
 });
 export type NaturalLanguageRegexOutput = z.infer<typeof NaturalLanguageRegexOutputSchema>;
 
-
-// Helper functions to create block structures, avoiding imports from client-side utils.
-const generateId = (): string => Math.random().toString(36).substring(2, 11);
-
 const createCharClass = (pattern: string, negated = false): Block => ({
-  id: generateId(), type: BlockType.CHARACTER_CLASS, settings: {pattern, negated} as CharacterClassSettings, children: [], isExpanded: false
+  id: "temp", type: BlockType.CHARACTER_CLASS, settings: {pattern, negated} as CharacterClassSettings, children: [], isExpanded: false
 });
-
+const createLiteral = (text: string): Block => ({
+  id: "temp", type: BlockType.LITERAL, settings: {text} as LiteralSettings, children: [], isExpanded: false
+});
 const createAlternation = (children: Block[]): Block => ({
-  id: generateId(), type: BlockType.ALTERNATION, settings: {} as AlternationSettings, children, isExpanded: true
+  id: "temp", type: BlockType.ALTERNATION, settings: {} as AlternationSettings, children, isExpanded: true
 });
-
 const createSequenceGroup = (children: Block[], type: GroupSettings['type'] = 'non-capturing', name?:string): Block => ({
-  id: generateId(), type: BlockType.GROUP, settings: {type, name} as GroupSettings, children, isExpanded: true
+  id: "temp", type: BlockType.GROUP, settings: {type, name} as GroupSettings, children, isExpanded: true
 });
-
 
 const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
   return blocks.flatMap(block => {
@@ -58,65 +54,72 @@ const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
       const settings = block.settings as CharacterClassSettings;
       const pattern = settings.pattern;
       
-      if (settings.negated || !pattern || pattern.length < 2 || pattern.startsWith('\\')) {
+      // Skip breakdown for negated classes or already simple/special classes
+      if (settings.negated || !pattern || pattern.length <= 1 || pattern.startsWith('\\')) {
          if (block.children && block.children.length > 0) {
             return { ...block, children: breakdownComplexCharClasses(block.children) };
          }
         return block;
       }
       
-      const components: { type: 'range' | 'literal', value: string }[] = [];
-      const predefined = ['a-z', 'A-Z', '0-9'];
+      const components: (Block)[] = [];
+      const predefinedRanges = ['a-z', 'A-Z', '0-9'];
       let remainingPattern = pattern;
 
-      predefined.forEach(pre => {
-        if (remainingPattern.includes(pre)) {
-          components.push({ type: 'range', value: pre });
-          remainingPattern = remainingPattern.replace(new RegExp(pre, 'g'), '');
+      // Extract predefined ranges
+      predefinedRanges.forEach(range => {
+        if (remainingPattern.includes(range)) {
+          components.push(createCharClass(range, false));
+          remainingPattern = remainingPattern.replace(new RegExp(range.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), '');
         }
       });
-
+      
+      // Treat remaining characters as individual literals inside the alternation
       if (remainingPattern.length > 0) {
         for (const char of remainingPattern) {
-            components.push({ type: 'literal', value: char });
+           components.push(createLiteral(char));
         }
       }
       
       if (components.length > 1) {
-        const alternationChildren = components.map(comp => createCharClass(comp.value, false));
-        const alternationBlock = createAlternation(alternationChildren);
-        return createSequenceGroup([alternationBlock], 'non-capturing');
+        // If we have multiple components, wrap them in an alternation inside a non-capturing group
+        return createSequenceGroup([createAlternation(components)], 'non-capturing');
       }
     }
 
     if (block.children && block.children.length > 0) {
       return { ...block, children: breakdownComplexCharClasses(block.children) };
     }
-
     return block;
   });
 };
 
 const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
+    if (!blocks) return [];
     return blocks.map(block => {
         let correctedBlock = { ...block };
 
+        // Rule: AI often misuses LITERAL for special regex tokens. Convert them.
         if (correctedBlock.type === BlockType.LITERAL) {
             const settings = correctedBlock.settings as LiteralSettings;
-            const text = settings.text;
+            const text = settings.text || '';
 
-            // Rule: If literal text is a known character class, convert it.
             const knownCharClasses = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];
             if (knownCharClasses.includes(text)) {
                 correctedBlock.type = BlockType.CHARACTER_CLASS;
                 correctedBlock.settings = { pattern: text, negated: false } as CharacterClassSettings;
             }
 
-            // Rule: If literal text is a known anchor, convert it.
             const knownAnchors = ['^', '$', '\\b', '\\B'];
             if (knownAnchors.includes(text)) {
                 correctedBlock.type = BlockType.ANCHOR;
                 correctedBlock.settings = { type: text } as AnchorSettings;
+            }
+            
+            // Rule: AI might escape things that shouldn't be. Un-escape them for our model.
+            // Our model expects plain characters in LITERALs; the generator will escape them.
+            if (text.startsWith('\\') && text.length === 2 && !knownCharClasses.includes(text) && !knownAnchors.includes(text)) {
+                (correctedBlock.settings as LiteralSettings).text = text.charAt(1);
             }
         }
         
@@ -127,7 +130,6 @@ const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
         return correctedBlock;
     });
 };
-
 
 export async function generateRegexFromNaturalLanguage(input: NaturalLanguageRegexInput): Promise<NaturalLanguageRegexOutput> {
   return naturalLanguageRegexFlow(input);
@@ -144,48 +146,31 @@ Additionally, provide an 'exampleTestText' field containing a short, relevant ex
 User Query: {{{query}}}
 
 The 'parsedBlocks' structure should be an array of objects. Each object must have:
-1.  "type": A string indicating the block type. Valid types are: "LITERAL", "CHARACTER_CLASS", "GROUP", "QUANTIFIER", "ANCHOR", "ALTERNATION", "LOOKAROUND", "BACKREFERENCE", "CONDITIONAL".
+1.  "type": A string enum indicating the block type from this list: ${Object.values(BlockType).join(', ')}.
 2.  "settings": An object with settings specific to the type. Examples:
-    *   For "LITERAL": \`{"text": "your_literal_text"}\` (Note: represent special regex characters like '\\d' as a LITERAL with text "\\d". My backend will convert it to the correct block type. Do not escape slashes in the JSON value, e.g. "text": "\\d").
-    *   For "CHARACTER_CLASS": \`{"pattern": "a-zA-Z0-9", "negated": false}\`
+    *   For "LITERAL": \`{"text": "your_literal_text"}\`. IMPORTANT: For special regex characters that should be treated as plain text (e.g., a literal dot '.'), represent it as a LITERAL with the character itself, like \`{"text": "."}\`. My backend will handle escaping.
+    *   For "CHARACTER_CLASS": \`{"pattern": "a-zA-Z0-9", "negated": false}\`. For shorthands like "any digit", use \`{"pattern": "\\\\d"}\`.
     *   For "QUANTIFIER": \`{"type": "*", "mode": "greedy"}\` (type can be '*', '+', '?', '{n}', '{n,}', '{n,m}'). If type is '{n}', '{n,}', or '{n,m}', include "min" and "max" (if applicable) in settings, e.g., \`{"type": "{n,m}", "min": 1, "max": 5, "mode": "greedy"}\`.
     *   For "GROUP": \`{"type": "capturing"}\`, \`{"type": "non-capturing"}\`, or \`{"type": "named", "name": "groupName"}\`.
     *   For "ANCHOR": \`{"type": "^"}\` (type can be '^', '$', '\\b', '\\B').
     *   For "LOOKAROUND": \`{"type": "positive-lookahead"}\` (types: 'positive-lookahead', 'negative-lookahead', 'positive-lookbehind', 'negative-lookbehind').
     *   For "BACKREFERENCE": \`{"ref": "1"}\` or \`{"ref": "groupName"}\`.
-    *   For "CONDITIONAL": \`{"condition": "groupName_or_lookaround", "yesPattern": "regex_if_true", "noPattern": "regex_if_false"}\`. (Keep yesPattern/noPattern as simple regex strings for now)
-3.  "children": An array of block objects, ONLY for container types ("GROUP", "ALTERNATION", "LOOKAROUND", "CONDITIONAL"). For other types, "children" should be an empty array or omitted. For "ALTERNATION", each child in "children" represents one alternative path, typically a "GROUP" or "LITERAL".
+3.  "children": An array of block objects, ONLY for container types ("GROUP", "ALTERNATION", "LOOKAROUND", "CONDITIONAL"). For other types, "children" should be an empty array or omitted.
 
-Example for "abc\\d+":
+Example for "a date like 12.31.2024":
 "parsedBlocks": [
-  { "type": "LITERAL", "settings": { "text": "abc" } },
-  { "type": "LITERAL", "settings": { "text": "\\d" } },
-  { "type": "QUANTIFIER", "settings": { "type": "+", "mode": "greedy" } }
-],
-"exampleTestText": "Some text abc123 and more text."
-
-Example for "(cat|dog)":
-"parsedBlocks": [
- {
-    "type": "GROUP",
-    "settings": {"type": "capturing"},
-    "children": [
-      {
-        "type": "ALTERNATION",
-        "settings": {},
-        "children": [
-          {"type": "LITERAL", "settings": {"text": "cat"}},
-          {"type": "LITERAL", "settings": {"text": "dog"}}
-        ]
-      }
-    ]
- }
-],
-"exampleTestText": "My pet is a cat."
+  { "type": "CHARACTER_CLASS", "settings": { "pattern": "\\\\d" } },
+  { "type": "QUANTIFIER", "settings": { "type": "{n}", "min": 2 } },
+  { "type": "LITERAL", "settings": { "text": "." } },
+  { "type": "CHARACTER_CLASS", "settings": { "pattern": "\\\\d" } },
+  { "type": "QUANTIFIER", "settings": { "type": "{n}", "min": 2 } },
+  { "type": "LITERAL", "settings": { "text": "." } },
+  { "type": "CHARACTER_CLASS", "settings": { "pattern": "\\\\d" } },
+  { "type": "QUANTIFIER", "settings": { "type": "{n}", "min": 4 } }
+]
 
 Ensure the output is in the specified JSON format with "regex", "explanation", "exampleTestText", and optionally "parsedBlocks" fields.
-If the query is too vague or cannot be reasonably translated into a regex, or if parsing into blocks is too complex, please indicate that in the explanation, provide an empty or generic regex (like ".*"), an empty or generic 'exampleTestText', and omit 'parsedBlocks' or provide an empty array for it.
-Always try to provide the "regex", "explanation", and "exampleTestText".
+If the query is too vague or cannot be reasonably translated, please indicate that in the explanation, provide a generic regex (like ".*"), an empty 'exampleTestText', and omit 'parsedBlocks'. Always try to provide "regex", "explanation", and "exampleTestText".
 `,
   config: {
     safetySettings: [

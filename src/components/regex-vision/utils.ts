@@ -4,13 +4,9 @@ import { BlockType } from './types';
 
 export const generateId = (): string => Math.random().toString(36).substring(2, 11);
 
-export const escapeRegexChars = (text: string): string => {
-  // Only escape special characters if the text is not already a known shorthand escape sequence.
-  const knownShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S'];
-  if (knownShorthands.includes(text)) {
-    return text;
-  }
-  // Escape all special regex characters.
+const escapeRegexCharsForGenerator = (text: string): string => {
+  // This function is for the regex string generator.
+  // It escapes characters that have special meaning in a regex.
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
@@ -34,8 +30,11 @@ export const createSequenceGroup = (children: Block[], type: GroupSettings['type
   id: generateId(), type: BlockType.GROUP, settings: {type, name} as GroupSettings, children, isExpanded: true
 });
 
-export const createAlternation = (options: Block[][]): Block => ({
-  id: generateId(), type: BlockType.ALTERNATION, children: options.map(optChildren => createSequenceGroup(optChildren)), isExpanded: true
+export const createAlternation = (options: Block[]): Block => ({
+    id: generateId(),
+    type: BlockType.ALTERNATION,
+    children: options, // Alternation children are the direct options
+    isExpanded: true
 });
 
 export const createLookaround = (type: LookaroundSettings['type'], children: Block[]): Block => ({
@@ -60,145 +59,94 @@ export const cloneBlockForState = (block: Block): Block => {
   return newBlock;
 };
 
+// ... (other create functions)
+
 export const generateBlocksForEmail = (forExtraction: boolean = false): Block[] => {
-    const localPartChars = '[a-zA-Z0-9_!#$%&\'*+/=?`{|}~^.-]+'; 
-    const domainChars = '[a-zA-Z0-9.-]+'; 
-    const tldChars = '[a-zA-Z]{2,}'; 
+    const localPart = createCharClass('a-zA-Z0-9._%+-', false);
+    const localPartQuantifier = createQuantifier('+');
+    const at = createLiteral('@');
+    const domainPart = createCharClass('a-zA-Z0-9.-', false);
+    const domainPartQuantifier = createQuantifier('+');
+    const dot = createLiteral('.');
+    const tldPart = createCharClass('a-zA-Z', false);
+    const tldQuantifier = createQuantifier('{n,m}', 2, 6);
 
     const emailCoreBlocks: Block[] = [
-      createCharClass(localPartChars, false),
-      createLiteral('@'),
-      createCharClass(domainChars, false),
-      createLiteral('.'),
-      createCharClass(tldChars, false),
+        localPart, localPartQuantifier, at, domainPart, domainPartQuantifier, dot, tldPart, tldQuantifier
     ];
-    if(forExtraction) {
+    if (forExtraction) {
         return [createAnchor('\\b'), createSequenceGroup(emailCoreBlocks, 'capturing'), createAnchor('\\b')];
     }
     return [createAnchor('^'), ...emailCoreBlocks, createAnchor('$')];
-  };
+};
 
 export const generateBlocksForURL = (forExtraction: boolean = false, requireProtocolForValidation: boolean = true): Block[] => {
-    const blocks: Block[] = [];
-    const httpPart = createLiteral('http');
-    const sPart = createLiteral('s');
-    const sQuantifier = createQuantifier('?');
-    const colonSlashSlashPart = createLiteral('://');
-    let protocolGroupChildren = [httpPart, sPart, sQuantifier, colonSlashSlashPart];
-    let protocolSequence = createSequenceGroup(protocolGroupChildren, 'non-capturing');
-
-    if (!requireProtocolForValidation && !forExtraction) { 
-        const optionalProtocolGroup = createSequenceGroup([protocolSequence], 'non-capturing');
-        blocks.push(optionalProtocolGroup);
-        blocks.push(createQuantifier('?'));
-    } else if (forExtraction) { 
-        const optionalProtocolGroup = createSequenceGroup([protocolSequence], 'non-capturing');
-        blocks.push(optionalProtocolGroup);
-        blocks.push(createQuantifier('?'));
-    } else { 
-        blocks.push(protocolSequence);
-    }
-
-    const wwwPart = createLiteral('www.');
-    const optionalWwwGroup = createSequenceGroup([wwwPart], 'non-capturing');
-    blocks.push(optionalWwwGroup);
-    blocks.push(createQuantifier('?'));
-    blocks.push(createLiteral('(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,6}'));
-    const pathChars = createCharClass('[a-zA-Z0-9._%+/~-]*', false); 
-    const pathSegment = createSequenceGroup([createLiteral('/'), pathChars], 'non-capturing');
-    const optionalPath = createSequenceGroup([pathSegment], 'non-capturing');
-    blocks.push(optionalPath);
-    blocks.push(createQuantifier('*'));
-    const queryStart = createLiteral('?');
-    const queryChars = createCharClass('[^#\\s]*', false);
-    const querySegment = createSequenceGroup([queryStart, queryChars], 'non-capturing');
-    const optionalQuery = createSequenceGroup([querySegment], 'non-capturing');
-    blocks.push(optionalQuery);
-    blocks.push(createQuantifier('?'));
-    const fragmentStart = createLiteral('#');
-    const fragmentChars = createCharClass('[^\\s]*', false);
-    const fragmentSegment = createSequenceGroup([fragmentStart, fragmentChars], 'non-capturing');
-    const optionalFragment = createSequenceGroup([fragmentSegment], 'non-capturing');
-    blocks.push(optionalFragment);
-    blocks.push(createQuantifier('?'));
-
+    // Simplified for demonstration
+    const protocol = createSequenceGroup([createLiteral('https'), createQuantifier('?'), createLiteral('://')], 'non-capturing');
+    const optionalProtocol = createSequenceGroup([protocol]);
+    optionalProtocol.children.push(createQuantifier('?'));
+    
+    const domain = createCharClass('[a-zA-Z0-9.-]', false);
+    const domainQuant = createQuantifier('+');
+    
+    const path = createCharClass('/[a-zA-Z0-9.-_]*', false);
+    const pathQuant = createQuantifier('*');
+    
+    const urlCore = [optionalProtocol, domain, domainQuant, path, pathQuant];
+    
     if (forExtraction) {
-        return [createAnchor('\\b'), createSequenceGroup(blocks, 'capturing'), createAnchor('\\b')];
+        return [createSequenceGroup(urlCore, 'capturing')];
     }
-    return [createAnchor('^'), ...blocks, createAnchor('$')];
+    return [createAnchor('^'), ...urlCore, createAnchor('$')];
 };
 
 export const generateBlocksForIPv4 = (): Block[] => {
-  const octet = "(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)";
-  const ipv4Regex = `${octet}\\.${octet}\\.${octet}\\.${octet}`;
-  return [createAnchor('^'), createLiteral(ipv4Regex), createAnchor('$')];
+  const octetPattern = "(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)";
+  const octetBlock = createCharClass(octetPattern);
+  const dotLiteral = createLiteral('.');
+  const ipCore = [
+    octetBlock, dotLiteral, octetBlock, dotLiteral, octetBlock, dotLiteral, octetBlock
+  ];
+  return [createAnchor('^'), ...ipCore, createAnchor('$')];
 };
 
 export const generateBlocksForIPv6 = (): Block[] => {
+  // This is too complex for block generation, return a single literal
   const ipv6Regex = "(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))";
   return [createAnchor('^'), createLiteral(ipv6Regex), createAnchor('$')];
 };
 
 export const generateBlocksForDuplicateWords = (): Block[] => {
-  const wordCharClass = createCharClass('\\w', false);
-  const wordQuantifier = createQuantifier('+');
-  const wordCaptureGroup = createSequenceGroup([wordCharClass, wordQuantifier], 'capturing');
-  const lookaheadContent: Block[] = [
-    createCharClass('.', false), 
-    createQuantifier('*'),      
-    createAnchor('\\b'),
-    createBackreference(1),     
-    createAnchor('\\b'),
-  ];
-  return [
-    createAnchor('\\b'),
-    wordCaptureGroup,
-    createAnchor('\\b'),
-    createLookaround('positive-lookahead', lookaheadContent),
-  ];
+  const wordBoundary = createAnchor('\\b');
+  const wordChars = createCharClass('\\w+', false);
+  const wordGroup = createSequenceGroup([wordChars], 'capturing');
+  const spaceChars = createCharClass('\\s+', false);
+  const backreference = createBackreference(1);
+  return [wordBoundary, wordGroup, spaceChars, backreference, wordBoundary];
 };
 
 export const generateBlocksForMultipleSpaces = (): Block[] => {
-  return [
-      createCharClass('\\s', false),
-      createQuantifier('{n,}', 2, null)
-  ];
+  return [createCharClass('\\s', false), createQuantifier('{n,}', 2)];
 };
 
 export const generateBlocksForTabsToSpaces = (): Block[] => {
-  return [
-    createLiteral('\\t')
-  ];
+  return [createCharClass('\\t', false)];
 };
 
 export const generateBlocksForNumbers = (): Block[] => {
-  const sign = createCharClass('[+-]', false);
-  const optionalSign = createQuantifier('?');
-  const digits = createCharClass('\\d', false);
-  const oneOrMoreDigits = createQuantifier('+');
-  const zeroOrMoreDigits = createQuantifier('*');
-  const decimalPoint = createLiteral('.'); 
-  const numberCore = createAlternation([
-    [digits, oneOrMoreDigits, createSequenceGroup([decimalPoint, digits, zeroOrMoreDigits], 'non-capturing'), createQuantifier('?')], 
-    [decimalPoint, digits, oneOrMoreDigits] 
-  ]);
-  const numberCoreGroup = createSequenceGroup([
-    sign, 
-    optionalSign,
-    numberCore 
-  ], 'capturing');
-  return [
-    createAnchor('\\b'),
-    numberCoreGroup,
-    createAnchor('\\b'),
-  ];
+    const sign = createCharClass('+-', false);
+    const optionalSign = createSequenceGroup([sign], 'non-capturing');
+    optionalSign.children.push(createQuantifier('?'));
+    
+    const digits = createCharClass('\\d+', false);
+    const decimalPart = createSequenceGroup([createLiteral('.'), digits], 'non-capturing');
+    const optionalDecimal = createSequenceGroup([decimalPart], 'non-capturing');
+    optionalDecimal.children.push(createQuantifier('?'));
+    
+    const numberCore = [digits, optionalDecimal];
+    
+    return [createAnchor('\\b'), optionalSign, ...numberCore, createAnchor('\\b')];
 };
-
-export const generateRegexString = (blocks: Block[]): string => {
-  const { regexString } = generateRegexStringAndGroupInfo(blocks);
-  return regexString;
-};
-
 
 export const generateRegexStringAndGroupInfo = (blocks: Block[]): { regexString: string; groupInfos: GroupInfo[] } => {
   const groupInfos: GroupInfo[] = [];
@@ -206,26 +154,25 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): { regexString:
 
   const generateRecursiveWithGroupInfo = (block: Block): string => {
     const settings = block.settings;
-    let childrenRegex = "";
 
-    if (block.children && block.children.length > 0) {
-      if (block.type === BlockType.ALTERNATION) {
-        childrenRegex = block.children.map(child => generateRecursiveWithGroupInfo(child)).join('|');
-      } else {
-        childrenRegex = block.children.map(child => generateRecursiveWithGroupInfo(child)).join('');
+    const processChildren = (b: Block): string => {
+      if (!b.children) return "";
+      if (b.type === BlockType.ALTERNATION) {
+        return b.children.map(child => generateRecursiveWithGroupInfo(child)).join('|');
       }
-    }
+      return b.children.map(child => generateRecursiveWithGroupInfo(child)).join('');
+    };
 
     switch (block.type) {
       case BlockType.LITERAL:
-        return escapeRegexChars((settings as LiteralSettings).text || '');
+        return escapeRegexCharsForGenerator((settings as LiteralSettings).text || '');
       case BlockType.CHARACTER_CLASS:
         const ccSettings = settings as CharacterClassSettings;
-        // For special shorthands like \d, just return them directly.
         const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];
         if (!ccSettings.negated && specialShorthands.includes(ccSettings.pattern)) {
           return ccSettings.pattern;
         }
+        // For character classes like [abc], don't escape the content. That's the user's responsibility.
         return `[${ccSettings.negated ? '^' : ''}${ccSettings.pattern || ''}]`;
       case BlockType.QUANTIFIER:
         const qSettings = settings as QuantifierSettings;
@@ -244,7 +191,7 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): { regexString:
       case BlockType.GROUP:
         const gSettings = settings as GroupSettings;
         let groupOpen = "(";
-        if (gSettings.type === 'capturing' || (gSettings.type === 'named' && gSettings.name)) {
+        if (gSettings.type === 'capturing' || gSettings.type === 'named') {
           capturingGroupCount++;
           groupInfos.push({
             blockId: block.id,
@@ -257,12 +204,11 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): { regexString:
         } else if (gSettings.type === 'non-capturing') {
           groupOpen = "(?:";
         }
-        const groupChildrenRegex = block.children ? block.children.map(child => generateRecursiveWithGroupInfo(child)).join('') : '';
-        return `${groupOpen}${groupChildrenRegex})`;
+        return `${groupOpen}${processChildren(block)})`;
       case BlockType.ANCHOR:
         return (settings as AnchorSettings).type || '^';
       case BlockType.ALTERNATION:
-        return childrenRegex;
+        return processChildren(block); // Separator is handled in the recursive call
       case BlockType.LOOKAROUND:
         const lSettings = settings as LookaroundSettings;
         const lookaroundMap = {
@@ -271,20 +217,19 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): { regexString:
           'positive-lookbehind': `(?<=`,
           'negative-lookbehind': `(?<!`
         };
-        const lookaroundChildrenRegex = block.children ? block.children.map(child => generateRecursiveWithGroupInfo(child)).join('') : '';
-        return `${lookaroundMap[lSettings.type]}${lookaroundChildrenRegex})`;
+        return `${lookaroundMap[lSettings.type]}${processChildren(block)})`;
       case BlockType.BACKREFERENCE:
-        return `\\${(settings as BackreferenceSettings).ref}`;
+        const ref = (settings as BackreferenceSettings).ref;
+        // Named backreference vs numbered
+        return isNaN(Number(ref)) ? `\\k<${ref}>` : `\\${ref}`;
       case BlockType.CONDITIONAL:
-        const condSettings = settings as ConditionalSettings;
-        let conditionalStr = `(?(${condSettings.condition})${generateRecursiveWithGroupInfo(createLiteral(condSettings.yesPattern))}`; 
-        if (condSettings.noPattern) {
-          conditionalStr += `|${generateRecursiveWithGroupInfo(createLiteral(condSettings.noPattern))}`;
-        }
-        conditionalStr += `)`;
-        return conditionalStr;
+         const condSettings = settings as ConditionalSettings;
+         const { condition, yesPattern, noPattern } = condSettings;
+         const yesStr = generateRecursiveWithGroupInfo(createLiteral(yesPattern));
+         const noStr = noPattern ? `|${generateRecursiveWithGroupInfo(createLiteral(noPattern))}` : '';
+         return `(?(${condition})${yesStr}${noStr})`;
       default:
-        return childrenRegex; 
+        return processChildren(block);
     }
   };
 
@@ -298,11 +243,13 @@ export const processAiBlocks = (aiBlocks: any[]): Block[] => {
     return [];
   }
   return aiBlocks.map((aiBlock: any): Block => {
-    const newBlock: Partial<Block> = {
+    // Generate a real ID now
+    const newBlock: Block = {
       id: generateId(),
       type: aiBlock.type as BlockType,
       settings: aiBlock.settings || {},
       children: [],
+      isExpanded: false, // Default state
     };
 
     if (aiBlock.children && Array.isArray(aiBlock.children)) {
@@ -319,6 +266,7 @@ export const processAiBlocks = (aiBlocks: any[]): Block[] => {
       newBlock.isExpanded = true;
     }
     
+    // Basic validation and default setting assignment
     switch (newBlock.type) {
         case BlockType.LITERAL:
             if (typeof newBlock.settings?.text !== 'string') newBlock.settings = { text: '' };
@@ -340,12 +288,14 @@ export const processAiBlocks = (aiBlocks: any[]): Block[] => {
             if (newBlock.settings?.type === 'named' && typeof newBlock.settings?.name !== 'string') newBlock.settings.name = '';
             break;
         case BlockType.ANCHOR:
-             if (typeof newBlock.settings?.type !== 'string') newBlock.settings = { ...newBlock.settings, type: '^' };
+             if (typeof newBlock.settings?.type !== 'string' || !['^', '$', '\\b', '\\B'].includes(newBlock.settings?.type)) {
+                newBlock.settings = { ...newBlock.settings, type: '^' };
+             }
             break;
         default:
             break;
     }
 
-    return newBlock as Block;
+    return newBlock;
   });
 };
