@@ -11,7 +11,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import type { Block, CharacterClassSettings, GroupSettings, AlternationSettings } from '@/components/regex-vision/types';
+import type { Block, CharacterClassSettings, GroupSettings, AlternationSettings, LiteralSettings, AnchorSettings } from '@/components/regex-vision/types';
 import { BlockType } from '@/components/regex-vision/types';
 
 const NaturalLanguageRegexInputSchema = z.object({
@@ -53,12 +53,11 @@ const createSequenceGroup = (children: Block[], type: GroupSettings['type'] = 'n
 
 
 const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
-  return blocks.map(block => {
+  return blocks.flatMap(block => {
     if (block.type === BlockType.CHARACTER_CLASS) {
       const settings = block.settings as CharacterClassSettings;
       const pattern = settings.pattern;
       
-      // Do not break down negated classes, or simple predefined classes / single character patterns
       if (settings.negated || !pattern || pattern.length < 2 || pattern.startsWith('\\')) {
          if (block.children && block.children.length > 0) {
             return { ...block, children: breakdownComplexCharClasses(block.children) };
@@ -73,22 +72,19 @@ const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
       predefined.forEach(pre => {
         if (remainingPattern.includes(pre)) {
           components.push({ type: 'range', value: pre });
-          remainingPattern = remainingPattern.replace(pre, '');
+          remainingPattern = remainingPattern.replace(new RegExp(pre, 'g'), '');
         }
       });
 
-      // If there are leftover characters, treat each one as a separate literal component.
       if (remainingPattern.length > 0) {
         for (const char of remainingPattern) {
             components.push({ type: 'literal', value: char });
         }
       }
       
-      // Only breakdown if more than one component was found
       if (components.length > 1) {
         const alternationChildren = components.map(comp => createCharClass(comp.value, false));
         const alternationBlock = createAlternation(alternationChildren);
-        // Wrap in a non-capturing group to keep it as a single logical unit
         return createSequenceGroup([alternationBlock], 'non-capturing');
       }
     }
@@ -99,6 +95,37 @@ const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
 
     return block;
   });
+};
+
+const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
+    return blocks.map(block => {
+        let correctedBlock = { ...block };
+
+        if (correctedBlock.type === BlockType.LITERAL) {
+            const settings = correctedBlock.settings as LiteralSettings;
+            const text = settings.text;
+
+            // Rule: If literal text is a known character class, convert it.
+            const knownCharClasses = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];
+            if (knownCharClasses.includes(text)) {
+                correctedBlock.type = BlockType.CHARACTER_CLASS;
+                correctedBlock.settings = { pattern: text, negated: false } as CharacterClassSettings;
+            }
+
+            // Rule: If literal text is a known anchor, convert it.
+            const knownAnchors = ['^', '$', '\\b', '\\B'];
+            if (knownAnchors.includes(text)) {
+                correctedBlock.type = BlockType.ANCHOR;
+                correctedBlock.settings = { type: text } as AnchorSettings;
+            }
+        }
+        
+        if (correctedBlock.children && correctedBlock.children.length > 0) {
+            correctedBlock.children = correctAndSanitizeAiBlocks(correctedBlock.children);
+        }
+
+        return correctedBlock;
+    });
 };
 
 
@@ -119,11 +146,11 @@ User Query: {{{query}}}
 The 'parsedBlocks' structure should be an array of objects. Each object must have:
 1.  "type": A string indicating the block type. Valid types are: "LITERAL", "CHARACTER_CLASS", "GROUP", "QUANTIFIER", "ANCHOR", "ALTERNATION", "LOOKAROUND", "BACKREFERENCE", "CONDITIONAL".
 2.  "settings": An object with settings specific to the type. Examples:
-    *   For "LITERAL": \`{"text": "your_literal_text"}\` (Note: do not escape regex special characters here, use raw text. E.g. for '\\d+' use text: '\\d+')
-    *   For "CHARACTER_CLASS": \`{"pattern": "a-zA-Z0-9", "negated": false}\` or \`{"pattern": "\\\\d", "negated": false}\` (use double backslash for predefined classes like \\d, \\s, \\w).
+    *   For "LITERAL": \`{"text": "your_literal_text"}\` (Note: represent special regex characters like '\\d' as a LITERAL with text "\\d". My backend will convert it to the correct block type. Do not escape slashes in the JSON value, e.g. "text": "\\d").
+    *   For "CHARACTER_CLASS": \`{"pattern": "a-zA-Z0-9", "negated": false}\`
     *   For "QUANTIFIER": \`{"type": "*", "mode": "greedy"}\` (type can be '*', '+', '?', '{n}', '{n,}', '{n,m}'). If type is '{n}', '{n,}', or '{n,m}', include "min" and "max" (if applicable) in settings, e.g., \`{"type": "{n,m}", "min": 1, "max": 5, "mode": "greedy"}\`.
     *   For "GROUP": \`{"type": "capturing"}\`, \`{"type": "non-capturing"}\`, or \`{"type": "named", "name": "groupName"}\`.
-    *   For "ANCHOR": \`{"type": "^"}\` (type can be '^', '$', '\\b', '\\B'). Use double backslash for \\b and \\B.
+    *   For "ANCHOR": \`{"type": "^"}\` (type can be '^', '$', '\\b', '\\B').
     *   For "LOOKAROUND": \`{"type": "positive-lookahead"}\` (types: 'positive-lookahead', 'negative-lookahead', 'positive-lookbehind', 'negative-lookbehind').
     *   For "BACKREFERENCE": \`{"ref": "1"}\` or \`{"ref": "groupName"}\`.
     *   For "CONDITIONAL": \`{"condition": "groupName_or_lookaround", "yesPattern": "regex_if_true", "noPattern": "regex_if_false"}\`. (Keep yesPattern/noPattern as simple regex strings for now)
@@ -132,7 +159,7 @@ The 'parsedBlocks' structure should be an array of objects. Each object must hav
 Example for "abc\\d+":
 "parsedBlocks": [
   { "type": "LITERAL", "settings": { "text": "abc" } },
-  { "type": "CHARACTER_CLASS", "settings": { "pattern": "\\\\d", "negated": false } },
+  { "type": "LITERAL", "settings": { "text": "\\d" } },
   { "type": "QUANTIFIER", "settings": { "type": "+", "mode": "greedy" } }
 ],
 "exampleTestText": "Some text abc123 and more text."
@@ -187,8 +214,11 @@ const naturalLanguageRegexFlow = ai.defineFlow(
         };
     }
     
-    // Post-process the blocks for better visual clarity
-    const processedBlocks = output.parsedBlocks ? breakdownComplexCharClasses(output.parsedBlocks) : [];
+    let processedBlocks: Block[] = [];
+    if (output.parsedBlocks) {
+      const correctedBlocks = correctAndSanitizeAiBlocks(output.parsedBlocks);
+      processedBlocks = breakdownComplexCharClasses(correctedBlocks);
+    }
 
     return {
         ...output,
