@@ -732,12 +732,11 @@ const RegexVisionWorkspace: React.FC = () => {
   };
 
   const isCombinableBlock = (type: BlockType): boolean => {
-    // Defines which blocks can be automatically grouped into an alternation
     return type === BlockType.LITERAL || type === BlockType.CHARACTER_CLASS;
   };
 
   const handleAutoGroupAlternation = useCallback((alternationId: string) => {
-    const processNodes = (nodes: Block[]): Block[] | null => {
+    const processNodesRecursive = (nodes: Block[]): [Block[] | null, number] => {
       for (let i = 0; i < nodes.length; i++) {
         if (nodes[i].id === alternationId) {
           const alternationBlock = nodes[i];
@@ -759,29 +758,30 @@ const RegexVisionWorkspace: React.FC = () => {
             newNodes.splice(i, 1, updatedAlternation); // Replace original alternation
             newNodes.splice(i + 1, blocksToMove.length); // Remove moved blocks
             
-            toast({ title: "Блоки объединены!", description: `Добавлено ${blocksToMove.length} вариант(а).` });
-            return newNodes;
+            return [newNodes, blocksToMove.length];
           }
-          return null; // No changes made
+          return [null, 0];
         }
         
         if (nodes[i].children) {
-          const updatedChildren = processNodes(nodes[i].children!);
+          const [updatedChildren, movedCount] = processNodesRecursive(nodes[i].children!);
           if (updatedChildren) {
             const newNodes = [...nodes];
             newNodes[i] = { ...nodes[i], children: updatedChildren };
-            return newNodes;
+            return [newNodes, movedCount];
           }
         }
       }
-      return null; // No changes made
+      return [null, 0];
     };
 
-    setBlocks(prevBlocks => {
-      const updatedBlocks = processNodes(prevBlocks);
-      return updatedBlocks || prevBlocks;
-    });
-  }, [toast]);
+    const [updatedBlocks, movedCount] = processNodesRecursive(blocks);
+    
+    if (updatedBlocks && movedCount > 0) {
+      setBlocks(updatedBlocks);
+      toast({ title: "Блоки объединены!", description: `Добавлено ${movedCount} вариант(а).` });
+    }
+  }, [blocks, toast]);
 
 
   const headerHeight = "60px";
