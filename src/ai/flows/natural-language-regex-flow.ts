@@ -43,35 +43,40 @@ const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
       const settings = block.settings as CharacterClassSettings;
       const pattern = settings.pattern;
       
-      if (settings.negated || !pattern || pattern.length <= 1 || pattern.startsWith('\\') || pattern === '.') {
+      // Do not break down special shorthands (\d, \w, etc.), single characters, or negated classes
+      if (settings.negated || !pattern || pattern.length <= 1 || (pattern.startsWith('\\') && pattern.length === 2) || pattern === '.') {
          if (block.children && block.children.length > 0) {
             return { ...block, children: breakdownComplexCharClasses(block.children) };
          }
         return block;
       }
       
-      const components: (Block | null)[] = [];
-      const predefinedRanges = ['a-z', 'A-Z', '0-9'];
+      const components: Block[] = [];
+      const predefinedRanges: { [key: string]: string } = { 'a-z': 'a-z', 'A-Z': 'A-Z', '0-9': '0-9' };
       let remainingPattern = pattern;
 
-      predefinedRanges.forEach(range => {
-        if (remainingPattern.includes(range)) {
-          components.push({ id: "temp", type: BlockType.CHARACTER_CLASS, settings: { pattern: range, negated: false } as CharacterClassSettings, children: [], isExpanded: false });
-          remainingPattern = remainingPattern.replace(new RegExp(range.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), '');
+      // Extract predefined ranges
+      Object.keys(predefinedRanges).forEach(rangeKey => {
+        if (remainingPattern.includes(rangeKey)) {
+          components.push({ id: "temp", type: BlockType.CHARACTER_CLASS, settings: { pattern: rangeKey, negated: false } as CharacterClassSettings, children: [], isExpanded: false });
+          remainingPattern = remainingPattern.replace(new RegExp(rangeKey.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), '');
         }
       });
       
+      // Treat remaining characters as individual literals
       if (remainingPattern.length > 0) {
          for (const char of remainingPattern) {
+           // If the char is a special regex char that needs escaping, treat it as a literal
            components.push({ id: "temp", type: BlockType.LITERAL, settings: { text: char } as LiteralSettings, children: [], isExpanded: false });
         }
       }
       
-      const validComponents = components.filter(c => c !== null) as Block[];
-      if (validComponents.length > 1) {
-        return { id: "temp", type: BlockType.GROUP, settings: { type: 'non-capturing' } as GroupSettings, children: [{id: "temp", type: BlockType.ALTERNATION, settings: {}, children: validComponents, isExpanded: true}], isExpanded: true };
-      } else if (validComponents.length === 1) {
-        return validComponents[0];
+      if (components.length > 1) {
+        // Wrap multiple components in a non-capturing group with an alternation
+        return { id: "temp", type: BlockType.CHARACTER_CLASS, settings: { pattern: '', negated: false } as CharacterClassSettings, children: components, isExpanded: true };
+      } else if (components.length === 1) {
+        // If only one component remains, return it directly
+        return components[0];
       }
     }
 
@@ -96,14 +101,17 @@ const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
             if (knownCharClasses.includes(text)) {
                 correctedBlock.type = BlockType.CHARACTER_CLASS;
                 correctedBlock.settings = { pattern: text, negated: false } as CharacterClassSettings;
+                return correctedBlock;
             }
 
             const knownAnchors = ['^', '$', '\\b', '\\B'];
             if (knownAnchors.includes(text)) {
                 correctedBlock.type = BlockType.ANCHOR;
                 correctedBlock.settings = { type: text } as AnchorSettings;
+                return correctedBlock;
             }
             
+            // Handle escaped literals like \. or \+
             if (text.startsWith('\\') && text.length === 2 && !knownCharClasses.includes(text) && !knownAnchors.includes(text)) {
                 (correctedBlock.settings as LiteralSettings).text = text.charAt(1);
             }
@@ -221,10 +229,12 @@ export async function generateRegexFromNaturalLanguage(input: NaturalLanguageReg
     
     if (blocks.length > 0) {
       const { regexString } = generateRegexStringAndGroupInfo(blocks);
+      const sanitizedBlocks = correctAndSanitizeAiBlocks(blocks);
+      const processedBlocks = breakdownComplexCharClasses(sanitizedBlocks);
       return {
         regex: regexString,
         explanation,
-        parsedBlocks: blocks,
+        parsedBlocks: processedBlocks,
         exampleTestText,
       };
     }

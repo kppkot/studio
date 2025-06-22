@@ -1,4 +1,3 @@
-
 "use client";
 import React from 'react';
 import { Input } from '@/components/ui/input';
@@ -6,9 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import type { Block } from './types';
+import type { Block, LiteralSettings, CharacterClassSettings, QuantifierSettings, GroupSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, ConditionalSettings } from './types';
+import { BlockType } from './types';
 import { cn } from '@/lib/utils';
-import { generateRegexStringAndGroupInfo } from './utils';
+
 
 interface RegexOutputDisplayProps {
   blocks: Block[];
@@ -16,9 +16,9 @@ interface RegexOutputDisplayProps {
   onFlagsChange: (flags: string) => void;
   generatedRegex: string;
   selectedBlockId: string | null;
-  hoveredBlockId: string | null; // New prop for hover state
-  onHoverBlockInOutput: (blockId: string | null) => void; // New callback
-  onSelectBlockInOutput: (blockId: string) => void; // New callback
+  hoveredBlockId: string | null;
+  onHoverBlockInOutput: (blockId: string | null) => void;
+  onSelectBlockInOutput: (blockId: string) => void;
 }
 
 const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
@@ -43,66 +43,159 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
         console.error('Не удалось скопировать regex: ', err);
       });
   };
-
-  // A simple tokenizer for syntax highlighting
-  const tokenizeRegex = (regexStr: string): { type: string; value: string }[] => {
-      const tokens: { type: string; value: string }[] = [];
-      const regex = /\\.|\[\^?.*?\]|\(.*?\)|\.|[+*?{}()|^$]/g;
-      let match;
-      let lastIndex = 0;
-
-      while ((match = regex.exec(regexStr)) !== null) {
-          if (match.index > lastIndex) {
-              tokens.push({ type: 'literal', value: regexStr.substring(lastIndex, match.index) });
-          }
-          const matchedValue = match[0];
-          if (matchedValue.startsWith('\\')) {
-              tokens.push({ type: 'escaped', value: matchedValue });
-          } else if (matchedValue.startsWith('[')) {
-              tokens.push({ type: 'char-class', value: matchedValue });
-          } else if (matchedValue.startsWith('(')) {
-              tokens.push({ type: 'group', value: matchedValue });
-          } else {
-              tokens.push({ type: 'meta', value: matchedValue });
-          }
-          lastIndex = match.index + matchedValue.length;
-      }
-
-      if (lastIndex < regexStr.length) {
-          tokens.push({ type: 'literal', value: regexStr.substring(lastIndex) });
-      }
-
-      return tokens;
-  };
-
-  const renderTokenizedRegex = () => {
-      const tokens = tokenizeRegex(generatedRegex);
-      return tokens.map((token, index) => {
-          let className = '';
-          switch (token.type) {
-              case 'escaped': className = 'text-purple-700 dark:text-purple-300 font-semibold'; break;
-              case 'char-class': className = 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'; break;
-              case 'group': className = 'text-blue-700 dark:text-blue-300'; break;
-              case 'meta': className = 'text-orange-600 dark:text-orange-400 font-bold'; break;
-              case 'literal':
-              default:
-                  className = 'text-green-700 dark:text-green-400';
-                  break;
-          }
-          return <span key={index} className={className}>{token.value}</span>;
-      });
-  };
   
+  const escapeRegexCharsForDisplay = (text: string): string => {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  };
+
+  const renderInteractiveRegex = (blocksToRender: Block[]): React.ReactNode[] => {
+    return blocksToRender.map(block => {
+      const isSelected = selectedBlockId === block.id;
+      const isHovered = hoveredBlockId === block.id;
+      const settings = block.settings;
+
+      const spanProps = {
+        key: block.id,
+        className: cn('cursor-pointer rounded-[3px] p-0.5 transition-colors', {
+          'bg-primary/20 ring-1 ring-primary/80': isSelected,
+          'bg-accent/30': isHovered && !isSelected,
+        }),
+        onMouseEnter: (e: React.MouseEvent) => { e.stopPropagation(); onHoverBlockInOutput(block.id); },
+        onMouseLeave: (e: React.MouseEvent) => { e.stopPropagation(); onHoverBlockInOutput(null); },
+        onClick: (e: React.MouseEvent) => { e.stopPropagation(); onSelectBlockInOutput(block.id); },
+      };
+
+      const renderChildren = (b: Block): React.ReactNode[] => {
+        if (!b.children) return [];
+        if (b.type === BlockType.ALTERNATION) {
+          return b.children.map((child, index) => (
+            <React.Fragment key={child.id}>
+              {renderInteractiveRegex([child])}
+              {index < b.children.length - 1 && <span className='text-orange-600 font-bold px-0.5'>|</span>}
+            </React.Fragment>
+          ));
+        }
+        return renderInteractiveRegex(b.children);
+      };
+
+      switch (block.type) {
+        case BlockType.LITERAL:
+          return (
+            <span {...spanProps}>
+              <span className='text-green-700 dark:text-green-400'>
+                {escapeRegexCharsForDisplay((settings as LiteralSettings).text || '')}
+              </span>
+            </span>
+          );
+        
+        case BlockType.CHARACTER_CLASS:
+          const ccSettings = settings as CharacterClassSettings;
+          const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];
+          let content;
+          if (!ccSettings.negated && specialShorthands.includes(ccSettings.pattern)) {
+            content = (
+              <>
+                <span className="text-red-500 font-semibold">\</span>
+                <span className="text-purple-700 dark:text-purple-300 font-semibold">{ccSettings.pattern.substring(1)}</span>
+              </>
+            );
+          } else if (block.children && block.children.length > 0) {
+            content = (
+              <>
+                 <span className='text-purple-700 dark:text-purple-300'>[</span>
+                  <span className='text-orange-600 font-bold'>
+                    {ccSettings.negated ? '^' : ''}
+                  </span>
+                  {renderChildren(block)}
+                 <span className='text-purple-700 dark:text-purple-300'>]</span>
+              </>
+            )
+          } else {
+            content = (
+              <>
+                <span className='text-purple-700 dark:text-purple-300'>[</span>
+                <span className='text-orange-600 font-bold'>
+                  {ccSettings.negated ? '^' : ''}
+                </span>
+                <span className='text-green-700 dark:text-green-400'>
+                  {ccSettings.pattern || ''}
+                </span>
+                <span className='text-purple-700 dark:text-purple-300'>]</span>
+              </>
+            );
+          }
+          return <span {...spanProps}>{content}</span>;
+
+        case BlockType.QUANTIFIER:
+          const qSettings = settings as QuantifierSettings;
+          let qStr = qSettings.type || '*';
+          if (qStr.includes('{')) {
+            const min = qSettings.min ?? 0;
+            const max = qSettings.max;
+            if (qStr === '{n}') qStr = `{${min}}`;
+            else if (qStr === '{n,}') qStr = `{${min},}`;
+            else if (qStr === '{n,m}') qStr = `{${min},${max ?? ''}}`;
+          }
+          let mode = '';
+          if (qSettings.mode === 'lazy') mode = '?';
+          else if (qSettings.mode === 'possessive') mode = '+';
+          return <span {...spanProps} className={cn(spanProps.className, 'text-orange-600 font-bold')}>{qStr + mode}</span>;
+
+        case BlockType.GROUP:
+          const gSettings = settings as GroupSettings;
+          let groupOpen = "(";
+          if (gSettings.type === 'non-capturing') groupOpen = "(?:";
+          if (gSettings.type === 'named' && gSettings.name) groupOpen = `(?<${gSettings.name}>`;
+          return (
+            <span {...spanProps}>
+              <span className='text-blue-700 dark:text-blue-300'>{groupOpen}</span>
+              {renderChildren(block)}
+              <span className='text-blue-700 dark:text-blue-300'>)</span>
+            </span>
+          );
+        
+        case BlockType.ANCHOR:
+          return <span {...spanProps} className={cn(spanProps.className, 'text-red-500 font-semibold')}>{(settings as AnchorSettings).type || '^'}</span>;
+
+        case BlockType.LOOKAROUND:
+          const lSettings = settings as LookaroundSettings;
+          const lookaroundMap = { 'positive-lookahead': '(?=', 'negative-lookahead': '(?!', 'positive-lookbehind': '(?<=', 'negative-lookbehind': '(?<!' };
+          return (
+            <span {...spanProps}>
+              <span className='text-blue-700 dark:text-blue-300'>{lookaroundMap[lSettings.type]}</span>
+              {renderChildren(block)}
+              <span className='text-blue-700 dark:text-blue-300'>)</span>
+            </span>
+          );
+        
+        case BlockType.BACKREFERENCE:
+          const ref = (settings as BackreferenceSettings).ref;
+          return (
+            <span {...spanProps} className={cn(spanProps.className, 'text-purple-700 dark:text-purple-300 font-semibold')}>
+              {isNaN(Number(ref)) ? `\\k<${ref}>` : `\\${ref}`}
+            </span>
+          );
+
+        case BlockType.ALTERNATION:
+             return <span {...spanProps}>{renderChildren(block)}</span>;
+
+        default:
+          return renderChildren(block);
+      }
+    });
+  };
+
   return (
     <div className="space-y-2">
       <Label htmlFor="generatedRegexOutput" className="text-sm font-medium">Сгенерированное регулярное выражение</Label>
       <div className="flex items-center gap-2">
         <div className="flex-1 p-2.5 bg-muted rounded-lg font-mono text-sm min-h-[2.5rem] flex items-center overflow-x-auto flex-wrap leading-relaxed">
           <span className="text-muted-foreground">/</span>
-          {blocks.length > 0 
-            ? renderTokenizedRegex()
-            : <span className="italic text-muted-foreground">Добавьте блоки для построения выражения</span>
-          }
+          {blocks.length > 0 ? (
+            renderInteractiveRegex(blocks)
+          ) : (
+            <span className="italic text-muted-foreground">Добавьте блоки для построения выражения</span>
+          )}
           <span className="text-muted-foreground">/</span>
         </div>
         <Input
