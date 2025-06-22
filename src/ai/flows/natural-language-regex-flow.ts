@@ -54,7 +54,6 @@ const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
       const settings = block.settings as CharacterClassSettings;
       const pattern = settings.pattern;
       
-      // Skip breakdown for negated classes or already simple/special classes
       if (settings.negated || !pattern || pattern.length <= 1 || pattern.startsWith('\\')) {
          if (block.children && block.children.length > 0) {
             return { ...block, children: breakdownComplexCharClasses(block.children) };
@@ -66,7 +65,6 @@ const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
       const predefinedRanges = ['a-z', 'A-Z', '0-9'];
       let remainingPattern = pattern;
 
-      // Extract predefined ranges
       predefinedRanges.forEach(range => {
         if (remainingPattern.includes(range)) {
           components.push(createCharClass(range, false));
@@ -74,16 +72,20 @@ const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
         }
       });
       
-      // Treat remaining characters as individual literals inside the alternation
       if (remainingPattern.length > 0) {
         for (const char of remainingPattern) {
-           components.push(createLiteral(char));
+           if (char === '.') {
+              components.push(createCharClass(char));
+           } else {
+              components.push(createLiteral(char));
+           }
         }
       }
       
       if (components.length > 1) {
-        // If we have multiple components, wrap them in an alternation inside a non-capturing group
         return createSequenceGroup([createAlternation(components)], 'non-capturing');
+      } else if (components.length === 1) {
+        return components[0];
       }
     }
 
@@ -99,7 +101,6 @@ const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
     return blocks.map(block => {
         let correctedBlock = { ...block };
 
-        // Rule: AI often misuses LITERAL for special regex tokens. Convert them.
         if (correctedBlock.type === BlockType.LITERAL) {
             const settings = correctedBlock.settings as LiteralSettings;
             const text = settings.text || '';
@@ -116,8 +117,6 @@ const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
                 correctedBlock.settings = { type: text } as AnchorSettings;
             }
             
-            // Rule: AI might escape things that shouldn't be. Un-escape them for our model.
-            // Our model expects plain characters in LITERALs; the generator will escape them.
             if (text.startsWith('\\') && text.length === 2 && !knownCharClasses.includes(text) && !knownAnchors.includes(text)) {
                 (correctedBlock.settings as LiteralSettings).text = text.charAt(1);
             }
@@ -149,7 +148,7 @@ The 'parsedBlocks' structure should be an array of objects. Each object must hav
 1.  "type": A string enum indicating the block type from this list: ${Object.values(BlockType).join(', ')}.
 2.  "settings": An object with settings specific to the type. Examples:
     *   For "LITERAL": \`{"text": "your_literal_text"}\`. IMPORTANT: For special regex characters that should be treated as plain text (e.g., a literal dot '.'), represent it as a LITERAL with the character itself, like \`{"text": "."}\`. My backend will handle escaping.
-    *   For "CHARACTER_CLASS": \`{"pattern": "a-zA-Z0-9", "negated": false}\`. For shorthands like "any digit", use \`{"pattern": "\\\\d"}\`.
+    *   For "CHARACTER_CLASS": \`{"pattern": "a-zA-Z0-9", "negated": false}\`. For shorthands like "any digit", use \`{"type": "CHARACTER_CLASS", "settings": {"pattern": "\\\\d"}}\`. Do not use literal for this. For a single dot, use \`{"type": "CHARACTER_CLASS", "settings": {"pattern": "."}}\`.
     *   For "QUANTIFIER": \`{"type": "*", "mode": "greedy"}\` (type can be '*', '+', '?', '{n}', '{n,}', '{n,m}'). If type is '{n}', '{n,}', or '{n,m}', include "min" and "max" (if applicable) in settings, e.g., \`{"type": "{n,m}", "min": 1, "max": 5, "mode": "greedy"}\`.
     *   For "GROUP": \`{"type": "capturing"}\`, \`{"type": "non-capturing"}\`, or \`{"type": "named", "name": "groupName"}\`.
     *   For "ANCHOR": \`{"type": "^"}\` (type can be '^', '$', '\\b', '\\B').
@@ -182,6 +181,16 @@ If the query is too vague or cannot be reasonably translated, please indicate th
   },
 });
 
+const isRegexValid = (regex: string): boolean => {
+  try {
+    new RegExp(regex);
+    return true;
+  } catch (e) {
+    return false;
+  }
+};
+
+
 const naturalLanguageRegexFlow = ai.defineFlow(
   {
     name: 'naturalLanguageRegexFlow',
@@ -190,12 +199,13 @@ const naturalLanguageRegexFlow = ai.defineFlow(
   },
   async (input) => {
     const {output} = await prompt(input);
-    if (!output) {
+    
+    if (!output || !output.regex || !isRegexValid(output.regex)) {
         return {
             regex: ".*",
-            explanation: "AI could not generate a specific regex for this query. Please try rephrasing or being more specific.",
+            explanation: "AI не смог сгенерировать корректное регулярное выражение для этого запроса. Пожалуйста, попробуйте перефразировать или быть более конкретным.",
             parsedBlocks: [],
-            exampleTestText: "Some example text to test with."
+            exampleTestText: "Введите текст для тестирования."
         };
     }
     
@@ -208,7 +218,7 @@ const naturalLanguageRegexFlow = ai.defineFlow(
     return {
         ...output,
         parsedBlocks: processedBlocks,
-        exampleTestText: output.exampleTestText || "Example text was not provided by AI."
+        exampleTestText: output.exampleTestText || "Пример текста не был предоставлен AI."
     };
   }
 );
