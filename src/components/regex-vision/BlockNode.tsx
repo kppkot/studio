@@ -8,6 +8,8 @@ import { ChevronDown, ChevronRight, PlusCircle, Trash2, GripVertical, Copy, Ungr
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { reconstructPatternFromChildren } from './utils';
+
 
 interface BlockNodeProps {
   block: Block;
@@ -43,23 +45,29 @@ const getDescriptiveBlockTitle = (block: Block, config: BlockConfig, groupInfo?:
       break;
     case BlockType.CHARACTER_CLASS:
       const cs = settings as CharacterClassSettings;
+      if (hasChildren) {
+          const childPattern = reconstructPatternFromChildren(block.children);
+          let patternDesc = childPattern.length > 10 ? `[${childPattern.substring(0,10)}...]` : `[${childPattern}]`;
+          title = cs.negated ? `Символы: НЕ ${patternDesc}` : `Символы: ${patternDesc}`;
+          details = `${cs.negated ? '[^' : '['}${childPattern}${cs.negated ? ']' : ']'}`;
+          break;
+      }
+
       let patternDesc = cs.pattern || '...';
-      if (cs.pattern === '\\d') patternDesc = 'любая цифра';
-      else if (cs.pattern === '\\D') patternDesc = 'НЕ цифра';
-      else if (cs.pattern === '\\w') patternDesc = 'любая буква/цифра';
-      else if (cs.pattern === '\\W') patternDesc = 'НЕ буква/цифра';
-      else if (cs.pattern === '\\s') patternDesc = 'любой пробел';
-      else if (cs.pattern === '\\S') patternDesc = 'НЕ пробел';
-      else if (cs.pattern === '.') patternDesc = 'любой символ';
-      else if (cs.pattern?.length > 10) patternDesc = `[${cs.pattern.substring(0,10)}...]`;
-      else patternDesc = `[${cs.pattern || '...'}]`;
-      
-      title = cs.negated ? `Символы: НЕ ${patternDesc}` : `Символы: ${patternDesc}`;
-      
       const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];
-      if (!cs.negated && specialShorthands.includes(cs.pattern)) {
+      if (specialShorthands.includes(cs.pattern)) {
+          if (cs.pattern === '\\d') patternDesc = 'любая цифра';
+          else if (cs.pattern === '\\D') patternDesc = 'НЕ цифра';
+          else if (cs.pattern === '\\w') patternDesc = 'любая буква/цифра';
+          else if (cs.pattern === '\\W') patternDesc = 'НЕ буква/цифра';
+          else if (cs.pattern === '\\s') patternDesc = 'любой пробел';
+          else if (cs.pattern === '\\S') patternDesc = 'НЕ пробел';
+          else if (cs.pattern === '.') patternDesc = 'любой символ';
+          title = `Символы: ${patternDesc}`;
           details = cs.pattern;
       } else {
+        patternDesc = cs.pattern?.length > 10 ? `[${cs.pattern.substring(0,10)}...]` : `[${cs.pattern || '...'}]`;
+        title = cs.negated ? `Символы: НЕ ${patternDesc}` : `Символы: ${patternDesc}`;
         details = `${cs.negated ? '[^' : '['}${cs.pattern || ''}${cs.negated ? ']' : ']'}`;
       }
       break;
@@ -185,14 +193,23 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
   const config: BlockConfig | undefined = BLOCK_CONFIGS[block.type];
 
-  const canHaveChildren = block.type === BlockType.GROUP ||
-                          block.type === BlockType.LOOKAROUND ||
-                          block.type === BlockType.ALTERNATION ||
-                          block.type === BlockType.CONDITIONAL;
+  const hasChildren = block.children && block.children.length > 0;
 
-  const hasVisibleChildren = block.children && block.children.length > 0;
-  const isCurrentlyExpanded = block.isExpanded ?? (canHaveChildren ? true : false);
-  const isEmptyContainer = canHaveChildren && !hasVisibleChildren;
+  const isContainerBlock = 
+      block.type === BlockType.GROUP ||
+      block.type === BlockType.LOOKAROUND ||
+      block.type === BlockType.ALTERNATION ||
+      block.type === BlockType.CONDITIONAL ||
+      (block.type === BlockType.CHARACTER_CLASS && hasChildren);
+      
+  const canAddNewChildren = 
+      block.type === BlockType.GROUP ||
+      block.type === BlockType.LOOKAROUND ||
+      block.type === BlockType.ALTERNATION ||
+      block.type === BlockType.CONDITIONAL;
+
+  const isCurrentlyExpanded = block.isExpanded ?? (isContainerBlock ? true : false);
+  const isEmptyContainer = isContainerBlock && !hasChildren;
 
   const isSelected = selectedId === block.id || (quantifierToRender && selectedId === quantifierToRender.id);
 
@@ -218,7 +235,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
   const handleToggleExpand = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (canHaveChildren) {
+    if (isContainerBlock) {
       onUpdate(block.id, { isExpanded: !isCurrentlyExpanded });
     }
   };
@@ -251,7 +268,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     }
   };
 
-  const canBeUngrouped = canHaveChildren && hasVisibleChildren;
+  const canBeUngrouped = isContainerBlock && hasChildren && block.type !== BlockType.CHARACTER_CLASS;
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
     e.stopPropagation();
@@ -327,13 +344,13 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           <div className="flex items-center gap-2">
             <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab flex-shrink-0" />
 
-            {canHaveChildren && (
+            {isContainerBlock ? (
               <Button variant="ghost" size="iconSm" onClick={handleToggleExpand} className="flex-shrink-0">
                 {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
               </Button>
+            ) : (
+                <div className="w-7 h-7 flex-shrink-0" />
             )}
-            {!canHaveChildren && <div className="w-7 h-7 flex-shrink-0" />}
-
 
             <div className="flex items-center gap-1.5 flex-1 min-w-0">
               <span className={cn(
@@ -358,7 +375,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             </div>
 
             <div className={cn("flex items-center gap-0.5 transition-opacity flex-shrink-0", (isInternallyHovered && selectedId !== quantifierToRender?.id) || selectedId === block.id ? "opacity-100" : "opacity-0 focus-within:opacity-100 group-hover/blocknode:opacity-100")}>
-              {canHaveChildren && (
+              {canAddNewChildren && (
                    <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onAddChild(block.id);}} title="Добавить дочерний элемент">
                       <PlusCircle size={14} className="text-green-600"/>
                    </Button>
@@ -425,7 +442,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         </div>
       )}
 
-      {block.type === BlockType.ALTERNATION && isCurrentlyExpanded && hasVisibleChildren && (
+      {block.type === BlockType.ALTERNATION && isCurrentlyExpanded && hasChildren && (
         <div className="mt-1 pt-1 border-l-2 border-primary/60 bg-primary/10 rounded-r-md ml-14 mr-px pr-2">
           {block.children.map((altChild, index) => (
             <React.Fragment key={altChild.id}>
@@ -446,8 +463,11 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         </div>
       )}
 
-      {block.type !== BlockType.ALTERNATION && canHaveChildren && isCurrentlyExpanded && hasVisibleChildren && (
-        <div className="mt-1 pt-1 pl-3 border-l-2 border-primary/60 bg-primary/10 rounded-r-md ml-14 mr-px pr-2">
+      {block.type !== BlockType.ALTERNATION && isContainerBlock && isCurrentlyExpanded && hasChildren && (
+        <div className={cn("mt-1 pt-1 pl-3 pr-2 rounded-r-md ml-14 mr-px", {
+          "border-l-2 border-primary/60 bg-primary/10": block.type !== BlockType.CHARACTER_CLASS,
+          "border-l-2 border-purple-500/60 bg-purple-500/10": block.type === BlockType.CHARACTER_CLASS
+        })}>
           {renderChildNodes(block.children, block.id, depth + 1, groupInfos)}
         </div>
       )}
@@ -456,3 +476,4 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 };
 
 export default BlockNode;
+
