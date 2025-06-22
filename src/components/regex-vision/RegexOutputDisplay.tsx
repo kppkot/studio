@@ -75,42 +75,28 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
 
       const renderChildren = (children: Block[], separator: string = ''): React.ReactNode => {
         const childNodes = children.map(child => renderNode(child));
+        if(childNodes.length === 0) return null;
         return childNodes.reduce((acc, curr, idx) => [acc, <span key={`sep-${idx}`} className="text-pink-600 dark:text-pink-400 font-bold mx-px">{separator}</span>, curr]);
       };
 
       const renderEscaped = (text: string) => {
-        const parts: React.ReactNode[] = [];
-        let i = 0;
-        while (i < text.length) {
-            const char = text[i];
-            if ('.*+?^${}()|[]\\'.includes(char)) {
-                parts.push(
-                    <span key={i} className="text-green-700 dark:text-green-400">
-                        <span className="text-red-600 dark:text-red-400">\\</span>
-                        <span>{char}</span>
-                    </span>
-                );
-            } else {
-                parts.push(<span key={i} className="text-green-700 dark:text-green-400">{char}</span>);
-            }
-            i++;
-        }
-        return <span>{parts}</span>;
+        return <span className="text-green-700 dark:text-green-400">{text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</span>
       };
 
 
       let content: React.ReactNode;
       switch (block.type) {
         case BlockType.LITERAL:
-          content = renderEscaped((block.settings as LiteralSettings).text);
-          break;
+            const literalText = (block.settings as LiteralSettings).text;
+            content = <span className="text-green-700 dark:text-green-400">{literalText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</span>;
+            break;
         case BlockType.CHARACTER_CLASS:
           const { pattern, negated } = block.settings as CharacterClassSettings;
           const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];
           if (!negated && specialShorthands.includes(pattern)) {
               content = (
                   <span className="text-purple-700 dark:text-purple-300 font-semibold">
-                      {pattern === '.' ? '.' : <><span className="text-red-600 dark:text-red-400">\</span>{pattern.slice(1)}</>}
+                      {pattern}
                   </span>
               );
           } else {
@@ -140,7 +126,7 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
           break;
         case BlockType.ANCHOR:
           const as = block.settings as AnchorSettings;
-          content = <span className="text-red-600 dark:text-red-400">{as.type.startsWith('\\') ? <><span className="text-red-600 dark:text-red-400">\</span>{as.type.slice(1)}</> : as.type}</span>;
+          content = <span className="text-red-600 dark:text-red-400">{as.type}</span>;
           break;
         case BlockType.ALTERNATION:
             content = <>{renderChildren(block.children, '|')}</>;
@@ -154,7 +140,9 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
             content = <span className="bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 px-0.5 rounded-sm">{lookaroundMap[ls.type]}{block.children.map(renderNode)}{')'}</span>;
             break;
         case BlockType.BACKREFERENCE:
-            content = <span className="text-cyan-600 dark:text-cyan-400">\k&lt;{(block.settings as BackreferenceSettings).ref}&gt;</span>;
+            const ref = (block.settings as BackreferenceSettings).ref;
+            const backrefText = isNaN(Number(ref)) ? `\\k<${ref}>` : `\\${ref}`;
+            content = <span className="text-cyan-600 dark:text-cyan-400">{backrefText}</span>;
             break;
         default:
           content = <>{block.children.map(renderNode)}</>;

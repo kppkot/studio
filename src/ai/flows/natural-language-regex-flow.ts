@@ -54,7 +54,7 @@ const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
       const settings = block.settings as CharacterClassSettings;
       const pattern = settings.pattern;
       
-      if (settings.negated || !pattern || pattern.length <= 1 || pattern.startsWith('\\')) {
+      if (settings.negated || !pattern || pattern.length <= 1 || pattern.startsWith('\\') || pattern === '.') {
          if (block.children && block.children.length > 0) {
             return { ...block, children: breakdownComplexCharClasses(block.children) };
          }
@@ -74,11 +74,7 @@ const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
       
       if (remainingPattern.length > 0) {
         for (const char of remainingPattern) {
-           if (char === '.') {
-              components.push(createCharClass(char));
-           } else {
-              components.push(createLiteral(char));
-           }
+           components.push(createLiteral(char));
         }
       }
       
@@ -118,6 +114,7 @@ const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
             }
             
             if (text.startsWith('\\') && text.length === 2 && !knownCharClasses.includes(text) && !knownAnchors.includes(text)) {
+                // It's an escaped literal, like \. or \+
                 (correctedBlock.settings as LiteralSettings).text = text.charAt(1);
             }
         }
@@ -147,8 +144,8 @@ User Query: {{{query}}}
 The 'parsedBlocks' structure should be an array of objects. Each object must have:
 1.  "type": A string enum indicating the block type from this list: ${Object.values(BlockType).join(', ')}.
 2.  "settings": An object with settings specific to the type. Examples:
-    *   For "LITERAL": \`{"text": "your_literal_text"}\`. IMPORTANT: For special regex characters that should be treated as plain text (e.g., a literal dot '.'), represent it as a LITERAL with the character itself, like \`{"text": "."}\`. My backend will handle escaping.
-    *   For "CHARACTER_CLASS": \`{"pattern": "a-zA-Z0-9", "negated": false}\`. For shorthands like "any digit", use \`{"type": "CHARACTER_CLASS", "settings": {"pattern": "\\\\d"}}\`. Do not use literal for this. For a single dot, use \`{"type": "CHARACTER_CLASS", "settings": {"pattern": "."}}\`.
+    *   For "LITERAL": \`{"text": "your_literal_text"}\`. IMPORTANT: For special regex characters that should be treated as plain text (e.g., a literal dot '.'), my backend will handle escaping. Provide the literal character itself: \`{"text": "."}\`.
+    *   For "CHARACTER_CLASS": \`{"pattern": "a-zA-Z0-9", "negated": false}\`. For shorthands like "any digit", use \`{"type": "CHARACTER_CLASS", "settings": {"pattern": "\\\\d"}}\`. Do not use literal for this. For a single dot matching any character, use \`{"type": "CHARACTER_CLASS", "settings": {"pattern": "."}}\`.
     *   For "QUANTIFIER": \`{"type": "*", "mode": "greedy"}\` (type can be '*', '+', '?', '{n}', '{n,}', '{n,m}'). If type is '{n}', '{n,}', or '{n,m}', include "min" and "max" (if applicable) in settings, e.g., \`{"type": "{n,m}", "min": 1, "max": 5, "mode": "greedy"}\`.
     *   For "GROUP": \`{"type": "capturing"}\`, \`{"type": "non-capturing"}\`, or \`{"type": "named", "name": "groupName"}\`.
     *   For "ANCHOR": \`{"type": "^"}\` (type can be '^', '$', '\\b', '\\B').
@@ -159,14 +156,16 @@ The 'parsedBlocks' structure should be an array of objects. Each object must hav
 Example for "a date like 12.31.2024":
 "parsedBlocks": [
   { "type": "CHARACTER_CLASS", "settings": { "pattern": "\\\\d" } },
-  { "type": "QUANTIFIER", "settings": { "type": "{n}", "min": 2 } },
+  { "type": "QUANTIFIER", "settings": { "type": "{n}", "min": 2, "mode": "greedy" } },
   { "type": "LITERAL", "settings": { "text": "." } },
   { "type": "CHARACTER_CLASS", "settings": { "pattern": "\\\\d" } },
-  { "type": "QUANTIFIER", "settings": { "type": "{n}", "min": 2 } },
+  { "type": "QUANTIFIER", "settings": { "type": "{n}", "min": 2, "mode": "greedy" } },
   { "type": "LITERAL", "settings": { "text": "." } },
   { "type": "CHARACTER_CLASS", "settings": { "pattern": "\\\\d" } },
-  { "type": "QUANTIFIER", "settings": { "type": "{n}", "min": 4 } }
+  { "type": "QUANTIFIER", "settings": { "type": "{n}", "min": 4, "mode": "greedy" } }
 ]
+
+CRITICAL INSTRUCTION: Instead of creating a single large LITERAL block with regex characters inside, you MUST break it down into smaller, semantic blocks. For example, for "a number between 0 and 255", do not create a LITERAL with text "(?:25[0-5]|...))". Instead, create a non-capturing GROUP containing an ALTERNATION of smaller blocks. For "IPv4 address", generate a sequence of blocks representing each octet and dot, not one large literal.
 
 Ensure the output is in the specified JSON format with "regex", "explanation", "exampleTestText", and optionally "parsedBlocks" fields.
 If the query is too vague or cannot be reasonably translated, please indicate that in the explanation, provide a generic regex (like ".*"), an empty 'exampleTestText', and omit 'parsedBlocks'. Always try to provide "regex", "explanation", and "exampleTestText".
@@ -182,6 +181,7 @@ If the query is too vague or cannot be reasonably translated, please indicate th
 });
 
 const isRegexValid = (regex: string): boolean => {
+  if (!regex) return false;
   try {
     new RegExp(regex);
     return true;
@@ -200,7 +200,7 @@ const naturalLanguageRegexFlow = ai.defineFlow(
   async (input) => {
     const {output} = await prompt(input);
     
-    if (!output || !output.regex || !isRegexValid(output.regex)) {
+    if (!output || !isRegexValid(output.regex)) {
         return {
             regex: ".*",
             explanation: "AI не смог сгенерировать корректное регулярное выражение для этого запроса. Пожалуйста, попробуйте перефразировать или быть более конкретным.",

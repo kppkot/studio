@@ -77,29 +77,23 @@ interface WizardFormData {
   replacementChoice?: 'multipleSpaces' | 'tabsToSpaces';
 }
 
-const aiPromptExamples: string[] = [
-    "Найти все email адреса",
-    "Извлечь URL из текста",
-    "Найти номера телефонов в формате +7 XXX XXX XX XX",
-    "Найти все даты в формате ДД.ММ.ГГГГ",
-    "Слова, начинающиеся с 'авто-'",
-    "Проверить, является ли строка валидным IPv4 адресом",
-    "Найти все слова, написанные КИРИЛЛИЦЕЙ",
-    "Извлечь числа с двумя знаками после запятой"
-];
-
 const wizardConfig: Record<WizardStepId, any> = {
   start: {
-    title: "AI Помощник RegexVision",
-    description: "Опишите, что вы хотите найти, и AI предложит варианты. Ниже несколько примеров:",
-    type: 'card_choice_single_ai', // Новый тип для специального рендеринга
+    title: "Мастер Regex: С чего начнем?",
+    description: "Выберите общую задачу. Мастер поможет вам уточнить детали на следующих шагах.",
+    type: 'card_choice',
     options: [
-      { id: 'ai_assisted', label: "Ввести запрос на естественном языке", description: "AI поможет вам составить Regex.", icon: Sparkles },
+      { id: 'validation', label: "Проверить/Валидировать текст", description: "Соответствует ли строка формату (email, IP, и т.д.)?", icon: SearchCheck },
+      { id: 'extraction', label: "Найти/Извлечь данные", description: "Найти в тексте все email, URL, числа и т.д.", icon: FileText },
+      { id: 'replacement', label: "Заменить/Трансформировать", description: "Заменить несколько пробелов одним, табуляцию и т.д.", icon: Replace },
+      { id: 'ai_assisted', label: "Помощь AI (свой запрос)", description: "Опишите любую другую задачу на естественном языке.", icon: Sparkles },
     ],
-    examples: aiPromptExamples,
     next: (choice: string) => {
+      if (choice === 'validation') return 'validation_type_choice';
+      if (choice === 'extraction') return 'extraction_whatToExtract';
+      if (choice === 'replacement') return 'replacement_whatToReplace';
       if (choice === 'ai_assisted') return 'ai_natural_language_input';
-      return 'start'; // Should not happen if only one option
+      return 'start';
     }
   },
   ai_natural_language_input: {
@@ -237,7 +231,7 @@ const escapeCharsForCharClass = (str: string): string => {
 
 const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, onComplete, initialParentId }) => {
   const [currentStepId, setCurrentStepId] = useState<WizardStepId>('start');
-  const [formData, setFormData] = useState<WizardFormData>({mainCategory: 'ai_assisted'}); // Pre-select AI category
+  const [formData, setFormData] = useState<WizardFormData>({});
   const [generatedBlocks, setGeneratedBlocks] = useState<Block[]>([]);
   const [aiExplanation, setAiExplanation] = useState<string | null>(null);
   const [aiExampleTestText, setAiExampleTestText] = useState<string | null>(null); // New state for AI example text
@@ -248,7 +242,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
   useEffect(() => {
     if (isOpen) {
         setCurrentStepId('start');
-        setFormData({mainCategory: 'ai_assisted'}); // Ensure AI is pre-selected
+        setFormData({});
         setGeneratedBlocks([]);
         setAiExplanation(null);
         setAiExampleTestText(null);
@@ -525,7 +519,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
   const resetWizardAndClose = () => {
     setCurrentStepId('start');
-    setFormData({mainCategory: 'ai_assisted'});
+    setFormData({});
     setGeneratedBlocks([]);
     setAiExplanation(null);
     setAiExampleTestText(null);
@@ -594,15 +588,6 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                              {opt.disabled && <span className="text-xs text-amber-600 dark:text-amber-400 mt-1">(скоро)</span>}
                         </Button>
                     ))}
-                    {currentStepConfig.examples && (
-                        <div className="text-xs text-muted-foreground space-y-1 px-1">
-                            {currentStepConfig.examples.map((ex: string, index: number) => (
-                                <div key={index} className="p-1.5 bg-muted/50 rounded-sm font-mono">
-                                   &raquo; {ex}
-                                </div>
-                            ))}
-                        </div>
-                    )}
                 </div>
             )}
             {currentStepConfig?.type === 'card_choice' && currentStepConfig.options && (
