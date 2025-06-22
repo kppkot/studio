@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import type { Block, BlockConfig, CharacterClassSettings, QuantifierSettings, GroupSettings, LiteralSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, ConditionalSettings } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { reconstructPatternFromChildren } from './utils';
+import { reconstructPatternFromChildren, breakdownPatternIntoChildren } from './utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -12,8 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { X } from 'lucide-react';
+import { X, Lightbulb } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 
 interface SettingsPanelProps {
@@ -27,8 +28,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
 
   const config: BlockConfig | undefined = BLOCK_CONFIGS[block.type];
   
-  // Local state for the pattern input to avoid re-rendering on every keystroke
-  // but still allowing updates from block selection.
   const [localPattern, setLocalPattern] = useState('');
 
   useEffect(() => {
@@ -50,7 +49,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
     if (!block) return;
 
     if (key === 'pattern') {
-      // For pattern, we update local state immediately for responsiveness
       setLocalPattern(value);
     } else {
        onUpdate(block.id, {
@@ -63,7 +61,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
   };
 
   const handlePatternBlur = () => {
-    // On blur, we commit the final pattern state to the workspace
      if (!block || localPattern === ((block.settings as CharacterClassSettings).pattern)) return;
       onUpdate(block.id, {
         settings: {
@@ -97,11 +94,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
       
       case BlockType.CHARACTER_CLASS:
         const ccSettings = settings as CharacterClassSettings;
-        const isShorthand = (localPattern.startsWith('\\') && localPattern.length === 2);
+        const isShorthand = (localPattern.startsWith('\\') && localPattern.length === 2 && !localPattern.match(/\\\d/));
 
         const handleShorthandCharChange = (e: React.ChangeEvent<HTMLInputElement>) => {
           const char = e.target.value.slice(0, 1);
-          setLocalPattern(`\\${char}`);
+          const newPattern = `\\${char}`;
+          setLocalPattern(newPattern);
+          onUpdate(block.id, { settings: { ...ccSettings, pattern: newPattern } });
         };
         
         return (
@@ -119,7 +118,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
                         type="text"
                         value={localPattern.substring(1)}
                         onChange={handleShorthandCharChange}
-                        onBlur={handlePatternBlur}
                         className="rounded-l-none text-lg font-mono focus:ring-inset focus:ring-2"
                         maxLength={1}
                         autoFocus
@@ -161,7 +159,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        // Immediately commit preset changes
                         setLocalPattern(preset.value);
                         onUpdate(block.id, {
                           settings: { ...block.settings, pattern: preset.value },
@@ -276,6 +273,15 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
                 />
               </div>
             )}
+            
+            <Alert className="mt-4 text-xs">
+              <Lightbulb className="h-4 w-4" />
+              <AlertDescription>
+                {gSettings.type === 'capturing' && "Сохраняет найденный текст в отдельную пронумерованную группу (например, №1). Полезно для извлечения конкретной части совпадения. Результат виден на вкладке 'Тестирование'."}
+                {gSettings.type === 'non-capturing' && "Используется для объединения блоков (например, чтобы применить к ним квантификатор `(?:a|b)+`), но не сохраняет результат. Экономит ресурсы и не засоряет вывод."}
+                {gSettings.type === 'named' && "Работает как захватывающая группа, но дает ей понятное имя вместо номера. Это делает Regex более читаемым и упрощает извлечение данных в коде (например, `(?<year>\\d{4})`)."}
+              </AlertDescription>
+            </Alert>
           </>
         );
 
