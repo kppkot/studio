@@ -1,9 +1,10 @@
 
 "use client";
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Block, BlockConfig, CharacterClassSettings, QuantifierSettings, GroupSettings, LiteralSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, ConditionalSettings } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
+import { reconstructPatternFromChildren } from './utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -25,6 +26,21 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
   if (!block) return null;
 
   const config: BlockConfig | undefined = BLOCK_CONFIGS[block.type];
+  
+  // Local state for the pattern input to avoid re-rendering on every keystroke
+  // but still allowing updates from block selection.
+  const [localPattern, setLocalPattern] = useState('');
+
+  useEffect(() => {
+    if (block?.type === BlockType.CHARACTER_CLASS) {
+      if (block.children && block.children.length > 0) {
+        setLocalPattern(reconstructPatternFromChildren(block.children));
+      } else {
+        setLocalPattern((block.settings as CharacterClassSettings).pattern || '');
+      }
+    }
+  }, [block]);
+
 
   if (!config) {
     return <div className="p-4 text-destructive">Ошибка: Неизвестный тип блока для настроек.</div>;
@@ -32,14 +48,30 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
 
   const handleSettingChange = (key: string, value: any) => {
     if (!block) return;
-    onUpdate(block.id, {
-      ...block,
-      settings: {
-        ...block.settings,
-        [key]: value,
-      },
-    });
+
+    if (key === 'pattern') {
+      // For pattern, we update local state immediately for responsiveness
+      setLocalPattern(value);
+    } else {
+       onUpdate(block.id, {
+        settings: {
+          ...block.settings,
+          [key]: value,
+        },
+      });
+    }
   };
+
+  const handlePatternBlur = () => {
+    // On blur, we commit the final pattern state to the workspace
+     if (!block || localPattern === ((block.settings as CharacterClassSettings).pattern)) return;
+      onUpdate(block.id, {
+        settings: {
+          ...block.settings,
+          pattern: localPattern,
+        },
+      });
+  }
   
   const renderSettingsFields = () => {
     const settings = block.settings;
@@ -53,7 +85,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
               id="text"
               type="text"
               value={literalSettings.text || ''}
-              onChange={(e) => handleSettingChange('text', e.target.value)}
+              onChange={(e) => onUpdate(block.id, { settings: { text: e.target.value } })}
               placeholder="Введите литеральный текст"
               className="mt-1"
             />
@@ -65,54 +97,48 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
       
       case BlockType.CHARACTER_CLASS:
         const ccSettings = settings as CharacterClassSettings;
-        const pattern = ccSettings.pattern || '';
-        const isShorthand = (pattern.startsWith('\\') && pattern.length === 2);
-        const isDotShorthand = pattern === '.';
+        const isShorthand = (localPattern.startsWith('\\') && localPattern.length === 2);
 
         const handleShorthandCharChange = (e: React.ChangeEvent<HTMLInputElement>) => {
           const char = e.target.value.slice(0, 1);
-          handleSettingChange('pattern', `\\${char}`);
-        };
-
-        const handleFullPatternChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-          handleSettingChange('pattern', e.target.value);
+          setLocalPattern(`\\${char}`);
         };
         
         return (
           <>
             <div>
               <Label htmlFor="pattern" className="text-sm font-medium">Шаблон</Label>
-              {isShorthand ? (
-                <div className="flex items-stretch mt-1">
-                  <span className="flex items-center justify-center w-10 rounded-l-md border border-r-0 border-input bg-muted text-red-500 font-bold text-lg">
-                    \
-                  </span>
-                  <Input
-                    id="pattern-shorthand"
+               <div className="flex items-stretch mt-1">
+                 {isShorthand ? (
+                    <>
+                    <span className="flex items-center justify-center w-10 rounded-l-md border border-r-0 border-input bg-muted text-red-500 font-bold text-lg">
+                        \
+                    </span>
+                    <Input
+                        id="pattern-shorthand"
+                        type="text"
+                        value={localPattern.substring(1)}
+                        onChange={handleShorthandCharChange}
+                        onBlur={handlePatternBlur}
+                        className="rounded-l-none text-lg font-mono focus:ring-inset focus:ring-2"
+                        maxLength={1}
+                        autoFocus
+                    />
+                    </>
+                 ) : (
+                    <Input
+                    id="pattern"
                     type="text"
-                    value={pattern.substring(1)}
-                    onChange={handleShorthandCharChange}
-                    className="rounded-l-none text-lg font-mono focus:ring-inset focus:ring-2"
-                    maxLength={1}
-                    onBlur={(e) => { if(!e.target.value) handleSettingChange('pattern', ''); }}
-                    autoFocus
-                  />
-                </div>
-              ) : (
-                <Input
-                  id="pattern"
-                  type="text"
-                  value={pattern}
-                  onChange={handleFullPatternChange}
-                  placeholder="например, a-z0-9"
-                  className="mt-1 font-mono"
-                />
-              )}
+                    value={localPattern}
+                    onChange={(e) => setLocalPattern(e.target.value)}
+                    onBlur={handlePatternBlur}
+                    placeholder="например, a-z0-9"
+                    className="font-mono"
+                    />
+                 )}
+               </div>
                <p className="text-xs text-muted-foreground mt-1.5 px-1">
-                {isShorthand || isDotShorthand
-                  ? "Специальный символьный класс."
-                  : "Для спец. класса введите '\\' и символ (например, \\d, \\w)."
-                }
+                 Для спец. класса введите '\' и символ (например, \d, \w).
               </p>
             </div>
             
@@ -134,7 +160,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
                       key={preset.value}
                       variant="outline"
                       size="sm"
-                      onClick={() => handleSettingChange('pattern', preset.value)}
+                      onClick={() => {
+                        // Immediately commit preset changes
+                        setLocalPattern(preset.value);
+                        onUpdate(block.id, {
+                          settings: { ...block.settings, pattern: preset.value },
+                        });
+                      }}
                       className="justify-start text-left"
                     >
                       {preset.label}

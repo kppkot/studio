@@ -1,10 +1,10 @@
 
 "use client";
 import React, { useState, useEffect, useCallback } from 'react';
-import type { Block, RegexMatch, GroupInfo, SavedPattern } from './types'; 
+import type { Block, RegexMatch, GroupInfo, SavedPattern, CharacterClassSettings } from './types'; 
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks, cloneBlockForState } from './utils'; 
+import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks, cloneBlockForState, breakdownPatternIntoChildren } from './utils'; 
 import { useToast } from '@/hooks/use-toast';
 import { generateRegexFromNaturalLanguage, type NaturalLanguageRegexOutput } from '@/ai/flows/natural-language-regex-flow';
 
@@ -231,9 +231,27 @@ const RegexVisionWorkspace: React.FC = () => {
   }, [toast, blocks, selectedBlockId]);
 
 
-  const handleUpdateBlock = useCallback((id: string, updatedBlockSettings: Partial<Block>) => {
-    setBlocks(prev => updateBlockRecursive(prev, id, updatedBlockSettings));
-  }, []);
+  const handleUpdateBlock = useCallback((id: string, updatedBlockData: Partial<Block>) => {
+      // Special handling for Character Class pattern changes
+      if (updatedBlockData.settings && 'pattern' in updatedBlockData.settings) {
+          const blockToUpdate = findBlockRecursive(blocks, id);
+          if (blockToUpdate && blockToUpdate.type === BlockType.CHARACTER_CLASS) {
+              const newPattern = (updatedBlockData.settings as CharacterClassSettings).pattern;
+              const newChildren = breakdownPatternIntoChildren(newPattern);
+              const reparsedBlock = { 
+                  ...blockToUpdate, 
+                  settings: { ...blockToUpdate.settings, pattern: '' }, // Clear pattern on parent
+                  children: newChildren,
+                  isExpanded: newChildren.length > 0 ? true : undefined,
+              };
+              setBlocks(prev => updateBlockRecursive(prev, id, reparsedBlock));
+              return;
+          }
+      }
+
+      // Default update logic
+      setBlocks(prev => updateBlockRecursive(prev, id, updatedBlockData));
+  }, [blocks]);
 
 
   const handleDeleteBlock = useCallback((id: string, deleteAttachedQuantifier: boolean = false) => {
@@ -520,10 +538,12 @@ const RegexVisionWorkspace: React.FC = () => {
         }
       }
       
-      setTimeout(() => {
+      const updatedBlocksWithToast = () => {
         toast({ title: "Блок перемещен", description: "Порядок блоков обновлен." });
-      }, 0);
-      return finalBlocks;
+        return finalBlocks;
+      };
+      return updatedBlocksWithToast();
+
     });
   }, [toast]);
 
@@ -704,7 +724,7 @@ const RegexVisionWorkspace: React.FC = () => {
         setBlocks(parsedBlocksFromAI);
         toast({ title: "Паттерн применен и разобран!", description: `"${pattern.name}" загружен и преобразован в блоки.` });
       } else {
-        const fallbackBlock = createLiteral(pattern.regexString, false); 
+        const fallbackBlock = createLiteral(pattern.regexString); 
         setBlocks([fallbackBlock]);
         toast({ title: "Паттерн применен (как литерал)", description: `"${pattern.name}" загружен. AI не смог разобрать его на блоки.` });
       }
@@ -713,7 +733,7 @@ const RegexVisionWorkspace: React.FC = () => {
       }
     } catch (error) {
       console.error("Error parsing pattern with AI:", error);
-      const fallbackBlock = createLiteral(pattern.regexString, false);
+      const fallbackBlock = createLiteral(pattern.regexString);
       setBlocks([fallbackBlock]);
       toast({ title: "Паттерн применен (ошибка AI)", description: `"${pattern.name}" загружен. Произошла ошибка при попытке разбора AI.`, variant: "destructive" });
     }
@@ -736,7 +756,8 @@ const RegexVisionWorkspace: React.FC = () => {
   };
 
   const handleAutoGroupAlternation = useCallback((alternationId: string) => {
-    const processNodesRecursive = (nodes: Block[]): [Block[] | null, number] => {
+    let movedCountResult = 0;
+    const processNodesRecursive = (nodes: Block[]): Block[] => {
       for (let i = 0; i < nodes.length; i++) {
         if (nodes[i].id === alternationId) {
           const alternationBlock = nodes[i];
@@ -749,37 +770,36 @@ const RegexVisionWorkspace: React.FC = () => {
           }
 
           if (blocksToMove.length > 0) {
+            movedCountResult = blocksToMove.length;
             const updatedAlternation = {
               ...alternationBlock,
               children: [...(alternationBlock.children || []), ...blocksToMove.map(cloneBlockForState)],
               isExpanded: true,
             };
             const newNodes = [...nodes];
-            newNodes.splice(i, 1, updatedAlternation); // Replace original alternation
-            newNodes.splice(i + 1, blocksToMove.length); // Remove moved blocks
-            
-            return [newNodes, blocksToMove.length];
+            newNodes.splice(i, 1 + blocksToMove.length, updatedAlternation);
+            return newNodes;
           }
-          return [null, 0];
+          return nodes;
         }
         
         if (nodes[i].children) {
-          const [updatedChildren, movedCount] = processNodesRecursive(nodes[i].children!);
-          if (updatedChildren) {
+          const updatedChildren = processNodesRecursive(nodes[i].children!);
+          if (updatedChildren !== nodes[i].children) {
             const newNodes = [...nodes];
             newNodes[i] = { ...nodes[i], children: updatedChildren };
-            return [newNodes, movedCount];
+            return newNodes;
           }
         }
       }
-      return [null, 0];
+      return nodes;
     };
 
-    const [updatedBlocks, movedCount] = processNodesRecursive(blocks);
+    const updatedBlocks = processNodesRecursive(blocks);
     
-    if (updatedBlocks && movedCount > 0) {
+    if (movedCountResult > 0) {
       setBlocks(updatedBlocks);
-      toast({ title: "Блоки объединены!", description: `Добавлено ${movedCount} вариант(а).` });
+      toast({ title: "Блоки объединены!", description: `Добавлено ${movedCountResult} вариант(а).` });
     }
   }, [blocks, toast]);
 

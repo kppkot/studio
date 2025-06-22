@@ -32,6 +32,7 @@ export const createAlternation = (options: Block[]): Block => ({
     id: generateId(),
     type: BlockType.ALTERNATION,
     children: options,
+    settings: {},
     isExpanded: true
 });
 
@@ -150,10 +151,10 @@ export const generateBlocksForTabsToSpaces = (): Block[] => {
 
 export const generateBlocksForNumbers = (): Block[] => {
     const sign = createCharClass('+-', false);
-    const optionalSign = createSequenceGroup([sign, createQuantifier('?')]);
+    const optionalSign = createSequenceGroup([sign, createQuantifier('?')], 'non-capturing');
     
     const digits = createCharClass('\\d+', false);
-    const decimalPart = createSequenceGroup([createLiteral('.'), createCharClass('\\d+')], 'non-capturing');
+    const decimalPart = createSequenceGroup([createLiteral('.'), createCharClass('\\d+', false)], 'non-capturing');
     const optionalDecimal = createSequenceGroup([decimalPart, createQuantifier('?')]);
     
     const numberCore = [optionalSign, digits, optionalDecimal];
@@ -184,6 +185,9 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): { regexString:
         const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];
         if (!ccSettings.negated && specialShorthands.includes(ccSettings.pattern)) {
           return ccSettings.pattern;
+        }
+        if (block.children && block.children.length > 0) {
+           return `[${ccSettings.negated ? '^' : ''}${processChildren(block)}]`;
         }
         return `[${ccSettings.negated ? '^' : ''}${ccSettings.pattern || ''}]`;
       case BlockType.QUANTIFIER:
@@ -248,6 +252,53 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): { regexString:
   return { regexString, groupInfos };
 };
 
+export const reconstructPatternFromChildren = (children: Block[]): string => {
+  if (!children) return '';
+  return children.map(child => {
+    if (child.type === BlockType.LITERAL) {
+      return (child.settings as LiteralSettings).text;
+    }
+    if (child.type === BlockType.CHARACTER_CLASS) {
+      return (child.settings as CharacterClassSettings).pattern;
+    }
+    return '';
+  }).join('');
+};
+
+export const breakdownPatternIntoChildren = (pattern: string): Block[] => {
+  if (!pattern) return [];
+
+  const components: Block[] = [];
+  const predefinedRanges: { [key: string]: string } = { 'a-z': 'a-z', 'A-Z': 'A-Z', '0-9': '0-9' };
+  let remainingPattern = pattern;
+
+  // This is a simplified breakdown. A more robust solution might need a more complex parser.
+  // Extract predefined ranges first
+  Object.keys(predefinedRanges).forEach(rangeKey => {
+    if (remainingPattern.includes(rangeKey)) {
+      components.push({ id: generateId(), type: BlockType.CHARACTER_CLASS, settings: { pattern: rangeKey, negated: false } as CharacterClassSettings, children: [], isExpanded: false });
+      remainingPattern = remainingPattern.replace(new RegExp(rangeKey.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), '');
+    }
+  });
+  
+  // Handle special shorthands
+  const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S'];
+  specialShorthands.forEach(shorthand => {
+    const escapedShorthand = shorthand.replace('\\', '\\\\');
+    if (remainingPattern.includes(shorthand)) {
+      components.push({ id: generateId(), type: BlockType.CHARACTER_CLASS, settings: { pattern: shorthand, negated: false } as CharacterClassSettings, children: [], isExpanded: false });
+      remainingPattern = remainingPattern.replace(new RegExp(escapedShorthand, 'g'), '');
+    }
+  });
+
+  // Treat remaining characters as individual literals
+  if (remainingPattern.length > 0) {
+     for (const char of remainingPattern) {
+       components.push({ id: generateId(), type: BlockType.LITERAL, settings: { text: char } as LiteralSettings, children: [], isExpanded: false });
+    }
+  }
+  return components;
+}
 
 export const processAiBlocks = (aiBlocks: any[]): Block[] => {
   if (!aiBlocks || !Array.isArray(aiBlocks)) {
@@ -271,6 +322,7 @@ export const processAiBlocks = (aiBlocks: any[]): Block[] => {
       BlockType.LOOKAROUND,
       BlockType.ALTERNATION,
       BlockType.CONDITIONAL,
+      BlockType.CHARACTER_CLASS, // Character class can also be a container
     ];
     if (containerTypes.includes(newBlock.type!)) {
       newBlock.isExpanded = true;
