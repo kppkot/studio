@@ -91,7 +91,6 @@ export interface RegexMatch {
   match: string;
   index: number;
   groups: (string | undefined)[];
-  namedGroups?: { [key: string]: string | undefined };
 }
 
 export interface GroupInfo {

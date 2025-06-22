@@ -1,3 +1,4 @@
+
 "use client";
 import React from 'react';
 import { Textarea } from '@/components/ui/textarea';
@@ -6,15 +7,17 @@ import type { RegexMatch } from './types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AlertCircle, CheckCircle2, Search } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface TestAreaProps {
   testText: string;
   onTestTextChange: (text: string) => void;
   matches: RegexMatch[];
   generatedRegex: string;
+  highlightedGroupIndex: number; // 1-based index
 }
 
-const TestArea: React.FC<TestAreaProps> = ({ testText, onTestTextChange, matches, generatedRegex }) => {
+const TestArea: React.FC<TestAreaProps> = ({ testText, onTestTextChange, matches, generatedRegex, highlightedGroupIndex }) => {
   const highlightMatches = () => {
     if (!testText || matches.length === 0) {
       return <span className="whitespace-pre-wrap">{testText || "Введите текст для тестирования..."}</span>;
@@ -90,7 +93,13 @@ const TestArea: React.FC<TestAreaProps> = ({ testText, onTestTextChange, matches
                         <span className="text-muted-foreground">Группы:</span>
                         <ul className="list-disc list-inside ml-1 mt-0.5 space-y-0.5">
                           {match.groups.map((group, groupIndex) => (
-                            <li key={groupIndex} className="font-mono">
+                            <li
+                              key={groupIndex}
+                              className={cn(
+                                "font-mono transition-all p-1 rounded-md",
+                                (groupIndex + 1) === highlightedGroupIndex && "bg-primary/20 ring-1 ring-primary"
+                              )}
+                            >
                               <span className="text-muted-foreground">{groupIndex + 1}:</span> "{group ?? <span className="italic">не определено</span>}"
                             </li>
                           ))}

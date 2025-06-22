@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { Block, RegexMatch, GroupInfo, SavedPattern, CharacterClassSettings } from './types'; 
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks, cloneBlockForState, breakdownPatternIntoChildren } from './utils'; 
+import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks, cloneBlockForState, breakdownPatternIntoChildren, reconstructPatternFromChildren } from './utils'; 
 import { useToast } from '@/hooks/use-toast';
 import { generateRegexFromNaturalLanguage, type NaturalLanguageRegexOutput } from '@/ai/flows/natural-language-regex-flow';
 
@@ -82,7 +82,14 @@ const RegexVisionWorkspace: React.FC = () => {
 
   const updateBlockRecursive = (currentBlocks: Block[], targetId: string, updatedBlockData: Partial<Block>): Block[] => {
     return currentBlocks.map(block => {
-      if (block.id === targetId) return { ...block, ...updatedBlockData };
+      if (block.id === targetId) {
+        // If the update involves children, ensure it's an array
+        const newBlock = { ...block, ...updatedBlockData };
+        if ('children' in updatedBlockData && !Array.isArray(newBlock.children)) {
+            newBlock.children = [];
+        }
+        return newBlock;
+      }
       if (block.children) {
         return { ...block, children: updateBlockRecursive(block.children, targetId, updatedBlockData) };
       }
@@ -173,7 +180,7 @@ const RegexVisionWorkspace: React.FC = () => {
     let targetParentId = parentId;
     if (!targetParentId && selectedBlockId) {
       const selBlock = findBlockRecursive(blocks, selectedBlockId);
-      if (selBlock && [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(selBlock.type)) {
+      if (selBlock && [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL, BlockType.CHARACTER_CLASS].includes(selBlock.type)) {
         targetParentId = selectedBlockId;
       }
     }
@@ -238,9 +245,9 @@ const RegexVisionWorkspace: React.FC = () => {
           if (blockToUpdate && blockToUpdate.type === BlockType.CHARACTER_CLASS) {
               const newPattern = (updatedBlockData.settings as CharacterClassSettings).pattern;
               const newChildren = breakdownPatternIntoChildren(newPattern);
-              const reparsedBlock = { 
-                  ...blockToUpdate, 
-                  settings: { ...blockToUpdate.settings, pattern: '' }, // Clear pattern on parent
+              
+              const reparsedBlock: Partial<Block> = { 
+                  settings: { ...(blockToUpdate.settings as CharacterClassSettings), pattern: '' },
                   children: newChildren,
                   isExpanded: newChildren.length > 0 ? true : undefined,
               };
@@ -465,7 +472,7 @@ const RegexVisionWorkspace: React.FC = () => {
       }
       const dropTargetNode = dropTargetNodeInfo.block;
 
-      const canDropTargetBeParent = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(dropTargetNode.type);
+      const canDropTargetBeParent = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL, BlockType.CHARACTER_CLASS].includes(dropTargetNode.type);
       let finalBlocks: Block[];
 
       const isDescendantOrSelf = (checkNodes: Block[], parentId: string, childIdToFind: string): boolean => {
@@ -554,6 +561,15 @@ const RegexVisionWorkspace: React.FC = () => {
   }, []);
 
   const selectedBlock = selectedBlockId ? findBlockRecursive(blocks, selectedBlockId) : null;
+  
+  // Find the group index for the selected block if it's a capturing group
+  const highlightedGroupIndex = React.useMemo(() => {
+    if (selectedBlock && (selectedBlock.type === BlockType.GROUP)) {
+      const groupInfo = regexOutput.groupInfos.find(gi => gi.blockId === selectedBlock.id);
+      return groupInfo ? groupInfo.groupIndex : -1;
+    }
+    return -1;
+  }, [selectedBlock, regexOutput.groupInfos]);
 
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href)
@@ -867,7 +883,7 @@ const RegexVisionWorkspace: React.FC = () => {
                                     const config = BLOCK_CONFIGS[b.type];
                                     let previewText = "";
                                     if(b.type === BlockType.LITERAL) previewText = `"${(b.settings as any).text}"`;
-                                    if(b.type === BlockType.CHARACTER_CLASS) previewText = `[${(b.settings as any).pattern}]`;
+                                    if(b.type === BlockType.CHARACTER_CLASS) previewText = `[${reconstructPatternFromChildren(b.children) || (b.settings as any).pattern}]`;
 
                                     return (
                                     <span key={b.id} className="flex items-center gap-1.5 text-xs px-2 py-1 bg-background rounded-md border shadow-sm">
@@ -982,6 +998,7 @@ const RegexVisionWorkspace: React.FC = () => {
                     onTestTextChange={setTestText}
                     matches={matches}
                     generatedRegex={regexOutput.regexString}
+                    highlightedGroupIndex={highlightedGroupIndex}
                   />
                 </TabsContent>
                 <TabsContent value="codegen" className="mt-2 flex-1 overflow-y-auto p-0.5">
