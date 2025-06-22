@@ -45,6 +45,7 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
   };
   
   const escapeRegexCharsForDisplay = (text: string): string => {
+    // This function escapes all special regex characters.
     return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   };
 
@@ -55,7 +56,6 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
       const settings = block.settings;
 
       const spanProps = {
-        key: block.id,
         className: cn('cursor-pointer rounded-[3px] p-0.5 transition-colors', {
           'bg-primary/20 ring-1 ring-primary/80': isSelected,
           'bg-accent/30': isHovered && !isSelected,
@@ -81,7 +81,7 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
       switch (block.type) {
         case BlockType.LITERAL:
           return (
-            <span {...spanProps}>
+            <span key={block.id} {...spanProps}>
               <span className='text-green-700 dark:text-green-400'>
                 {escapeRegexCharsForDisplay((settings as LiteralSettings).text || '')}
               </span>
@@ -90,7 +90,7 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
         
         case BlockType.CHARACTER_CLASS:
           const ccSettings = settings as CharacterClassSettings;
-          const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];
+          const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S'];
           let content;
           if (!ccSettings.negated && specialShorthands.includes(ccSettings.pattern)) {
             content = (
@@ -99,6 +99,8 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
                 <span className="text-purple-700 dark:text-purple-300 font-semibold">{ccSettings.pattern.substring(1)}</span>
               </>
             );
+          } else if (ccSettings.pattern === '.') {
+              content = <span className="text-purple-700 dark:text-purple-300 font-semibold">.</span>
           } else if (block.children && block.children.length > 0) {
             content = (
               <>
@@ -124,7 +126,7 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
               </>
             );
           }
-          return <span {...spanProps}>{content}</span>;
+          return <span key={block.id} {...spanProps}>{content}</span>;
 
         case BlockType.QUANTIFIER:
           const qSettings = settings as QuantifierSettings;
@@ -139,7 +141,7 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
           let mode = '';
           if (qSettings.mode === 'lazy') mode = '?';
           else if (qSettings.mode === 'possessive') mode = '+';
-          return <span {...spanProps} className={cn(spanProps.className, 'text-orange-600 font-bold')}>{qStr + mode}</span>;
+          return <span key={block.id} {...spanProps} className={cn(spanProps.className, 'text-orange-600 font-bold')}>{qStr + mode}</span>;
 
         case BlockType.GROUP:
           const gSettings = settings as GroupSettings;
@@ -147,7 +149,7 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
           if (gSettings.type === 'non-capturing') groupOpen = "(?:";
           if (gSettings.type === 'named' && gSettings.name) groupOpen = `(?<${gSettings.name}>`;
           return (
-            <span {...spanProps}>
+            <span key={block.id} {...spanProps}>
               <span className='text-blue-700 dark:text-blue-300'>{groupOpen}</span>
               {renderChildren(block)}
               <span className='text-blue-700 dark:text-blue-300'>)</span>
@@ -155,13 +157,13 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
           );
         
         case BlockType.ANCHOR:
-          return <span {...spanProps} className={cn(spanProps.className, 'text-red-500 font-semibold')}>{(settings as AnchorSettings).type || '^'}</span>;
+          return <span key={block.id} {...spanProps} className={cn(spanProps.className, 'text-red-500 font-semibold')}>{(settings as AnchorSettings).type || '^'}</span>;
 
         case BlockType.LOOKAROUND:
           const lSettings = settings as LookaroundSettings;
           const lookaroundMap = { 'positive-lookahead': '(?=', 'negative-lookahead': '(?!', 'positive-lookbehind': '(?<=', 'negative-lookbehind': '(?<!' };
           return (
-            <span {...spanProps}>
+            <span key={block.id} {...spanProps}>
               <span className='text-blue-700 dark:text-blue-300'>{lookaroundMap[lSettings.type]}</span>
               {renderChildren(block)}
               <span className='text-blue-700 dark:text-blue-300'>)</span>
@@ -171,16 +173,16 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
         case BlockType.BACKREFERENCE:
           const ref = (settings as BackreferenceSettings).ref;
           return (
-            <span {...spanProps} className={cn(spanProps.className, 'text-purple-700 dark:text-purple-300 font-semibold')}>
+            <span key={block.id} {...spanProps} className={cn(spanProps.className, 'text-purple-700 dark:text-purple-300 font-semibold')}>
               {isNaN(Number(ref)) ? `\\k<${ref}>` : `\\${ref}`}
             </span>
           );
 
         case BlockType.ALTERNATION:
-             return <span {...spanProps}>{renderChildren(block)}</span>;
+             return <span key={block.id} {...spanProps}>{renderChildren(block)}</span>;
 
         default:
-          return renderChildren(block);
+          return <React.Fragment key={block.id}>{renderChildren(block)}</React.Fragment>;
       }
     });
   };
