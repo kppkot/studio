@@ -14,7 +14,7 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import type { Block, CharacterClassSettings, GroupSettings, LiteralSettings, AnchorSettings } from '@/components/regex-vision/types';
 import { BlockType } from '@/components/regex-vision/types';
-import { generateBlocksForIPv4, generateBlocksForIPv6, generateBlocksForEmail, generateBlocksForURL, generateBlocksForDuplicateWords, generateBlocksForMultipleSpaces, generateBlocksForTabsToSpaces, generateBlocksForNumbers, generateRegexStringAndGroupInfo } from '@/components/regex-vision/utils';
+import { generateBlocksForIPv4, generateBlocksForIPv6, generateBlocksForEmail, generateBlocksForURL, generateBlocksForDuplicateWords, generateBlocksForMultipleSpaces, generateBlocksForTabsToSpaces, generateBlocksForNumbers, generateRegexStringAndGroupInfo, generateId } from '@/components/regex-vision/utils';
 
 const NaturalLanguageRegexInputSchema = z.object({
   query: z.string().describe('The natural language query describing the desired regex.'),
@@ -58,7 +58,7 @@ const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
       // Extract predefined ranges
       Object.keys(predefinedRanges).forEach(rangeKey => {
         if (remainingPattern.includes(rangeKey)) {
-          components.push({ id: "temp", type: BlockType.CHARACTER_CLASS, settings: { pattern: rangeKey, negated: false } as CharacterClassSettings, children: [], isExpanded: false });
+          components.push({ id: generateId(), type: BlockType.CHARACTER_CLASS, settings: { pattern: rangeKey, negated: false } as CharacterClassSettings, children: [], isExpanded: false });
           remainingPattern = remainingPattern.replace(new RegExp(rangeKey.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), '');
         }
       });
@@ -67,13 +67,13 @@ const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
       if (remainingPattern.length > 0) {
          for (const char of remainingPattern) {
            // If the char is a special regex char that needs escaping, treat it as a literal
-           components.push({ id: "temp", type: BlockType.LITERAL, settings: { text: char } as LiteralSettings, children: [], isExpanded: false });
+           components.push({ id: generateId(), type: BlockType.LITERAL, settings: { text: char } as LiteralSettings, children: [], isExpanded: false });
         }
       }
       
       if (components.length > 1) {
         // Wrap multiple components in a non-capturing group with an alternation
-        return { id: "temp", type: BlockType.CHARACTER_CLASS, settings: { pattern: '', negated: false } as CharacterClassSettings, children: components, isExpanded: true };
+        return { id: generateId(), type: BlockType.CHARACTER_CLASS, settings: { pattern: '', negated: false } as CharacterClassSettings, children: components, isExpanded: true };
       } else if (components.length === 1) {
         // If only one component remains, return it directly
         return components[0];
