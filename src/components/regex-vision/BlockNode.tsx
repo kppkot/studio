@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import type { Block, BlockConfig, LiteralSettings, CharacterClassSettings, QuantifierSettings, GroupSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, ConditionalSettings, GroupInfo } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { ChevronDown, ChevronRight, PlusCircle, Trash2, GripVertical, Copy, Ungroup, PackagePlus, Asterisk, AlertTriangle } from 'lucide-react';
+import { ChevronDown, ChevronRight, PlusCircle, Trash2, GripVertical, Copy, Ungroup, PackagePlus, Asterisk, AlertTriangle, Combine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -47,8 +47,7 @@ const getDescriptiveBlockTitle = (block: Block, config: BlockConfig, groupInfo?:
       const cs = settings as CharacterClassSettings;
       if (hasChildren) {
           const childPattern = reconstructPatternFromChildren(block.children);
-          let patternDesc = childPattern.length > 10 ? `[${childPattern.substring(0,10)}...]` : `[${childPattern}]`;
-          title = cs.negated ? `Символы: НЕ ${patternDesc}` : `Символы: ${patternDesc}`;
+          title = cs.negated ? `Символьный класс (НЕ набор)` : `Символьный класс (набор)`;
           details = `${cs.negated ? '[^' : '['}${childPattern}${cs.negated ? ']' : ']'}`;
           break;
       }
@@ -358,7 +357,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                   selectedId === block.id && "ring-1 ring-primary",
                   isEmptyContainer && "opacity-50"
                 )}>
-                {typeof config.icon === 'string' ? <span className="font-mono text-xs">{config.icon}</span> : config.icon}
+                {block.type === BlockType.CHARACTER_CLASS && hasChildren ? <Combine size={18} /> : (typeof config.icon === 'string' ? <span className="font-mono text-xs">{config.icon}</span> : config.icon)}
               </span>
               <span className={cn(
                   "font-medium text-sm whitespace-nowrap", 
@@ -476,4 +475,3 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 };
 
 export default BlockNode;
-
