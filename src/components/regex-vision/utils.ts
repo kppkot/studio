@@ -187,7 +187,8 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): { regexString:
           return ccSettings.pattern;
         }
         if (block.children && block.children.length > 0) {
-           return `[${ccSettings.negated ? '^' : ''}${processChildren(block)}]`;
+           const content = reconstructPatternFromChildren(block.children);
+           return `[${ccSettings.negated ? '^' : ''}${content}]`;
         }
         return `[${ccSettings.negated ? '^' : ''}${ccSettings.pattern || ''}]`;
       case BlockType.QUANTIFIER:

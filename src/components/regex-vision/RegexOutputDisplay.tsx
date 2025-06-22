@@ -1,3 +1,4 @@
+
 "use client";
 import React from 'react';
 import { Input } from '@/components/ui/input';
@@ -8,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Block, LiteralSettings, CharacterClassSettings, QuantifierSettings, GroupSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, ConditionalSettings } from './types';
 import { BlockType } from './types';
 import { cn } from '@/lib/utils';
-
+import { reconstructPatternFromChildren } from './utils';
 
 interface RegexOutputDisplayProps {
   blocks: Block[];
@@ -77,6 +78,42 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
         }
         return renderInteractiveRegex(b.children);
       };
+      
+      const renderCharClassChildren = (children: Block[]): React.ReactNode[] => {
+          return children.map(childBlock => {
+              const isChildSelected = selectedBlockId === childBlock.id;
+              const isChildHovered = hoveredBlockId === childBlock.id;
+              const childSettings = childBlock.settings;
+
+              const childSpanProps = {
+                className: cn('cursor-pointer rounded-[2px] p-0.5 transition-colors', {
+                  'bg-primary/20 ring-1 ring-primary/80': isChildSelected,
+                  'bg-accent/30': isChildHovered && !isChildSelected,
+                }),
+                onMouseEnter: (e: React.MouseEvent) => { e.stopPropagation(); onHoverBlockInOutput(childBlock.id); },
+                onMouseLeave: (e: React.MouseEvent) => { e.stopPropagation(); onHoverBlockInOutput(null); },
+                onClick: (e: React.MouseEvent) => { e.stopPropagation(); onSelectBlockInOutput(childBlock.id); },
+              };
+              
+              let content;
+              if (childBlock.type === BlockType.LITERAL) {
+                  content = <span className='text-green-700 dark:text-green-400'>{(childSettings as LiteralSettings).text || ''}</span>;
+              } else if (childBlock.type === BlockType.CHARACTER_CLASS) {
+                  const pattern = (childSettings as CharacterClassSettings).pattern || '';
+                  const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];
+                  if (specialShorthands.includes(pattern)) {
+                       content = <><span className="text-red-500 font-semibold">\</span><span className="text-purple-700 dark:text-purple-300 font-semibold">{pattern.substring(1)}</span></>;
+                  } else {
+                      content = <span className='text-green-700 dark:text-green-400'>{pattern}</span>;
+                  }
+              } else {
+                  return null;
+              }
+
+              return <span key={childBlock.id} {...childSpanProps}>{content}</span>;
+          })
+      }
+
 
       switch (block.type) {
         case BlockType.LITERAL:
@@ -108,7 +145,7 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
                   <span className='text-orange-600 font-bold'>
                     {ccSettings.negated ? '^' : ''}
                   </span>
-                  {renderChildren(block)}
+                  {renderCharClassChildren(block.children)}
                  <span className='text-purple-700 dark:text-purple-300'>]</span>
               </>
             )
