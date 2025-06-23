@@ -117,10 +117,18 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
 
       switch (block.type) {
         case BlockType.LITERAL:
+          const litSettings = settings as LiteralSettings;
+          if (litSettings.isRawRegex) {
+            return (
+              <span key={block.id} {...spanProps}>
+                <span className='text-muted-foreground italic'>{litSettings.text || ''}</span>
+              </span>
+            );
+          }
           return (
             <span key={block.id} {...spanProps}>
               <span className='text-green-700 dark:text-green-400'>
-                {escapeRegexCharsForDisplay((settings as LiteralSettings).text || '')}
+                {escapeRegexCharsForDisplay(litSettings.text || '')}
               </span>
             </span>
           );

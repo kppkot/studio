@@ -32,6 +32,7 @@ export interface CharacterClassSettings {
 
 export interface LiteralSettings {
   text: string;
+  isRawRegex?: boolean;
 }
 
 export interface AnchorSettings {

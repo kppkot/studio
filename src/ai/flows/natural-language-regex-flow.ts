@@ -96,6 +96,9 @@ const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
 
         if (correctedBlock.type === BlockType.LITERAL) {
             const settings = correctedBlock.settings as LiteralSettings;
+            if (settings.isRawRegex) { // Do not correct raw regex literals
+                return correctedBlock;
+            }
             const text = settings.text || '';
             
             const knownCharClasses = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S'];
@@ -202,12 +205,12 @@ export async function generateRegexFromNaturalLanguage(input: NaturalLanguageReg
 
     switch (route.pattern) {
       case 'ipv4':
-        blocks = generateBlocksForIPv4(false);
+        blocks = generateBlocksForIPv4();
         explanation = "Находит IPv4-адреса в тексте. Этот шаблон ищет адреса, окруженные границами слов (пробелы, начало/конец строки), но не проверяет, является ли вся строка IP-адресом.";
         exampleTestText = "Primary server: 192.168.1.1, backup is 10.0.0.1. Invalid: 999.999.999.999";
         break;
       case 'ipv6':
-        blocks = generateBlocksForIPv6(false);
+        blocks = generateBlocksForIPv6();
         explanation = "Находит IPv6-адреса в тексте. Из-за сложности IPv6, он представлен как один блок.";
         exampleTestText = "The server at 2001:0db8:85a3::8a2e:0370:7334 is the main one.";
         break;
@@ -346,7 +349,13 @@ const generalPurposeRegexGenerator = ai.defineFlow(
     
     // Fallback: If block processing failed or was never attempted, but we have a valid regex string.
     if (processedBlocks.length === 0 && output.regex) {
-      processedBlocks = [createLiteral(output.regex)];
+      processedBlocks = [{
+        id: generateId(),
+        type: BlockType.LITERAL,
+        settings: { text: output.regex, isRawRegex: true } as LiteralSettings,
+        children: [],
+        isExpanded: false
+      }];
     }
 
 
@@ -357,5 +366,3 @@ const generalPurposeRegexGenerator = ai.defineFlow(
     };
   }
 );
-
-    

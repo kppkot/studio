@@ -72,17 +72,18 @@ export const generateBlocksForEmail = (forExtraction: boolean = false): Block[] 
         localPart, localPartQuantifier, at, domainPart, domainPartQuantifier, dot, tldPart, tldQuantifier
     ];
     if (forExtraction) {
-        return [createAnchor('\\b'), createSequenceGroup(emailCoreBlocks, 'capturing'), createAnchor('\\b')];
+        return [createAnchor('\\b'), ...emailCoreBlocks, createAnchor('\\b')];
     }
     return [createAnchor('^'), ...emailCoreBlocks, createAnchor('$')];
 };
 
 export const generateBlocksForURL = (forExtraction: boolean = false, requireProtocol: boolean = true): Block[] => {
     const protocolHttp = createLiteral('http');
-    const optionalS = createSequenceGroup([createLiteral('s')], 'non-capturing');
-    optionalS.children.push(createQuantifier('?'));
+    const optionalS = createQuantifier('?');
+    const sWithQuantifier = createSequenceGroup([createLiteral('s'), optionalS], 'non-capturing');
+
     const colonSlashSlash = createLiteral('://');
-    const protocolGroup = createSequenceGroup([protocolHttp, optionalS, colonSlashSlash], 'non-capturing');
+    const protocolGroup = createSequenceGroup([protocolHttp, sWithQuantifier, colonSlashSlash], 'non-capturing');
     
     if (!requireProtocol) {
       protocolGroup.children.push(createQuantifier('?'));
@@ -97,16 +98,14 @@ export const generateBlocksForURL = (forExtraction: boolean = false, requireProt
     const urlCore = [protocolGroup, domainChars, domainQuant, pathChars, pathQuant];
     
     if (forExtraction) {
-        return [createAnchor('\\b'), createSequenceGroup(urlCore, 'capturing'), createAnchor('\\b')];
+        return [createAnchor('\\b'), ...urlCore, createAnchor('\\b')];
     }
     return [createAnchor('^'), ...urlCore, createAnchor('$')];
 };
 
-export const generateBlocksForIPv4 = (forValidation: boolean = true): Block[] => {
-  // Provides a simpler, more readable, but less strict pattern.
-  // Good for a wizard's starting point.
+export const generateBlocksForIPv4 = (): Block[] => {
   const buildOctet = () => [
-    createCharClass('\\d', false),
+    createCharClass('\\d'),
     createQuantifier('{n,m}', 1, 3)
   ];
   
@@ -117,44 +116,38 @@ export const generateBlocksForIPv4 = (forValidation: boolean = true): Block[] =>
     ...buildOctet()
   ];
   
-  if (forValidation) {
-    return [createAnchor('^'), ...ipCore, createAnchor('$')];
-  }
   return [createAnchor('\\b'), ...ipCore, createAnchor('\\b')];
 };
 
-export const generateBlocksForIPv6 = (forValidation: boolean = true): Block[] => {
-  // IPv6 is too complex for readable block generation. We'll provide it as a single, complex literal.
-  const ipv6Regex = "(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))";
-  const ipCore = [createLiteral(ipv6Regex)];
-  if(forValidation) {
-     return [createAnchor('^'), ...ipCore, createAnchor('$')];
-  }
-  return ipCore;
+export const generateBlocksForIPv6 = (): Block[] => {
+  const ipv6Regex = "(?:[0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,7}:|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}|(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}|(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}|(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:(?:(?::[0-9a-fA-F]{1,4}){1,6})|:(?:(?::[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(?::[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(?:ffff(?::0{1,4}){0,1}:){0,1}(?:(?:25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(?:25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9])|(?:[0-9a-fA-F]{1,4}:){1,4}:(?:(?:25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(?:25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9])";
+  const ipCore = [ { id: generateId(), type: BlockType.LITERAL, settings: { text: ipv6Regex, isRawRegex: true } as LiteralSettings, children: [], isExpanded: false } ];
+
+  return [createAnchor('\\b'), ...ipCore, createAnchor('\\b')];
 };
 
 export const generateBlocksForDuplicateWords = (): Block[] => {
-  const wordChars = createCharClass('\\w+', false);
+  const wordChars = createCharClass('\\w+');
   const wordGroup = createSequenceGroup([wordChars], 'capturing');
-  const spaceChars = createCharClass('\\s+', false);
+  const spaceChars = createCharClass('\\s+');
   const backreference = createBackreference(1);
   return [createAnchor('\\b'), wordGroup, spaceChars, backreference, createAnchor('\\b')];
 };
 
 export const generateBlocksForMultipleSpaces = (): Block[] => {
-  return [createCharClass('\\s', false), createQuantifier('{n,}', 2)];
+  return [createCharClass('\\s'), createQuantifier('{n,}', 2)];
 };
 
 export const generateBlocksForTabsToSpaces = (): Block[] => {
-  return [createCharClass('\\t', false)];
+  return [createCharClass('\\t')];
 };
 
 export const generateBlocksForNumbers = (): Block[] => {
-    const sign = createCharClass('+-', false);
-    const optionalSign = createSequenceGroup([sign, createQuantifier('?')], 'non-capturing');
+    const sign = createCharClass('+-');
+    const optionalSign = createSequenceGroup([sign, createQuantifier('?')]);
     
-    const digits = createCharClass('\\d+', false);
-    const decimalPart = createSequenceGroup([createLiteral('.'), createCharClass('\\d+', false)], 'non-capturing');
+    const digits = createCharClass('\\d+');
+    const decimalPart = createSequenceGroup([createLiteral('.'), createCharClass('\\d+')], 'non-capturing');
     const optionalDecimal = createSequenceGroup([decimalPart, createQuantifier('?')]);
     
     const numberCore = [optionalSign, digits, optionalDecimal];
@@ -179,7 +172,11 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): { regexString:
 
     switch (block.type) {
       case BlockType.LITERAL:
-        return escapeRegexCharsForGenerator((settings as LiteralSettings).text || '');
+        const litSettings = settings as LiteralSettings;
+        if (litSettings.isRawRegex) {
+          return litSettings.text || '';
+        }
+        return escapeRegexCharsForGenerator(litSettings.text || '');
       case BlockType.CHARACTER_CLASS:
         const ccSettings = settings as CharacterClassSettings;
         const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];
