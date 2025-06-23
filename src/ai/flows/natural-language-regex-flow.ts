@@ -96,8 +96,8 @@ const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
         if (correctedBlock.type === BlockType.LITERAL) {
             const settings = correctedBlock.settings as LiteralSettings;
             const text = settings.text || '';
-
-            const knownCharClasses = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];
+            // A literal dot '.' should NOT be converted to a character class. This was the bug.
+            const knownCharClasses = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S'];
             if (knownCharClasses.includes(text)) {
                 correctedBlock.type = BlockType.CHARACTER_CLASS;
                 correctedBlock.settings = { pattern: text, negated: false } as CharacterClassSettings;
@@ -188,22 +188,22 @@ export async function generateRegexFromNaturalLanguage(input: NaturalLanguageReg
       case 'ipv4':
         blocks = generateBlocksForIPv4(route.forValidation ?? false);
         explanation = "Проверяет или находит IPv4-адреса. Этот базовый шаблон проверяет структуру (4 группы цифр по 1-3 в каждой, разделенные точками), но не диапазон 0-255.";
-        exampleTestText = "Valid: 192.168.1.1. Invalid: 999.0.0.256 or 127.0.0.1.3";
+        exampleTestText = route.forValidation ? "192.168.1.1" : "Valid: 192.168.1.1. Invalid: 999.0.0.256 or 127.0.0.1.3";
         break;
       case 'ipv6':
         blocks = generateBlocksForIPv6(route.forValidation ?? false);
         explanation = "Проверяет или находит IPv6-адреса. Из-за сложности IPv6, он представлен как один блок.";
-        exampleTestText = "Valid: 2001:0db8:85a3:0000:0000:8a2e:0370:7334";
+        exampleTestText = route.forValidation ? "2001:0db8:85a3:0000:0000:8a2e:0370:7334" : "Valid: 2001:0db8:85a3:0000:0000:8a2e:0370:7334";
         break;
       case 'email':
         blocks = generateBlocksForEmail(route.forValidation === false);
         explanation = route.forValidation ? "Проверяет, является ли строка валидным email-адресом." : "Находит все email-адреса в тексте.";
-        exampleTestText = "Contact us at support@example.com or info@example.org.";
+        exampleTestText = route.forValidation ? "test@example.com" : "Contact us at support@example.com or info@example.org.";
         break;
       case 'url':
         blocks = generateBlocksForURL(route.forValidation === false, route.urlRequiresProtocol ?? false);
         explanation = route.forValidation ? "Проверяет, является ли строка валидным URL." : "Находит все URL-адреса в тексте.";
-        exampleTestText = "Visit our site: https://www.example.com or check http://example.org";
+        exampleTestText = route.forValidation ? "https://www.example.com" : "Visit our site: https://www.example.com or check http://example.org";
         break;
       case 'duplicate_words':
          blocks = generateBlocksForDuplicateWords();
