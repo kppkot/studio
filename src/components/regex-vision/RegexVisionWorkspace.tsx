@@ -62,11 +62,18 @@ const RegexVisionWorkspace: React.FC = () => {
         setMatches(formattedMatches);
       } catch (error) {
         setMatches([]);
+        if (error instanceof Error) {
+            toast({
+                title: "Некорректное регулярное выражение",
+                description: `Ошибка: ${error.message}. Пожалуйста, исправьте блоки в конструкторе.`,
+                variant: "destructive",
+            });
+        }
       }
     } else {
       setMatches([]);
     }
-  }, [blocks, testText, regexFlags]);
+  }, [blocks, testText, regexFlags, toast]);
 
 
   const findBlockRecursive = (searchBlocks: Block[], id: string): Block | null => {

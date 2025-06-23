@@ -358,11 +358,15 @@ const generalPurposeRegexGenerator = ai.defineFlow(
       }];
     }
 
+    const { regexString: finalRegex } = generateRegexStringAndGroupInfo(processedBlocks);
 
+    // Construct the final object from trusted sources to ensure consistency.
     return {
-        ...output,
+        regex: finalRegex,
+        explanation: output.explanation,
         parsedBlocks: processedBlocks,
-        exampleTestText: output.exampleTestText || "Пример текста не был предоставлен AI."
+        exampleTestText: output.exampleTestText || "Пример текста не был предоставлен AI.",
+        recommendedFlags: output.recommendedFlags,
     };
   }
 );
