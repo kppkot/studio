@@ -159,19 +159,31 @@ const routerPrompt = ai.definePrompt({
   name: 'regexRouterPrompt',
   input: { schema: NaturalLanguageRegexInputSchema },
   output: { schema: RouterOutputSchema },
-  prompt: `You are a regex query classifier. Analyze the user's query and classify it into one of the known patterns.
+  prompt: `You are a regex query classifier. Analyze the user's query and classify it into one of the known patterns. Your goal is to handle simple, generic requests with predefined patterns, and pass more specific or complex requests to a more powerful AI by classifying them as 'unknown'.
     
     Known Patterns:
-    - email: For finding or validating email addresses.
-    - url: For finding or validating URLs.
+    - email: For finding or validating any generic email addresses.
+    - url: For finding or validating any generic URLs.
     - ipv4: For IPv4 addresses (e.g., 192.168.1.1).
     - ipv6: For IPv6 addresses.
     - duplicate_words: For finding repeated words next to each other.
     - multiple_spaces: For finding blocks of 2 or more spaces.
     - tabs_to_spaces: For finding tabs to replace them with spaces.
     - numbers: For finding integers or decimal numbers.
+    - unknown: For any query that is more specific than the general patterns above.
     
-    If the query is very specific and doesn't match a general category (e.g., "a 5-digit number followed by 'px'"), classify it as 'unknown'.
+    **CRITICAL RULE:** If the user's query is a specific *type* of a general category, you MUST classify it as 'unknown'. The 'unknown' classification will pass the query to a more powerful, general-purpose generator that can handle the specifics. Only classify as a known pattern if the user asks for the generic, broad case.
+
+    Examples:
+    - "find an email address" -> 'email'
+    - "find a gmail address" -> 'unknown' (This is a specific type of email)
+    - "match a URL" -> 'url'
+    - "extract a YouTube video ID from a URL" -> 'unknown' (This is a specific task related to URLs)
+    - "найти ЛЮБОЙ YOUTUBE ID" -> 'unknown'
+    - "find any number" -> 'numbers'
+    - "find a 5-digit number" -> 'unknown' (This is a specific type of number)
+    - "find duplicate words" -> 'duplicate_words'
+    
     If the user asks to validate something, still classify it by the pattern type (e.g., "validate email" -> 'email'). The system will handle the generation logic.
     
     User Query: {{{query}}}
