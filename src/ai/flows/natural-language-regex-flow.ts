@@ -275,20 +275,20 @@ Additionally, provide an 'exampleTestText' field containing a short, relevant ex
 User Query: {{{query}}}
 
 **IMPORTANT INSTRUCTIONS:**
-*   **Flags:** Do not include inline flags in the regex string (like \\\`(?i)\\\`). Instead, use the 'recommendedFlags' field in the output JSON. If the user asks for "case-insensitive", "ignore case", etc., add 'i' to the 'recommendedFlags' string. If they ask for "multiline", add 'm'. If they ask for "dot all" or "single line", add 's'. Combine flags if needed (e.g., "im"). Do NOT include the 'g' (global) flag, as the UI handles it by default.
-*   **Word Boundaries:** If the user asks to find a "word", you MUST wrap the pattern in \\\`\\\\b\\\` anchors. Example: for "find the word cat", generate \\\`\\\\bcat\\\\b\\\`.
+*   **Flags:** Do not include inline flags in the regex string (like \`(?i)\`). Instead, use the 'recommendedFlags' field in the output JSON. If the user asks for "case-insensitive", "ignore case", etc., add 'i' to the 'recommendedFlags' string. If they ask for "multiline", add 'm'. If they ask for "dot all" or "single line", add 's'. Combine flags if needed (e.g., "im"). Do NOT include the 'g' (global) flag, as the UI handles it by default.
+*   **Word Boundaries:** If the user asks to find a "word", you MUST wrap the pattern in \`\\b\` anchors. Example: for "find the word cat", generate \`\\bcat\\b\`.
 
 The 'parsedBlocks' structure should be an array of objects. Each object must have:
 1.  "type": A string enum indicating the block type from this list: ${Object.values(BlockType).join(', ')}.
 2.  "settings": An object with settings specific to the type. Examples:
-    *   For "LITERAL": \\\`{"text": "your_literal_text"}\\\`. IMPORTANT: For special regex characters that should be treated as plain text (e.g., a literal dot '.'), provide the literal character itself: \\\`{"text": "."}\\\`. My backend will handle escaping. For special characters like \\\`\\\\d\\\`, \\\`\\\\s\\\`, \\\`^\\\`, \\\`$\\\`, DO NOT use a LITERAL block. Use CHARACTER_CLASS or ANCHOR instead.
-    *   For "CHARACTER_CLASS": \\\`{"pattern": "a-zA-Z0-9", "negated": false}\\\`. For shorthands like "any digit", use \\\`{"type": "CHARACTER_CLASS", "settings": {"pattern": "\\\\d"}}\\\`. For a single dot matching any character, use \\\`{"type": "CHARACTER_CLASS", "settings": {"pattern": "."}}\\\`.
-    *   For "QUANTIFIER": \\\`{"type": "*", "mode": "greedy"}\\\` (type can be '*', '+', '?', '{n}', '{n,}', '{n,m}'). If type is '{n}', '{n,}', or '{n,m}', include "min" and "max" (if applicable) in settings, e.g., \\\`{"type": "{n,m}", "min": 1, "max": 5, "mode": "greedy"}\\\`.
-    *   For "GROUP": \\\`{"type": "capturing"}\\\`, \\\`{"type": "non-capturing"}\\\`, or \\\`{"type": "named", "name": "groupName"}\\\`.
-    *   For "ANCHOR": \\\`{"type": "^"}\\\` (type can be '^', '$', '\\b', '\\B').
-    *   For "ALTERNATION": This block has no settings. Its children are the different options to match. For example, to match "cat" or "dog", an ALTERNATION block would have two children: a LITERAL block for "cat" and a LITERAL block for "dog". This block is almost always placed inside a GROUP block to define its scope (e.g., to create \\\`(?:cat|dog)\\\`).
-    *   For "LOOKAROUND": \\\`{"type": "positive-lookahead"}\\\` (types: 'positive-lookahead', 'negative-lookahead', 'positive-lookbehind', 'negative-lookbehind').
-    *   For "BACKREFERENCE": \\\`{"ref": "1"}\\\` or \\\`{"ref": "groupName"}\\\`.
+    *   For "LITERAL": \`{"text": "your_literal_text"}\`. IMPORTANT: For special regex characters that should be treated as plain text (e.g., a literal dot '.'), provide the literal character itself: \`{"text": "."}\`. My backend will handle escaping. For special characters like \`\\d\`, \`\\s\`, \`^\`, \`$\`, DO NOT use a LITERAL block. Use CHARACTER_CLASS or ANCHOR instead.
+    *   For "CHARACTER_CLASS": \`{"pattern": "a-zA-Z0-9", "negated": false}\`. For shorthands like "any digit", use \`{"type": "CHARACTER_CLASS", "settings": {"pattern": "\\\\d"}}\`. For a single dot matching any character, use \`{"type": "CHARACTER_CLASS", "settings": {"pattern": "."}}\`.
+    *   For "QUANTIFIER": \`{"type": "*", "mode": "greedy"}\` (type can be '*', '+', '?', '{n}', '{n,}', '{n,m}'). If type is '{n}', '{n,}', or '{n,m}', include "min" and "max" (if applicable) in settings, e.g., \`{"type": "{n,m}", "min": 1, "max": 5, "mode": "greedy"}\`.
+    *   For "GROUP": \`{"type": "capturing"}\`, \`{"type": "non-capturing"}\`, or \`{"type": "named", "name": "groupName"}\`.
+    *   For "ANCHOR": \`{"type": "^"}\` (type can be '^', '$', '\\b', '\\B').
+    *   For "ALTERNATION": This block has no settings. Its children are the different options to match. For example, to match "cat" or "dog", an ALTERNATION block would have two children: a LITERAL block for "cat" and a LITERAL block for "dog". This block is almost always placed inside a GROUP block to define its scope (e.g., to create \`(?:cat|dog)\`).
+    *   For "LOOKAROUND": \`{"type": "positive-lookahead"}\` (types: 'positive-lookahead', 'negative-lookahead', 'positive-lookbehind', 'negative-lookbehind').
+    *   For "BACKREFERENCE": \`{"ref": "1"}\` or \`{"ref": "groupName"}\`.
 3.  "children": An array of block objects, ONLY for container types ("GROUP", "ALTERNATION", "LOOKAROUND", "CONDITIONAL"). For other types, "children" should be an empty array or omitted.
 
 CRITICAL INSTRUCTION: Instead of creating a single large LITERAL block with regex characters inside, you MUST break it down into smaller, semantic blocks. For example, for "a number between 0 and 255", do not create a LITERAL with text "(?:25[0-5]|...))". Instead, create a non-capturing GROUP containing an ALTERNATION of smaller blocks. For "IPv4 address", generate a sequence of blocks representing each octet and dot, not one large literal.
@@ -334,16 +334,21 @@ const generalPurposeRegexGenerator = ai.defineFlow(
 
     let processedBlocks: Block[] = [];
     if (output.parsedBlocks && output.parsedBlocks.length > 0) {
-      // The AI might return blocks without IDs. processAiBlocks will add them.
+      // processAiBlocks now filters invalid blocks.
       const sanitizedBlocksWithIds = processAiBlocks(output.parsedBlocks);
-      const correctedBlocks = correctAndSanitizeAiBlocks(sanitizedBlocksWithIds);
-      processedBlocks = breakdownComplexCharClasses(correctedBlocks);
-    } else if (output.regex) {
-        // Fallback: If the AI provides a valid regex but no blocks,
-        // create a single literal block. This is better than disabling
-        // the "Add" button and provides a starting point for the user.
-        processedBlocks = [createLiteral(output.regex)];
+      
+      // Only proceed if we have valid blocks after sanitization.
+      if (sanitizedBlocksWithIds.length > 0) {
+        const correctedBlocks = correctAndSanitizeAiBlocks(sanitizedBlocksWithIds);
+        processedBlocks = breakdownComplexCharClasses(correctedBlocks);
+      }
     }
+    
+    // Fallback: If block processing failed or was never attempted, but we have a valid regex string.
+    if (processedBlocks.length === 0 && output.regex) {
+      processedBlocks = [createLiteral(output.regex)];
+    }
+
 
     return {
         ...output,

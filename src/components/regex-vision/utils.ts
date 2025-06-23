@@ -305,7 +305,11 @@ export const processAiBlocks = (aiBlocks: any[]): Block[] => {
   if (!aiBlocks || !Array.isArray(aiBlocks)) {
     return [];
   }
-  return aiBlocks.map((aiBlock: any): Block => {
+
+  // Filter for blocks that are objects and have a valid BlockType.
+  const validAiBlocks = aiBlocks.filter(b => b && typeof b === 'object' && Object.values(BlockType).includes(b.type));
+
+  return validAiBlocks.map((aiBlock: any): Block => {
     const newBlock: Block = {
       id: generateId(),
       type: aiBlock.type as BlockType,
