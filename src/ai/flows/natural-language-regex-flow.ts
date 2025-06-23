@@ -97,10 +97,10 @@ const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
             const settings = correctedBlock.settings as LiteralSettings;
             const text = settings.text || '';
             
-            // This logic was faulty before. A literal dot '.' should stay a literal dot.
-            // The regex generation part will handle escaping it to `\.`.
+            // Do not convert a literal dot '.' to a character class. It should remain a literal.
+            // The generator will handle escaping it.
             const knownCharClasses = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S'];
-            if (knownCharClasses.includes(text) || text === '.') {
+            if (knownCharClasses.includes(text)) {
                 correctedBlock.type = BlockType.CHARACTER_CLASS;
                 correctedBlock.settings = { pattern: text, negated: false } as CharacterClassSettings;
                 return correctedBlock;
@@ -253,6 +253,10 @@ Provide the regex string itself, a concise explanation of how it works, and if p
 Additionally, provide an 'exampleTestText' field containing a short, relevant example string that would be suitable for testing the generated regex. This text should ideally contain at least one match for the regex, but also some non-matching parts if appropriate for context.
 
 User Query: {{{query}}}
+
+**IMPORTANT INSTRUCTIONS:**
+*   **Flags:** Do not include inline flags like \`(?i)\`. For "case-insensitive", generate the base pattern and mention in the \`explanation\` to use the 'i' flag in the UI.
+*   **Word Boundaries:** If the user asks to find a "word", you MUST wrap the pattern in \`\\b\` anchors. Example: for "find the word cat", generate \`\\bcat\\b\`.
 
 The 'parsedBlocks' structure should be an array of objects. Each object must have:
 1.  "type": A string enum indicating the block type from this list: ${Object.values(BlockType).join(', ')}.
