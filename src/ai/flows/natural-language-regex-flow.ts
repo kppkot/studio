@@ -184,25 +184,26 @@ export async function generateRegexFromNaturalLanguage(input: NaturalLanguageReg
     let blocks: Block[] = [];
     let explanation = "";
     let exampleTestText = "";
+    let recommendedFlags = "";
 
     switch (route.pattern) {
       case 'ipv4':
-        blocks = generateBlocksForIPv4();
+        blocks = generateBlocksForIPv4(false);
         explanation = "Находит IPv4-адреса в тексте. Этот шаблон ищет адреса, окруженные границами слов (пробелы, начало/конец строки), но не проверяет, является ли вся строка IP-адресом.";
         exampleTestText = "Primary server: 192.168.1.1, backup is 10.0.0.1. Invalid: 999.999.999.999";
         break;
       case 'ipv6':
-        blocks = generateBlocksForIPv6();
+        blocks = generateBlocksForIPv6(false);
         explanation = "Находит IPv6-адреса в тексте. Из-за сложности IPv6, он представлен как один блок.";
         exampleTestText = "The server at 2001:0db8:85a3::8a2e:0370:7334 is the main one.";
         break;
       case 'email':
-        blocks = generateBlocksForEmail();
+        blocks = generateBlocksForEmail(true);
         explanation = "Находит все email-адреса в тексте, используя границы слов для точности.";
         exampleTestText = "Contact us at support@example.com or info@example.org.";
         break;
       case 'url':
-        blocks = generateBlocksForURL(route.urlRequiresProtocol ?? false);
+        blocks = generateBlocksForURL(true, route.urlRequiresProtocol ?? false);
         explanation = "Находит все URL-адреса в тексте. Может включать или не включать требование протокола http/https.";
         exampleTestText = "Visit our site: https://www.example.com or check www.anothersite.co.uk for more info.";
         break;
@@ -210,6 +211,7 @@ export async function generateRegexFromNaturalLanguage(input: NaturalLanguageReg
          blocks = generateBlocksForDuplicateWords();
          explanation = "Находит слова, которые повторяются подряд (например, 'the the').";
          exampleTestText = "This is a a test of the the emergency system.";
+         recommendedFlags = "i";
          break;
       case 'multiple_spaces':
          blocks = generateBlocksForMultipleSpaces();
@@ -238,6 +240,7 @@ export async function generateRegexFromNaturalLanguage(input: NaturalLanguageReg
         explanation,
         parsedBlocks: finalBlocks,
         exampleTestText,
+        recommendedFlags,
       };
     }
   }
@@ -252,7 +255,7 @@ const generalPurposeGeneratorPrompt = ai.definePrompt({
   input: {schema: NaturalLanguageRegexInputSchema},
   output: {schema: NaturalLanguageRegexOutputSchema},
   prompt: `You are an expert Regex assistant. The user's query did not match any standard, pre-defined patterns, so you need to generate a custom regex. Based on the user's natural language query, generate an optimal and correct regular expression.
-Provide the regex string itself, a concise explanation of how it works, and if possible, a structured representation of the regex as an array of 'parsedBlocks'.
+Provide the regex string itself, a concise explanation in Russian of how it works, and if possible, a structured representation of the regex as an array of 'parsedBlocks'.
 Additionally, provide an 'exampleTestText' field containing a short, relevant example string that would be suitable for testing the generated regex. This text should ideally contain at least one match for the regex, but also some non-matching parts if appropriate for context.
 
 User Query: {{{query}}}
@@ -307,6 +310,13 @@ const generalPurposeRegexGenerator = ai.defineFlow(
         };
     }
     
+    if (output.recommendedFlags) {
+      const validFlags = new Set(['g', 'i', 'm', 's', 'u', 'y']);
+      output.recommendedFlags = Array.from(new Set(output.recommendedFlags.split('')))
+          .filter(flag => validFlags.has(flag))
+          .join('');
+    }
+
     let processedBlocks: Block[] = [];
     if (output.parsedBlocks) {
       // The AI might return blocks without IDs. processAiBlocks will add them.
