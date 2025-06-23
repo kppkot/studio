@@ -118,7 +118,9 @@ const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
             }
             
             if (text.startsWith('\\') && text.length === 2 && !knownCharClasses.includes(text) && !knownAnchors.includes(text)) {
-                (correctedBlock.settings as LiteralSettings).text = text.charAt(1);
+                 if(text !== '\\.'){
+                    (correctedBlock.settings as LiteralSettings).text = text.charAt(1);
+                 }
             }
         }
         
@@ -318,11 +320,16 @@ const generalPurposeRegexGenerator = ai.defineFlow(
     }
 
     let processedBlocks: Block[] = [];
-    if (output.parsedBlocks) {
+    if (output.parsedBlocks && output.parsedBlocks.length > 0) {
       // The AI might return blocks without IDs. processAiBlocks will add them.
       const sanitizedBlocksWithIds = processAiBlocks(output.parsedBlocks);
       const correctedBlocks = correctAndSanitizeAiBlocks(sanitizedBlocksWithIds);
       processedBlocks = breakdownComplexCharClasses(correctedBlocks);
+    } else if (output.regex) {
+        // Fallback: If the AI provides a valid regex but no blocks,
+        // create a single literal block. This is better than disabling
+        // the "Add" button and provides a starting point for the user.
+        processedBlocks = [createLiteral(output.regex)];
     }
 
     return {
