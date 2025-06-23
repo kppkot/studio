@@ -105,15 +105,16 @@ export const generateBlocksForURL = (forExtraction: boolean = false, requireProt
 export const generateBlocksForIPv4 = (forValidation: boolean = true): Block[] => {
   // Provides a simpler, more readable, but less strict pattern.
   // Good for a wizard's starting point.
-  const octet = createCharClass('\\d', false);
-  const octetQuantifier = createQuantifier('{n,m}', 1, 3);
-  const dot = createLiteral('.');
+  const buildOctet = () => [
+    createCharClass('\\d', false),
+    createQuantifier('{n,m}', 1, 3)
+  ];
   
   const ipCore = [
-    octet, octetQuantifier, dot,
-    octet, octetQuantifier, dot,
-    octet, octetQuantifier, dot,
-    octet, octetQuantifier
+    ...buildOctet(), createLiteral('.'),
+    ...buildOctet(), createLiteral('.'),
+    ...buildOctet(), createLiteral('.'),
+    ...buildOctet()
   ];
   
   if (forValidation) {
@@ -133,12 +134,11 @@ export const generateBlocksForIPv6 = (forValidation: boolean = true): Block[] =>
 };
 
 export const generateBlocksForDuplicateWords = (): Block[] => {
-  const wordBoundary = createAnchor('\\b');
   const wordChars = createCharClass('\\w+', false);
   const wordGroup = createSequenceGroup([wordChars], 'capturing');
   const spaceChars = createCharClass('\\s+', false);
   const backreference = createBackreference(1);
-  return [wordBoundary, wordGroup, spaceChars, backreference, wordBoundary];
+  return [createAnchor('\\b'), wordGroup, spaceChars, backreference, createAnchor('\\b')];
 };
 
 export const generateBlocksForMultipleSpaces = (): Block[] => {
