@@ -14,7 +14,7 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import type { Block, CharacterClassSettings, GroupSettings, LiteralSettings, AnchorSettings } from '@/components/regex-vision/types';
 import { BlockType } from '@/components/regex-vision/types';
-import { generateBlocksForIPv4, generateBlocksForIPv6, generateBlocksForEmail, generateBlocksForURL, generateBlocksForDuplicateWords, generateBlocksForMultipleSpaces, generateBlocksForTabsToSpaces, generateBlocksForNumbers, generateRegexStringAndGroupInfo, generateId } from '@/components/regex-vision/utils';
+import { generateBlocksForIPv4, generateBlocksForIPv6, generateBlocksForEmail, generateBlocksForURL, generateBlocksForDuplicateWords, generateBlocksForMultipleSpaces, generateBlocksForTabsToSpaces, generateBlocksForNumbers, generateRegexStringAndGroupInfo, generateId, processAiBlocks } from '@/components/regex-vision/utils';
 
 const NaturalLanguageRegexInputSchema = z.object({
   query: z.string().describe('The natural language query describing the desired regex.'),
@@ -303,7 +303,9 @@ const generalPurposeRegexGenerator = ai.defineFlow(
     
     let processedBlocks: Block[] = [];
     if (output.parsedBlocks) {
-      const correctedBlocks = correctAndSanitizeAiBlocks(output.parsedBlocks);
+      // The AI might return blocks without IDs. processAiBlocks will add them.
+      const sanitizedBlocksWithIds = processAiBlocks(output.parsedBlocks);
+      const correctedBlocks = correctAndSanitizeAiBlocks(sanitizedBlocksWithIds);
       processedBlocks = breakdownComplexCharClasses(correctedBlocks);
     }
 
