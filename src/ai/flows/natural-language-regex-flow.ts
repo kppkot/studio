@@ -14,7 +14,7 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import type { Block, CharacterClassSettings, GroupSettings, LiteralSettings, AnchorSettings } from '@/components/regex-vision/types';
 import { BlockType } from '@/components/regex-vision/types';
-import { generateBlocksForIPv4, generateBlocksForIPv6, generateBlocksForEmail, generateBlocksForURL, generateBlocksForDuplicateWords, generateBlocksForMultipleSpaces, generateBlocksForTabsToSpaces, generateBlocksForNumbers, generateRegexStringAndGroupInfo, generateId, processAiBlocks } from '@/components/regex-vision/utils';
+import { generateBlocksForIPv4, generateBlocksForIPv6, generateBlocksForEmail, generateBlocksForURL, generateBlocksForDuplicateWords, generateBlocksForMultipleSpaces, generateBlocksForTabsToSpaces, generateBlocksForNumbers, generateRegexStringAndGroupInfo, generateId, processAiBlocks, createLiteral } from '@/components/regex-vision/utils';
 
 const NaturalLanguageRegexInputSchema = z.object({
   query: z.string().describe('The natural language query describing the desired regex.'),
@@ -96,9 +96,11 @@ const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
         if (correctedBlock.type === BlockType.LITERAL) {
             const settings = correctedBlock.settings as LiteralSettings;
             const text = settings.text || '';
-            // A literal dot '.' should NOT be converted to a character class. This was the bug.
+            
+            // This logic was faulty before. A literal dot '.' should stay a literal dot.
+            // The regex generation part will handle escaping it to `\.`.
             const knownCharClasses = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S'];
-            if (knownCharClasses.includes(text)) {
+            if (knownCharClasses.includes(text) || text === '.') {
                 correctedBlock.type = BlockType.CHARACTER_CLASS;
                 correctedBlock.settings = { pattern: text, negated: false } as CharacterClassSettings;
                 return correctedBlock;
@@ -145,7 +147,6 @@ const KnownPatternSchema = z.enum([
 
 const RouterOutputSchema = z.object({
     pattern: KnownPatternSchema.describe("The general category of regex the user is asking for. If it's not a standard known pattern, classify as 'unknown'."),
-    forValidation: z.boolean().optional().describe("Set to true if the user wants to validate a whole string (e.g., 'is this an email?'). Set to false or omit if they want to find/extract patterns from a larger text (e.g., 'find all emails')."),
     urlRequiresProtocol: z.boolean().optional().describe("For URL patterns, set to true if the user explicitly requires http/https.")
 });
 
@@ -165,11 +166,8 @@ const routerPrompt = ai.definePrompt({
     - tabs_to_spaces: For finding tabs to replace them with spaces.
     - numbers: For finding integers or decimal numbers.
     
-    Also determine the user's intent:
-    - 'forValidation': Does the user want to check if the *entire string* matches the pattern? (e.g., "validate this string is an email", "is this an ipv4", "check if password is valid"). This usually implies using ^ and $ anchors.
-    - 'extraction' (forValidation: false): Does the user want to *find all occurrences* within a larger text? (e.g., "extract all emails from this log file", "find all numbers"). This usually implies using word boundaries (\\b) or no anchors.
-    
-    If the query doesn't match any known pattern, classify it as 'unknown'.
+    If the query is very specific and doesn't match a general category (e.g., "a 5-digit number followed by 'px'"), classify it as 'unknown'.
+    If the user asks to validate something, still classify it by the pattern type (e.g., "validate email" -> 'email'). The system will handle the generation logic.
     
     User Query: {{{query}}}
     `,
@@ -186,24 +184,24 @@ export async function generateRegexFromNaturalLanguage(input: NaturalLanguageReg
 
     switch (route.pattern) {
       case 'ipv4':
-        blocks = generateBlocksForIPv4(route.forValidation ?? false);
-        explanation = "Проверяет или находит IPv4-адреса. Этот базовый шаблон проверяет структуру (4 группы цифр по 1-3 в каждой, разделенные точками), но не диапазон 0-255.";
-        exampleTestText = route.forValidation ? "192.168.1.1" : "Valid: 192.168.1.1. Invalid: 999.0.0.256 or 127.0.0.1.3";
+        blocks = generateBlocksForIPv4(false); // forValidation = false, so it will find within text
+        explanation = "Находит IPv4-адреса в тексте. Этот шаблон ищет адреса, окруженные границами слов (пробелы, начало/конец строки), но не проверяет, является ли вся строка IP-адресом.";
+        exampleTestText = "Primary server: 192.168.1.1, backup is 10.0.0.1.";
         break;
       case 'ipv6':
-        blocks = generateBlocksForIPv6(route.forValidation ?? false);
-        explanation = "Проверяет или находит IPv6-адреса. Из-за сложности IPv6, он представлен как один блок.";
-        exampleTestText = route.forValidation ? "2001:0db8:85a3:0000:0000:8a2e:0370:7334" : "Valid: 2001:0db8:85a3:0000:0000:8a2e:0370:7334";
+        blocks = generateBlocksForIPv6(false); // forValidation = false
+        explanation = "Находит IPv6-адреса в тексте. Из-за сложности IPv6, он представлен как один блок.";
+        exampleTestText = "The server at 2001:0db8:85a3::8a2e:0370:7334 is the main one.";
         break;
       case 'email':
-        blocks = generateBlocksForEmail(route.forValidation === false);
-        explanation = route.forValidation ? "Проверяет, является ли строка валидным email-адресом." : "Находит все email-адреса в тексте.";
-        exampleTestText = route.forValidation ? "test@example.com" : "Contact us at support@example.com or info@example.org.";
+        blocks = generateBlocksForEmail(true); // forExtraction = true
+        explanation = "Находит все email-адреса в тексте, используя границы слов для точности.";
+        exampleTestText = "Contact us at support@example.com or info@example.org.";
         break;
       case 'url':
-        blocks = generateBlocksForURL(route.forValidation === false, route.urlRequiresProtocol ?? false);
-        explanation = route.forValidation ? "Проверяет, является ли строка валидным URL." : "Находит все URL-адреса в тексте.";
-        exampleTestText = route.forValidation ? "https://www.example.com" : "Visit our site: https://www.example.com or check http://example.org";
+        blocks = generateBlocksForURL(true, route.urlRequiresProtocol ?? false); // forExtraction = true
+        explanation = "Находит все URL-адреса в тексте. Может включать или не включать требование протокола http/https.";
+        exampleTestText = "Visit our site: https://www.example.com or check www.anothersite.co.uk for more info.";
         break;
       case 'duplicate_words':
          blocks = generateBlocksForDuplicateWords();
@@ -222,8 +220,8 @@ export async function generateRegexFromNaturalLanguage(input: NaturalLanguageReg
           break;
       case 'numbers':
           blocks = generateBlocksForNumbers();
-          explanation = "Находит целые или десятичные числа, включая отрицательные.";
-          exampleTestText = "The values are -10, 3.14, and 42.";
+          explanation = "Находит целые или десятичные числа, включая отрицательные. Использует границы слов, чтобы не совпадать с числами, являющимися частью слов.";
+          exampleTestText = "The values are -10, 3.14, and 42. But not value123.";
           break;
     }
     
@@ -231,10 +229,11 @@ export async function generateRegexFromNaturalLanguage(input: NaturalLanguageReg
       const { regexString } = generateRegexStringAndGroupInfo(blocks);
       const sanitizedBlocks = correctAndSanitizeAiBlocks(blocks);
       const processedBlocks = breakdownComplexCharClasses(sanitizedBlocks);
+      const finalBlocks = processAiBlocks(processedBlocks);
       return {
         regex: regexString,
         explanation,
-        parsedBlocks: processedBlocks,
+        parsedBlocks: finalBlocks,
         exampleTestText,
       };
     }
