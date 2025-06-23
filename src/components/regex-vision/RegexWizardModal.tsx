@@ -19,7 +19,7 @@ import type { LiteralSettings } from './types';
 interface RegexWizardModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onComplete: (blocks: Block[], parentId?: string | null, exampleTestText?: string) => void;
+  onComplete: (blocks: Block[], parentId: string | null, exampleTestText?: string, recommendedFlags?: string) => void;
   initialParentId: string | null;
 }
 
@@ -65,7 +65,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
   const handleComplete = () => {
     if (result?.parsedBlocks && result.parsedBlocks.length > 0) {
-      onComplete(result.parsedBlocks, initialParentId, result.exampleTestText || undefined);
+      onComplete(result.parsedBlocks, initialParentId, result.exampleTestText || undefined, result.recommendedFlags || undefined);
     } else {
         onClose();
     }
@@ -124,7 +124,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                    <Label className="text-sm font-medium">Предложение от AI:</Label>
                     <Card className="p-3 bg-muted/50">
                        <p className="text-sm font-semibold">Regex:</p>
-                       <p className="font-mono text-xs bg-background p-1.5 rounded-md">/{result.regex}/</p>
+                       <p className="font-mono text-xs bg-background p-1.5 rounded-md">/{result.regex}/{result.recommendedFlags || ''}</p>
                     </Card>
 
                     <div className="mt-3">

@@ -196,7 +196,7 @@ const RegexVisionWorkspace: React.FC = () => {
   }, [toast, blocks, selectedBlockId]);
 
 
-  const handleAddBlocksFromWizard = useCallback((newBlocks: Block[], parentIdFromWizard?: string | null, exampleTestText?: string) => {
+  const handleAddBlocksFromWizard = useCallback((newBlocks: Block[], parentIdFromWizard: string | null, exampleTestText?: string, recommendedFlags?: string) => {
     if (newBlocks.length === 0) return;
 
     let targetParentId = parentIdFromWizard;
@@ -231,11 +231,19 @@ const RegexVisionWorkspace: React.FC = () => {
     if (exampleTestText) {
       setTestText(exampleTestText);
     }
+    
+    if (recommendedFlags) {
+      // Combine with existing 'g' flag if it's there, avoiding duplicates.
+      const currentGlobalFlag = regexFlags.includes('g') ? 'g' : '';
+      const otherFlags = recommendedFlags.replace(/g/g, '');
+      const finalFlags = Array.from(new Set(currentGlobalFlag + otherFlags)).join('');
+      setRegexFlags(finalFlags);
+    }
 
     setSelectedBlockId(newBlocks[newBlocks.length - 1].id);
     setIsWizardModalOpen(false);
     toast({ title: "Блоки добавлены", description: "Блоки из Помощника успешно добавлены." });
-  }, [toast, blocks, selectedBlockId]);
+  }, [toast, blocks, selectedBlockId, regexFlags]);
 
 
   const handleUpdateBlock = useCallback((id: string, updatedBlockData: Partial<Block>) => {
@@ -1036,8 +1044,8 @@ const RegexVisionWorkspace: React.FC = () => {
             setIsWizardModalOpen(false);
             setParentIdForNewBlock(null);
           }}
-          onComplete={(wizardBlocks, parentId, exampleText) => { 
-            handleAddBlocksFromWizard(wizardBlocks, parentId, exampleText); 
+          onComplete={(wizardBlocks, parentId, exampleText, flags) => { 
+            handleAddBlocksFromWizard(wizardBlocks, parentId, exampleText, flags); 
             setIsWizardModalOpen(false);
             setParentIdForNewBlock(null);
           }}

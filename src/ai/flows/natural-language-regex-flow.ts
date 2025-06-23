@@ -34,6 +34,7 @@ const NaturalLanguageRegexOutputSchema = z.object({
   explanation: z.string().describe('A concise explanation of how the generated regex works.'),
   parsedBlocks: z.array(BlockSchema).optional().describe('An array of block objects representing the parsed regex structure. If parsing is not possible, this can be empty or omitted.'),
   exampleTestText: z.string().optional().describe('An example text string that would match the generated regex or be relevant for testing it.'),
+  recommendedFlags: z.string().optional().describe("A string of recommended flags based on the user's query (e.g., 'i', 'm', 's'). Only include flags if explicitly requested. Do not include 'g'."),
 });
 export type NaturalLanguageRegexOutput = z.infer<typeof NaturalLanguageRegexOutputSchema>;
 
@@ -97,12 +98,15 @@ const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
             const settings = correctedBlock.settings as LiteralSettings;
             const text = settings.text || '';
             
-            // Do not convert a literal dot '.' to a character class. It should remain a literal.
-            // The generator will handle escaping it.
             const knownCharClasses = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S'];
             if (knownCharClasses.includes(text)) {
                 correctedBlock.type = BlockType.CHARACTER_CLASS;
                 correctedBlock.settings = { pattern: text, negated: false } as CharacterClassSettings;
+                return correctedBlock;
+            }
+            if (text === '.') {
+                correctedBlock.type = BlockType.CHARACTER_CLASS;
+                correctedBlock.settings = { pattern: '.', negated: false } as CharacterClassSettings;
                 return correctedBlock;
             }
 
@@ -113,7 +117,6 @@ const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
                 return correctedBlock;
             }
             
-            // Handle escaped literals like \. or \+
             if (text.startsWith('\\') && text.length === 2 && !knownCharClasses.includes(text) && !knownAnchors.includes(text)) {
                 (correctedBlock.settings as LiteralSettings).text = text.charAt(1);
             }
@@ -184,22 +187,22 @@ export async function generateRegexFromNaturalLanguage(input: NaturalLanguageReg
 
     switch (route.pattern) {
       case 'ipv4':
-        blocks = generateBlocksForIPv4(false); // forValidation = false, so it will find within text
+        blocks = generateBlocksForIPv4();
         explanation = "Находит IPv4-адреса в тексте. Этот шаблон ищет адреса, окруженные границами слов (пробелы, начало/конец строки), но не проверяет, является ли вся строка IP-адресом.";
-        exampleTestText = "Primary server: 192.168.1.1, backup is 10.0.0.1.";
+        exampleTestText = "Primary server: 192.168.1.1, backup is 10.0.0.1. Invalid: 999.999.999.999";
         break;
       case 'ipv6':
-        blocks = generateBlocksForIPv6(false); // forValidation = false
+        blocks = generateBlocksForIPv6();
         explanation = "Находит IPv6-адреса в тексте. Из-за сложности IPv6, он представлен как один блок.";
         exampleTestText = "The server at 2001:0db8:85a3::8a2e:0370:7334 is the main one.";
         break;
       case 'email':
-        blocks = generateBlocksForEmail(true); // forExtraction = true
+        blocks = generateBlocksForEmail();
         explanation = "Находит все email-адреса в тексте, используя границы слов для точности.";
         exampleTestText = "Contact us at support@example.com or info@example.org.";
         break;
       case 'url':
-        blocks = generateBlocksForURL(true, route.urlRequiresProtocol ?? false); // forExtraction = true
+        blocks = generateBlocksForURL(route.urlRequiresProtocol ?? false);
         explanation = "Находит все URL-адреса в тексте. Может включать или не включать требование протокола http/https.";
         exampleTestText = "Visit our site: https://www.example.com or check www.anothersite.co.uk for more info.";
         break;
@@ -255,7 +258,7 @@ Additionally, provide an 'exampleTestText' field containing a short, relevant ex
 User Query: {{{query}}}
 
 **IMPORTANT INSTRUCTIONS:**
-*   **Flags:** Do not include inline flags like \`(?i)\`. For "case-insensitive", generate the base pattern and mention in the \`explanation\` to use the 'i' flag in the UI.
+*   **Flags:** Do not include inline flags in the regex string (like \`(?i)\`). Instead, use the 'recommendedFlags' field in the output JSON. If the user asks for "case-insensitive", "ignore case", etc., add 'i' to the 'recommendedFlags' string. If they ask for "multiline", add 'm'. If they ask for "dot all" or "single line", add 's'. Combine flags if needed (e.g., "im"). Do NOT include the 'g' (global) flag, as the UI handles it by default.
 *   **Word Boundaries:** If the user asks to find a "word", you MUST wrap the pattern in \`\\b\` anchors. Example: for "find the word cat", generate \`\\bcat\\b\`.
 
 The 'parsedBlocks' structure should be an array of objects. Each object must have:
@@ -272,7 +275,7 @@ The 'parsedBlocks' structure should be an array of objects. Each object must hav
 
 CRITICAL INSTRUCTION: Instead of creating a single large LITERAL block with regex characters inside, you MUST break it down into smaller, semantic blocks. For example, for "a number between 0 and 255", do not create a LITERAL with text "(?:25[0-5]|...))". Instead, create a non-capturing GROUP containing an ALTERNATION of smaller blocks. For "IPv4 address", generate a sequence of blocks representing each octet and dot, not one large literal.
 
-Ensure the output is in the specified JSON format with "regex", "explanation", "exampleTestText", and optionally "parsedBlocks" fields.
+Ensure the output is in the specified JSON format with "regex", "explanation", "exampleTestText", "recommendedFlags" (if any), and optionally "parsedBlocks" fields.
 If the query is too vague or cannot be reasonably translated, please indicate that in the explanation, provide a generic regex (like ".*"), an empty 'exampleTestText', and omit 'parsedBlocks'. Always try to provide "regex", "explanation", and "exampleTestText".
 `,
   config: {
