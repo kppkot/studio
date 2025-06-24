@@ -82,7 +82,7 @@ Based on all the information above, determine the **next single, atomic step**.
 
 **SPECIAL RULE FOR ALTERNATION (CHOICES):**
 While most steps must be atomic, handling choices like "yahoo.com, hotmail.com, or gmail.com" is an exception. When you need to create a set of choices, you MUST generate the entire \`GROUP\` containing the \`ALTERNATION\` and its children as **ONE SINGLE STEP**.
-Your explanation for this step should still be simple, like "Создадим группу для возможных доменов". The generated block should look like a \`GROUP\` containing an \`ALTERNATION\` block, which in turn contains \`LITERAL\` blocks for each choice.
+Your explanation for this step should still be simple, like "Создадим группу для возможных доменов". The generated block should be a \`GROUP\` block containing an \`ALTERNATION\` block. The \`ALTERNATION\` block, in turn, MUST contain multiple child \`LITERAL\` blocks, **where each literal block's \`text\` setting is filled with one of the actual choices (e.g., "yahoo.com", "hotmail.com").** Do not leave the text empty.
 
 Generate the JSON for the next single step, adhering strictly to the canons.
 `,
@@ -150,12 +150,12 @@ Based on the goal and the previous steps, provide a **new, alternative, single, 
 **CRITICAL CANONS OF REGEX CONSTRUCTION (YOU MUST OBEY THESE):**
 1.  **DIFFERENT & BETTER:** The new step must be a different approach or a more correct version of the rejected one.
 2.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step, unless the "Special Rule for Alternation" applies (see below).
-3.  **ATOMICITY IS LAW:** The step must correspond to **ONE** simple block (e.g., \\\`[a-z]\\\`, \\\`+\\\`, \\\`\\\\b\\\`). Do not combine concepts.
+3.  **ATOMICITY IS LAW:** The step must correspond to **ONE** simple block (e.g., \`[a-z]\`, \`+\`, \`\\b\`). Do not combine concepts.
 4.  **USE PRE-DEFINED BLOCKS:** Your generated 'block' object MUST be one of the simple, predefined types our application supports. Do not invent complex blocks. Choose from this list:
-    *   **LITERAL:** For a single character or short, simple string. **DO NOT** generate the \\\`|\\\` character.
-    *   **CHARACTER_CLASS:** For a set of characters. CRITICAL: Keep the \\\`pattern\\\` simple (e.g., \\\`a-z\\\`, \\\`0-9\\\`, or \\\`\\\\w\\\`).
-    *   **QUANTIFIER:** For repetition (e.g., \\\`+\\\`, \\\`*\\\`, \\\`?\\\`).
-    *   **ANCHOR:** For positions (e.g., \\\`^\\\`, \\\`$\\\`, \\\`\\\\b\\\`).
+    *   **LITERAL:** For a single character or short, simple string. **DO NOT** generate the \`|\` character.
+    *   **CHARACTER_CLASS:** For a set of characters. CRITICAL: Keep the \`pattern\` simple (e.g., \`a-z\`, \`0-9\`, or \`\\w\`).
+    *   **QUANTIFIER:** For repetition (e.g., \`+\`, \`*\`, \`?\`).
+    *   **ANCHOR:** For positions (e.g., \`^\`, \`$\`, \`\\b\`).
     *   **GROUP:** To group other blocks together.
     *   **ALTERNATION:** To handle 'OR' logic. See special rule.
 5.  **EXPLANATION (in Russian):** Provide a very short, clear explanation for the new step.
@@ -163,7 +163,7 @@ Based on the goal and the previous steps, provide a **new, alternative, single, 
 7.  **FINAL STEP:** If this new, alternative step now **completes** the regex and fully satisfies the user's request, you MUST set the \`isFinalStep\` field to \`true\` in your JSON output.
 
 **SPECIAL RULE FOR ALTERNATION (CHOICES):**
-If you determine that the best alternative is a set of choices (e.g., matching 'cat' or 'dog'), you MUST generate the entire \\\`GROUP\\\` containing the \\\`ALTERNATION\\\` and its children as **ONE SINGLE STEP**.
+If you determine that the best alternative is a set of choices (e.g., matching 'cat' or 'dog'), you MUST generate the entire \`GROUP\` containing the \`ALTERNATION\` and its children as **ONE SINGLE STEP**. The \`ALTERNATION\` block MUST contain child \`LITERAL\` blocks, **each filled with the text for one of the choices.**
 
 Generate the JSON for the new alternative single step, adhering strictly to the canons.
 `,
