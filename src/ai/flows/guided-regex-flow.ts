@@ -57,7 +57,7 @@ Your task is to take a user's query, an example text, and the steps already crea
 {{#if existingSteps.length}}
   This is the sequence of what has been built so far:
   {{#each existingSteps}}
-- Step {{add @index 1}}: {{this.explanation}} (Resulting Block: {{this.block.type}})
+- (Step {{@index}}) {{this.explanation}} (Resulting Block: {{this.block.type}})
   {{/each}}
 {{else}}
   This is the very first step. Start from the beginning.
@@ -122,7 +122,7 @@ A user is building a regex and was not satisfied with the last step you provided
 **Steps created before the problematic one:**
 {{#if stepsSoFar.length}}
   {{#each stepsSoFar}}
-- Step {{add @index 1}}: {{this.explanation}} (Block: {{this.block.type}})
+- (Step {{@index}}) {{this.explanation}} (Block: {{this.block.type}})
   {{/each}}
 {{else}}
   This was the very first step.
