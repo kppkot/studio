@@ -163,7 +163,7 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
             <X size={18} />
           </Button>
         </CardHeader>
-        <CardContent className="p-0 flex-1 flex flex-col overflow-hidden">
+        <CardContent className="p-0 flex-1 flex flex-col min-h-0">
           <div className="p-3 border-b">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
