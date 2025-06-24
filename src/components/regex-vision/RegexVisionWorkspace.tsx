@@ -299,25 +299,64 @@ const RegexVisionWorkspace: React.FC = () => {
     }
   }, [toast]);
 
-  const handleAddStepBlock = useCallback((block: Block, parentId: string | null) => {
-      const processedBlock = processAiBlocks([block])[0];
-      if (!processedBlock) return;
+ const handleAddStepBlock = useCallback((block: Block, parentId: string | null) => {
+    const processedBlock = processAiBlocks([block])[0];
+    if (!processedBlock) return;
 
-      let targetParentId = parentId;
-      if (!targetParentId && selectedBlockId) {
-          const selBlock = findBlockRecursive(blocks, selectedBlockId);
-          if (selBlock && [BlockType.GROUP, BlockType.ALTERNATION, BlockType.LOOKAROUND, BlockType.CONDITIONAL, BlockType.CHARACTER_CLASS].includes(selBlock.type)) {
-              targetParentId = selectedBlockId;
+    if (processedBlock.type === BlockType.QUANTIFIER) {
+      if (!selectedBlockId) {
+        toast({ title: "Ошибка", description: "Выберите блок, к которому нужно применить квантификатор.", variant: "destructive" });
+        return;
+      }
+      const insertQuantifier = (nodes: Block[]): Block[] | null => {
+        for (let i = 0; i < nodes.length; i++) {
+          const currentNode = nodes[i];
+          if (currentNode.id === selectedBlockId) {
+            if (currentNode.type === BlockType.QUANTIFIER) return null;
+            if (i + 1 < nodes.length && nodes[i+1].type === BlockType.QUANTIFIER) return null;
+            const newNodes = [...nodes];
+            newNodes.splice(i + 1, 0, processedBlock);
+            return newNodes;
           }
-      }
+          if (currentNode.children) {
+            const newChildren = insertQuantifier(currentNode.children);
+            if (newChildren) {
+              const newNodes = [...nodes];
+              newNodes[i] = { ...currentNode, children: newChildren };
+              return newNodes;
+            }
+          }
+        }
+        return null;
+      };
+      setBlocks(prev => {
+        const newTree = insertQuantifier(prev);
+        if (newTree) {
+          setSelectedBlockId(processedBlock.id);
+          return newTree;
+        }
+        toast({ title: 'Невозможно добавить квантификатор', description: 'Этот блок уже имеет квантификатор или является квантификатором.', variant: 'destructive' });
+        return prev;
+      });
+      return;
+    }
 
-      if (targetParentId) {
-        setBlocks(prev => addChildRecursive(prev, targetParentId, processedBlock));
-      } else {
-        setBlocks(prev => [...prev, processedBlock]);
+    let targetParentId = parentId;
+    if (!targetParentId && selectedBlockId) {
+      const selBlock = findBlockRecursive(blocks, selectedBlockId);
+      if (selBlock && [BlockType.GROUP, BlockType.ALTERNATION, BlockType.LOOKAROUND, BlockType.CONDITIONAL, BlockType.CHARACTER_CLASS].includes(selBlock.type)) {
+        targetParentId = selectedBlockId;
       }
-      setSelectedBlockId(processedBlock.id);
-      toast({ title: 'Блок добавлен!', description: `Блок был добавлен в конструктор.` });
+    }
+
+    if (targetParentId) {
+      setBlocks(prev => addChildRecursive(prev, targetParentId, processedBlock));
+    } else {
+      setBlocks(prev => [...prev, processedBlock]);
+    }
+    // Don't auto-select block when adding from guided mode to keep the panel open
+    // setSelectedBlockId(processedBlock.id);
+    toast({ title: 'Блок добавлен!', description: `Блок был добавлен в конструктор.` });
   }, [toast, blocks, selectedBlockId]);
 
   const handleClearGuidedMode = useCallback(() => {
@@ -357,9 +396,6 @@ const RegexVisionWorkspace: React.FC = () => {
   const handleRegenerateGuidedStep = async (indexToRegen: number) => {
     if (!guidedModeState) return;
 
-    // This implementation will use the isLoading flag from the parent
-    // to show a global loading state. A local state in GuidedStepsPanel
-    // will handle the specific button's spinner.
     setGuidedModeState(prev => ({ ...prev!, isLoading: true }));
     try {
         const stepToRegenerate = guidedModeState.steps[indexToRegen];
