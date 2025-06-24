@@ -157,13 +157,13 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
       <div className="fixed inset-0 bg-black/30 z-40 backdrop-blur-sm" onClick={onToggle} aria-hidden="true" />
       <Card className="fixed bottom-6 right-6 w-96 max-h-[calc(100vh-6rem)] flex flex-col shadow-xl z-50 border-primary">
         <CardHeader className="py-3 px-4 border-b">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between">
             <CardTitle className="text-lg">Добавить блок</CardTitle>
             <Button variant="ghost" size="icon" onClick={onToggle} className="h-8 w-8">
               <X size={18} />
             </Button>
           </div>
-           <div className="relative">
+          <div className="relative mt-2">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               type="text"
@@ -176,7 +176,7 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
           </div>
         </CardHeader>
         
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 min-h-0">
           <div className="p-3 space-y-2">
             {isLoadingAi && <p className="text-sm text-muted-foreground p-2 text-center">Загрузка AI подсказок...</p>}
             
@@ -199,12 +199,12 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
 
             {showWizard && !showAiSuggestions && (
               <Accordion type="multiple" className="w-full" defaultValue={WIZARD_CATEGORIES.map(cat => cat.name)}>
-                {WIZARD_CATEGORIES.map(category => (
+                {WIZARD_CATEGORIES.map((category, index) => (
                   <AccordionItem value={category.name} key={category.name}>
                     <AccordionTrigger className="text-sm font-semibold hover:no-underline py-2 px-1">
                       <div className="flex items-center">
                          {category.icon}
-                         {category.name}
+                         {`${index + 1}. ${category.name}`}
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="pb-1">
