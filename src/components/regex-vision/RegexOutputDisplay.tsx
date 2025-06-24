@@ -51,7 +51,8 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
   };
 
   const renderInteractiveRegex = (blocksToRender: Block[]): React.ReactNode[] => {
-    return blocksToRender.map(block => {
+    
+    const renderSingleBlock = (block: Block): React.ReactNode => {
       const isSelected = selectedBlockId === block.id;
       const isHovered = hoveredBlockId === block.id;
       const settings = block.settings;
@@ -229,7 +230,43 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
         default:
           return <React.Fragment key={block.id}>{renderChildren(block)}</React.Fragment>;
       }
-    });
+    };
+
+    // This logic ensures a block and its quantifier are rendered together correctly.
+    const nodes: React.ReactNode[] = [];
+    for (let i = 0; i < blocksToRender.length; i++) {
+        const block = blocksToRender[i];
+        
+        // If the current block is a quantifier, we skip it because it should have been
+        // handled by the previous iteration.
+        if (block.type === BlockType.QUANTIFIER) {
+            continue;
+        }
+
+        const mainRenderedBlock = renderSingleBlock(block);
+        let renderedQuantifier = null;
+
+        // Check if the next block is a quantifier
+        if (i + 1 < blocksToRender.length && blocksToRender[i + 1].type === BlockType.QUANTIFIER) {
+            renderedQuantifier = renderSingleBlock(blocksToRender[i + 1]);
+        }
+
+        // We use the block's ID as the key for the fragment.
+        // Even if a quantifier is attached, the key belongs to the main block.
+        nodes.push(
+            <React.Fragment key={block.id}>
+                {mainRenderedBlock}
+                {renderedQuantifier}
+            </React.Fragment>
+        );
+
+        // If a quantifier was rendered, we must increment the index
+        // to skip it in the next loop iteration.
+        if (renderedQuantifier) {
+            i++;
+        }
+    }
+    return nodes;
   };
 
   return (
