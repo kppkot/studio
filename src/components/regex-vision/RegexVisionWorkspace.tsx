@@ -303,13 +303,22 @@ const RegexVisionWorkspace: React.FC = () => {
       const processedBlock = processAiBlocks([block])[0];
       if (!processedBlock) return;
 
-      if (parentId) {
-        setBlocks(prev => addChildRecursive(prev, parentId, processedBlock));
+      let targetParentId = parentId;
+      if (!targetParentId && selectedBlockId) {
+          const selBlock = findBlockRecursive(blocks, selectedBlockId);
+          if (selBlock && [BlockType.GROUP, BlockType.ALTERNATION, BlockType.LOOKAROUND, BlockType.CONDITIONAL, BlockType.CHARACTER_CLASS].includes(selBlock.type)) {
+              targetParentId = selectedBlockId;
+          }
+      }
+
+      if (targetParentId) {
+        setBlocks(prev => addChildRecursive(prev, targetParentId, processedBlock));
       } else {
         setBlocks(prev => [...prev, processedBlock]);
       }
+      setSelectedBlockId(processedBlock.id);
       toast({ title: 'Блок добавлен!', description: `Блок был добавлен в конструктор.` });
-  }, [toast]);
+  }, [toast, blocks, selectedBlockId]);
 
   const handleClearGuidedMode = useCallback(() => {
     setGuidedModeState(null);
@@ -1154,13 +1163,7 @@ const RegexVisionWorkspace: React.FC = () => {
                 <ResizableHandle withHandle />
                  <ResizablePanel defaultSize={40} minSize={25} maxSize={50} className="overflow-hidden">
                    <div className="h-full m-2 ml-0 shadow-md border-primary/20 rounded-lg overflow-hidden bg-card">
-                      {selectedBlockId ? (
-                        <SettingsPanel
-                            block={selectedBlock}
-                            onUpdate={handleUpdateBlock}
-                            onClose={() => setSelectedBlockId(null)}
-                        />
-                      ) : guidedModeState ? (
+                      {guidedModeState ? (
                           <GuidedStepsPanel
                                 query={guidedModeState.query}
                                 exampleTestText={guidedModeState.exampleTestText}
@@ -1174,6 +1177,12 @@ const RegexVisionWorkspace: React.FC = () => {
                                 onNextStep={handleGenerateNextGuidedStep}
                                 onRegenerate={handleRegenerateGuidedStep}
                             />
+                      ) : selectedBlockId ? (
+                        <SettingsPanel
+                            block={selectedBlock}
+                            onUpdate={handleUpdateBlock}
+                            onClose={() => setSelectedBlockId(null)}
+                        />
                       ) : null}
                    </div>
                 </ResizablePanel>
