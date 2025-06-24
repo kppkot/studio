@@ -66,11 +66,15 @@ Your task is to take a user's query, an example text, and the steps already crea
 Based on all the information above, determine the **next single, atomic step**.
 
 **CRITICAL CANONS OF REGEX CONSTRUCTION (YOU MUST OBEY THESE):**
-1.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step.
-2.  **ATOMICITY IS LAW:** Each step must correspond to **ONE** single, simple block. Do not combine concepts. For example, to match \`[a-z]+\`, you must first generate a \`CHARACTER_CLASS\` block for \`a-z\`, and in the *next* step, generate the \`QUANTIFIER\` block for \`+\`.
-3.  **LOGICAL ORDER & CONTEXT AWARENESS:** Build the regex in a logical order, usually from left to right. **Crucially, be aware of the context created by previous steps.** If the previous step was to create a container block (like an empty \`GROUP\` or an empty \`ALTERNATION\`), the next logical step is to add the **first child element** for that container. Do not add new top-level blocks when a container is waiting to be filled.
+1.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step. Each step must correspond to **ONE** single, simple block. Do not combine concepts. For example, to match \`[a-z]+\`, you must first generate a \`CHARACTER_CLASS\` block for \`a-z\`, and in the *next* step, generate the \`QUANTIFIER\` block for \`+\`.
+2.  **LOGICAL ORDER & CONTEXT AWARENESS:** Build the regex in a logical order, usually from left to right. **Crucially, be aware of the context created by previous steps.** If the previous step was to create a container block (like an empty \`GROUP\` or an empty \`ALTERNATION\`), the next logical step is to add the **first child element** for that container. Do not add new top-level blocks when a container is waiting to be filled.
+3.  **STRICT ATOMICITY FOR ALTERNATION:** If the user wants to match one of several options (e.g., "cat or dog"), you MUST build this one piece at a time.
+    *   First, generate the \`ALTERNATION\` block (usually inside a \`GROUP\`).
+    *   Next, generate a \`LITERAL\` for the **first option** (e.g., "cat").
+    *   Next, generate a \`LITERAL\` for the **second option** (e.g., "dog").
+    *   ...and so on for each option.
+    *   You are **STRICTLY FORBIDDEN** from creating a single \`LITERAL\` that contains multiple options like \`"cat|dog|fish"\`. Each option is its own atomic step.
 4.  **USE PRE-DEFINED BLOCKS:** Your generated 'block' object MUST be one of the simple, predefined types our application supports. Do not invent complex blocks.
-    *   **GROUP / ALTERNATION:** When the user's goal requires grouping or alternation (e.g., \`(cat|dog)\`), you must build it atomically. First, generate the empty \`GROUP\` or \`ALTERNATION\` block. In the *next step*, generate the first child (e.g., a \`LITERAL\` for "cat"). Do not generate containers with children already inside them.
     *   **LITERAL:** For a single character or short, simple string (e.g., \`@\`, \`.\`, \`cat\`). **DO NOT** generate the \`|\` character inside a \`LITERAL\` block. It must be created via an \`ALTERNATION\` block. Each \`LITERAL\` must contain non-empty text.
     *   **CHARACTER_CLASS:** For a set of characters. CRITICAL: The \`pattern\` must be for **ONE ATOMIC ELEMENT**. Valid examples: \`a-z\`, \`A-Z\`, \`0-9\`, \`\\w\`, \`\\s\`, \`\\d\`. **YOU ARE FORBIDDEN** from creating complex patterns like \`[a-zA-Z0-9._%+-]\` in a single step. If a user needs a combination like "any letter or digit", you should suggest the \`\\w\` shorthand if it fits, or build it up over multiple steps.
     *   **QUANTIFIER:** For repetition (e.g., \`+\`, \`*\`, \`?\`). This block always follows another block.
@@ -144,12 +148,16 @@ Based on the goal and the previous steps, provide a **new, alternative, single, 
 
 **CRITICAL CANONS OF REGEX CONSTRUCTION (YOU MUST OBEY THESE):**
 1.  **DIFFERENT & BETTER:** The new step must be a different approach or a more correct version of the rejected one.
-2.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step.
-3.  **ATOMICITY IS LAW:** The step must correspond to **ONE** simple block (e.g., \`[a-z]\`, \`+\`, \`\\b\`). Do not combine concepts.
+2.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step. The step must correspond to **ONE** simple block (e.g., \`[a-z]\`, \`+\`, \`\\b\`). Do not combine concepts.
+3.  **STRICT ATOMICITY FOR ALTERNATION:** If the user wants to match one of several options (e.g., "cat or dog"), you MUST build this one piece at a time.
+    *   First, generate the \`ALTERNATION\` block (usually inside a \`GROUP\`).
+    *   Next, generate a \`LITERAL\` for the **first option** (e.g., "cat").
+    *   Next, generate a \`LITERAL\` for the **second option** (e.g., "dog").
+    *   ...and so on for each option.
+    *   You are **STRICTLY FORBIDDEN** from creating a single \`LITERAL\` that contains multiple options like \`"cat|dog|fish"\`. Each option is its own atomic step.
 4.  **USE PRE-DEFINED BLOCKS:** Your generated 'block' object MUST be one of the simple, predefined types our application supports. Do not invent complex blocks.
-    *   **GROUP / ALTERNATION:** When the user's goal requires grouping or alternation (e.g., \`(cat|dog)\`), you must build it atomically. First, generate the empty \`GROUP\` or \`ALTERNATION\` block. In the *next step*, generate the first child (e.g., a \`LITERAL\` for "cat"). Do not generate containers with children already inside them.
     *   **LITERAL:** For a single character or short, simple string (e.g., \`@\`, \`.\`, \`cat\`). **DO NOT** generate the \`|\` character inside a \`LITERAL\` block. It must be created via an \`ALTERNATION\` block. Each \`LITERAL\` must contain non-empty text.
-    *   **CHARACTER_CLASS:** For a set of characters. CRITICAL: The \`pattern\` must be for **ONE ATOMIC ELEMENT**. Valid examples: \`a-z\`, \`A-Z\`, \`0-9\`, \`\\w\`, \`\\s\`, \`\\d\`. **YOU ARE FORBIDDEN** from creating complex patterns like \`[a-zA-Z0-9._%+-]\` in a single step. If a user needs a combination like "any letter or digit", you should suggest the \`\\w\` shorthand if it fits, or build it up over multiple steps.
+    *   **CHARACTER_CLASS:** For a set of characters. CRITICAL: The \`pattern\` must be for **ONE ATOMIC ELEMENT**. Valid examples: \`a-z\`, \`A-Z\`, \`0-9\`, \`\\w\`, \`\\s\`, \`\\d\`. **YOU ARE FORBIDDEN** from creating complex patterns like \`[a-zA-Z0-9._%+-]\` in a single step.
     *   **QUANTIFIER:** For repetition (e.g., \`+\`, \`*\`, \`?\`).
     *   **ANCHOR:** For positions (e.g., \`^\`, \`$\`, \`\\b\`).
 5.  **EXPLANATION (in Russian):** Provide a very short, clear explanation for the new step.
