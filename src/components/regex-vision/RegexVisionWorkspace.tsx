@@ -308,7 +308,6 @@ const RegexVisionWorkspace: React.FC = () => {
       } else {
         setBlocks(prev => [...prev, processedBlock]);
       }
-      setSelectedBlockId(processedBlock.id);
       toast({ title: 'Блок добавлен!', description: `Блок был добавлен в конструктор.` });
   }, [toast]);
 
@@ -320,6 +319,62 @@ const RegexVisionWorkspace: React.FC = () => {
     setBlocks([]);
     setGuidedModeState(null);
   }, []);
+
+  const handleGenerateNextGuidedStep = async () => {
+    if (!guidedModeState) return;
+
+    setGuidedModeState(prev => ({ ...prev!, isLoading: true }));
+    try {
+        const newStep = await generateNextGuidedStep({
+            query: guidedModeState.query,
+            exampleTestText: guidedModeState.exampleTestText,
+            existingSteps: guidedModeState.steps,
+        });
+        setGuidedModeState(prev => ({
+            ...prev!,
+            steps: [...prev!.steps, newStep],
+            isLoading: false
+        }));
+        if (newStep.isFinalStep) {
+            toast({ title: "План завершен!", description: "AI считает, что это был последний необходимый шаг." });
+        }
+    } catch (error) {
+        console.error("Failed to generate next step:", error);
+        toast({ title: "Ошибка AI", description: "Не удалось сгенерировать следующий шаг.", variant: "destructive" });
+        setGuidedModeState(prev => ({ ...prev!, isLoading: false }));
+    }
+  };
+
+  const handleRegenerateGuidedStep = async (indexToRegen: number) => {
+    if (!guidedModeState) return;
+
+    // This implementation will use the isLoading flag from the parent
+    // to show a global loading state. A local state in GuidedStepsPanel
+    // will handle the specific button's spinner.
+    setGuidedModeState(prev => ({ ...prev!, isLoading: true }));
+    try {
+        const stepToRegenerate = guidedModeState.steps[indexToRegen];
+        const stepsSoFar = guidedModeState.steps.slice(0, indexToRegen);
+
+        const newStep = await regenerateGuidedStep({
+            query: guidedModeState.query,
+            exampleTestText: guidedModeState.exampleTestText,
+            stepsSoFar,
+            stepToRegenerate
+        });
+        
+        setGuidedModeState(prev => {
+            const newSteps = [...prev!.steps];
+            newSteps[indexToRegen] = newStep;
+            return { ...prev!, steps: newSteps, isLoading: false };
+        });
+
+    } catch (error) {
+        console.error("Failed to regenerate step:", error);
+        toast({ title: "Ошибка AI", description: "Не удалось перегенерировать шаг.", variant: "destructive" });
+        setGuidedModeState(prev => ({ ...prev!, isLoading: false }));
+    }
+  };
 
 
   const handleUpdateBlock = useCallback((id: string, updatedBlockData: Partial<Block>) => {
@@ -1106,23 +1161,19 @@ const RegexVisionWorkspace: React.FC = () => {
                             onClose={() => setSelectedBlockId(null)}
                         />
                       ) : guidedModeState ? (
-                        guidedModeState.isLoading ? (
-                            <div className="flex items-center justify-center h-full text-muted-foreground">
-                                <Loader2 className="h-6 w-6 animate-spin mr-3" />
-                                <span>AI генерирует первый шаг...</span>
-                            </div>
-                        ) : (
-                            <GuidedStepsPanel
+                          <GuidedStepsPanel
                                 query={guidedModeState.query}
                                 exampleTestText={guidedModeState.exampleTestText}
-                                initialSteps={guidedModeState.steps}
+                                steps={guidedModeState.steps}
+                                isLoading={guidedModeState.isLoading}
                                 onAddStep={handleAddStepBlock}
                                 onFinish={handleClearGuidedMode}
                                 onResetAndFinish={handleResetAndClearGuidedMode}
                                 selectedBlockId={selectedBlockId}
                                 blocks={blocks}
+                                onNextStep={handleGenerateNextGuidedStep}
+                                onRegenerate={handleRegenerateGuidedStep}
                             />
-                        )
                       ) : null}
                    </div>
                 </ResizablePanel>

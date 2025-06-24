@@ -1,6 +1,6 @@
 
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { Block } from './types';
 import { BlockType } from './types';
 import type { GuidedRegexStep } from '@/ai/flows/schemas';
@@ -8,46 +8,47 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { PlusCircle, CheckCircle, RefreshCw, Bot, Loader2, Wand2 } from 'lucide-react';
-import { generateNextGuidedStep, regenerateGuidedStep } from '@/ai/flows/guided-regex-flow';
 import { useToast } from '@/hooks/use-toast';
 
 interface GuidedStepsPanelProps {
   query: string;
   exampleTestText: string;
-  initialSteps: GuidedRegexStep[];
+  steps: GuidedRegexStep[];
+  isLoading: boolean;
   onAddStep: (block: Block, parentId: string | null) => void;
   onFinish: () => void;
   onResetAndFinish: () => void;
   selectedBlockId: string | null;
   blocks: Block[];
+  onNextStep: () => Promise<void>;
+  onRegenerate: (index: number) => Promise<void>;
 }
 
 const GuidedStepsPanel: React.FC<GuidedStepsPanelProps> = ({
   query,
   exampleTestText,
-  initialSteps,
+  steps,
+  isLoading,
   onAddStep,
   onFinish,
   onResetAndFinish,
   selectedBlockId,
   blocks,
+  onNextStep,
+  onRegenerate,
 }) => {
-  const [steps, setSteps] = useState<GuidedRegexStep[]>(initialSteps);
   const [addedIndices, setAddedIndices] = useState<Set<number>>(new Set());
-  const [isLoadingNext, setIsLoadingNext] = useState(false);
   const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null);
-  const [isPlanComplete, setIsPlanComplete] = useState(false);
-  const { toast } = useToast();
-
-  useEffect(() => {
+  
+  const isPlanComplete = useMemo(() => {
     const lastStep = steps[steps.length - 1];
-    if (lastStep?.isFinalStep) {
-        setIsPlanComplete(true);
-    } else {
-        setIsPlanComplete(false);
-    }
+    return lastStep?.isFinalStep;
   }, [steps]);
 
+  // Reset added steps when the underlying steps array changes from the parent
+  useEffect(() => {
+    setAddedIndices(new Set());
+  }, [steps]);
 
   const handleAdd = (block: Block, index: number) => {
     let parentId: string | null = null;
@@ -71,60 +72,17 @@ const GuidedStepsPanel: React.FC<GuidedStepsPanelProps> = ({
     onAddStep(block, parentId);
     setAddedIndices(prev => new Set(prev).add(index));
   };
-
-  const handleNextStep = async () => {
-    setIsLoadingNext(true);
-    try {
-      const newStep = await generateNextGuidedStep({
-        query,
-        exampleTestText,
-        existingSteps: steps,
-      });
-      setSteps(prev => [...prev, newStep]);
-      if (newStep.isFinalStep) {
-          toast({ title: "План завершен!", description: "AI считает, что это был последний необходимый шаг." });
-      }
-    } catch (error) {
-      console.error("Failed to generate next step:", error);
-      toast({ title: "Ошибка AI", description: "Не удалось сгенерировать следующий шаг.", variant: "destructive" });
-    } finally {
-      setIsLoadingNext(false);
-    }
-  };
   
-  const handleRegenerate = async (indexToRegen: number) => {
-    setRegeneratingIndex(indexToRegen);
-    try {
-        const stepToRegenerate = steps[indexToRegen];
-        const stepsSoFar = steps.slice(0, indexToRegen);
-
-        const newStep = await regenerateGuidedStep({
-            query,
-            exampleTestText,
-            stepsSoFar,
-            stepToRegenerate
-        });
-
-        setSteps(prev => {
-            const newSteps = [...prev];
-            newSteps[indexToRegen] = newStep;
-            return newSteps;
-        });
-        // Allow re-adding the new step
-        setAddedIndices(prev => {
-            const newAdded = new Set(prev);
-            newAdded.delete(indexToRegen);
-            return newAdded;
-        });
-
-    } catch (error) {
-      console.error("Failed to regenerate step:", error);
-      toast({ title: "Ошибка AI", description: "Не удалось перегенерировать шаг.", variant: "destructive" });
-    } finally {
-        setRegeneratingIndex(null);
-    }
+  const handleRegenerateClick = async (index: number) => {
+    setRegeneratingIndex(index);
+    await onRegenerate(index);
+    setAddedIndices(prev => {
+        const newAdded = new Set(prev);
+        newAdded.delete(index);
+        return newAdded;
+    });
+    setRegeneratingIndex(null);
   };
-
 
   return (
     <Card className="h-full shadow-none border-0 flex flex-col">
@@ -143,7 +101,7 @@ const GuidedStepsPanel: React.FC<GuidedStepsPanelProps> = ({
                     </div>
                 </div>
                 <div className="flex items-center justify-end gap-2">
-                   <Button size="sm" variant="ghost" onClick={() => handleRegenerate(index)} disabled={regeneratingIndex !== null || isLoadingNext}>
+                   <Button size="sm" variant="ghost" onClick={() => handleRegenerateClick(index)} disabled={isLoading || regeneratingIndex !== null}>
                        {regeneratingIndex === index ? (
                            <><Loader2 size={16} className="mr-2 animate-spin"/> Перегенерация...</>
                        ) : (
@@ -157,7 +115,7 @@ const GuidedStepsPanel: React.FC<GuidedStepsPanelProps> = ({
                 </div>
               </Card>
             ))}
-             {isLoadingNext && (
+             {isLoading && !regeneratingIndex && (
                 <div className="flex items-center justify-center p-4 text-muted-foreground">
                     <Loader2 size={20} className="mr-2 animate-spin" />
                     <span>AI генерирует следующий шаг...</span>
@@ -176,8 +134,8 @@ const GuidedStepsPanel: React.FC<GuidedStepsPanelProps> = ({
                 <p className="text-xs mt-1">AI считает, что выражение готово. Вы можете перегенерировать шаги или завершить работу.</p>
             </div>
         ) : (
-            <Button onClick={handleNextStep} disabled={isLoadingNext || regeneratingIndex !== null} className="w-full">
-                {isLoadingNext ? <><Loader2 size={16} className="mr-2 animate-spin" /> Загрузка...</> : <><Wand2 size={16} className="mr-2"/> Сгенерировать следующий шаг</>}
+            <Button onClick={onNextStep} disabled={isLoading || regeneratingIndex !== null} className="w-full">
+                {isLoading ? <><Loader2 size={16} className="mr-2 animate-spin" /> Загрузка...</> : <><Wand2 size={16} className="mr-2"/> Сгенерировать следующий шаг</>}
             </Button>
         )}
         <div className="w-full flex justify-between gap-2">
