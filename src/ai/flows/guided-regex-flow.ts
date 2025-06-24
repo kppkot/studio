@@ -82,7 +82,7 @@ Based on all the information above, determine the **next single, atomic step**.
 
 **SPECIAL RULE FOR ALTERNATION (CHOICES):**
 While most steps must be atomic, handling choices like "yahoo.com, hotmail.com, or gmail.com" is an exception. When you need to create a set of choices, you MUST generate the entire \`GROUP\` containing the \`ALTERNATION\` and its children as **ONE SINGLE STEP**.
-Your explanation for this step should still be simple, like "Создадим группу для возможных доменов". The generated block should be a \`GROUP\` block containing an \`ALTERNATION\` block. The \`ALTERNATION\` block, in turn, MUST contain multiple child \`LITERAL\` blocks, **where each literal block's \`text\` setting is filled with one of the actual choices (e.g., "yahoo.com", "hotmail.com").** Do not leave the text empty.
+Your explanation for this step should still be simple, like "Создадим группу для возможных доменов". The generated block structure must be: A \`GROUP\` block, containing one \`ALTERNATION\` block as its only child. This \`ALTERNATION\` block, in turn, MUST contain multiple child \`LITERAL\` blocks. Crucially, **each literal block's \`settings.text\` property MUST be filled with one of the actual string choices** (e.g., "yahoo.com", "hotmail.com"). It is a critical error to leave the \`text\` property empty.
 
 Generate the JSON for the next single step, adhering strictly to the canons.
 `,
@@ -163,7 +163,7 @@ Based on the goal and the previous steps, provide a **new, alternative, single, 
 7.  **FINAL STEP:** If this new, alternative step now **completes** the regex and fully satisfies the user's request, you MUST set the \`isFinalStep\` field to \`true\` in your JSON output.
 
 **SPECIAL RULE FOR ALTERNATION (CHOICES):**
-If you determine that the best alternative is a set of choices (e.g., matching 'cat' or 'dog'), you MUST generate the entire \`GROUP\` containing the \`ALTERNATION\` and its children as **ONE SINGLE STEP**. The \`ALTERNATION\` block MUST contain child \`LITERAL\` blocks, **each filled with the text for one of the choices.**
+If you determine that the best alternative is a set of choices (e.g., matching 'cat' or 'dog'), you MUST generate the entire \`GROUP\` containing the \`ALTERNATION\` and its children as **ONE SINGLE STEP**. The generated block structure must be: A \`GROUP\` block, containing one \`ALTERNATION\` block as its only child. This \`ALTERNATION\` block, in turn, MUST contain multiple child \`LITERAL\` blocks. Crucially, **each literal block's \`settings.text\` property MUST be filled with one of the actual string choices.** It is a critical error to leave the \`text\` property empty.
 
 Generate the JSON for the new alternative single step, adhering strictly to the canons.
 `,
