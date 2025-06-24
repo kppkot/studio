@@ -1,5 +1,4 @@
 
-'use server';
 /**
  * @fileOverview ARCHIVED smart dispatch logic for natural language regex generation.
  * This file contains the router-based approach that was previously used to handle
