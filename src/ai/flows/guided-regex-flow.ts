@@ -66,7 +66,7 @@ Your task is to take a user's query, an example text, and the steps already crea
 Based on all the information above, determine the **next single, atomic step**.
 
 **CRITICAL CANONS OF REGEX CONSTRUCTION (YOU MUST OBEY THESE):**
-1.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step, unless the "Special Rule for Alternation" applies.
+1.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step.
 2.  **ATOMICITY IS LAW:** Each step must correspond to **ONE** single, simple block. Do not combine concepts. For example, to match \`[a-z]+\`, you must first generate a \`CHARACTER_CLASS\` block for \`a-z\`, and in the *next* step, generate the \`QUANTIFIER\` block for \`+\`.
 3.  **LOGICAL ORDER:** Build the regex in a logical order, usually from left to right as it would appear in the final expression. Analyze the \`existingSteps\` and the \`exampleTestText\` to decide what comes next. For an email, a good sequence would be: \`word characters\` -> \`+\` -> \`@\` -> \`domain characters\` -> \`+\` -> \`.\` -> \`tld characters\`. **Do not jump around.** If the user has just added \`@\`, the next step should be something that comes *after* it, like the domain name. Always re-read the user's ultimate goal to make sure your plan is correct.
 4.  **USE PRE-DEFINED BLOCKS:** Your generated 'block' object MUST be one of the simple, predefined types our application supports. Do not invent complex blocks. Choose from this list:
@@ -75,14 +75,10 @@ Based on all the information above, determine the **next single, atomic step**.
     *   **QUANTIFIER:** For repetition (e.g., \`+\`, \`*\`, \`?\`). This block always follows another block.
     *   **ANCHOR:** For positions (e.g., \`^\`, \`$\`, \`\\b\`).
     *   **GROUP:** To group other blocks together. Start with an empty group.
-    *   **ALTERNATION:** This block is for creating 'OR' logic (like \`cat|dog\`). See the special rule below.
+    *   **ALTERNATION:** This block is for creating 'OR' logic (like \`cat|dog\`).
 5.  **EXPLANATION (in Russian):** Provide a very short, clear explanation of what this single block does and why it's the next logical step.
 6.  **CORRECT BLOCK STRUCTURE:** The 'block' object must be a valid JSON object matching the Block schema.
 7.  **FINAL STEP:** After analyzing the goal and existing steps, if you determine that this new step **completes** the regex and fully satisfies the user's request, you MUST set the \`isFinalStep\` field to \`true\` in your JSON output. Otherwise, omit it or set it to \`false\`.
-
-**SPECIAL RULE FOR ALTERNATION (CHOICES):**
-While most steps must be atomic, handling choices like "yahoo.com, hotmail.com, or gmail.com" is an exception. When you need to create a set of choices, you MUST generate the entire \`GROUP\` containing the \`ALTERNATION\` and its children as **ONE SINGLE STEP**.
-Your explanation for this step should still be simple, like "Создадим группу для возможных доменов". The generated block structure must be: A \`GROUP\` block, containing one \`ALTERNATION\` block as its only child. This \`ALTERNATION\` block, in turn, MUST contain multiple child \`LITERAL\` blocks. Crucially, **each literal block's \`settings.text\` property MUST be filled with one of the actual string choices** (e.g., "yahoo.com", "hotmail.com"). It is a critical error to leave the \`text\` property empty.
 
 Generate the JSON for the next single step, adhering strictly to the canons.
 `,
@@ -149,7 +145,7 @@ Based on the goal and the previous steps, provide a **new, alternative, single, 
 
 **CRITICAL CANONS OF REGEX CONSTRUCTION (YOU MUST OBEY THESE):**
 1.  **DIFFERENT & BETTER:** The new step must be a different approach or a more correct version of the rejected one.
-2.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step, unless the "Special Rule for Alternation" applies (see below).
+2.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step.
 3.  **ATOMICITY IS LAW:** The step must correspond to **ONE** simple block (e.g., \`[a-z]\`, \`+\`, \`\\b\`). Do not combine concepts.
 4.  **USE PRE-DEFINED BLOCKS:** Your generated 'block' object MUST be one of the simple, predefined types our application supports. Do not invent complex blocks. Choose from this list:
     *   **LITERAL:** For a single character or short, simple string. **DO NOT** generate the \`|\` character.
@@ -157,13 +153,10 @@ Based on the goal and the previous steps, provide a **new, alternative, single, 
     *   **QUANTIFIER:** For repetition (e.g., \`+\`, \`*\`, \`?\`).
     *   **ANCHOR:** For positions (e.g., \`^\`, \`$\`, \`\\b\`).
     *   **GROUP:** To group other blocks together.
-    *   **ALTERNATION:** To handle 'OR' logic. See special rule.
+    *   **ALTERNATION:** To handle 'OR' logic.
 5.  **EXPLANATION (in Russian):** Provide a very short, clear explanation for the new step.
 6.  **CORRECT BLOCK STRUCTURE:** The 'block' object must be a valid JSON object.
 7.  **FINAL STEP:** If this new, alternative step now **completes** the regex and fully satisfies the user's request, you MUST set the \`isFinalStep\` field to \`true\` in your JSON output.
-
-**SPECIAL RULE FOR ALTERNATION (CHOICES):**
-If you determine that the best alternative is a set of choices (e.g., matching 'cat' or 'dog'), you MUST generate the entire \`GROUP\` containing the \`ALTERNATION\` and its children as **ONE SINGLE STEP**. The generated block structure must be: A \`GROUP\` block, containing one \`ALTERNATION\` block as its only child. This \`ALTERNATION\` block, in turn, MUST contain multiple child \`LITERAL\` blocks. Crucially, **each literal block's \`settings.text\` property MUST be filled with one of the actual string choices.** It is a critical error to leave the \`text\` property empty.
 
 Generate the JSON for the new alternative single step, adhering strictly to the canons.
 `,
