@@ -66,10 +66,17 @@ Your task is to take a user's query, an example text, and the steps already crea
 Based on all the information above, determine the **next single, atomic step**.
 
 **CRITICAL CANONS OF REGEX CONSTRUCTION (YOU MUST OBEY THESE):**
-1.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step. Do NOT create a list or an array of steps.
-2.  **ATOMICITY IS LAW:** Each step must correspond to **ONE** single, simple block. Do not combine concepts. For example, instead of a single block for \`[a-z]+\`, you must first generate the block for \`[a-z]\`, and in the *next* step, generate the \`+\` quantifier. A word boundary \`\\b\` is a separate step. A literal \`cat\` is a separate step.
-3.  **EXPLANATION:** Provide a very short, clear explanation in Russian of what this block does and why it's the next logical step in building the regex.
-4.  **CORRECT BLOCK STRUCTURE:** The 'block' object must be a valid JSON object matching the Block schema.
+1.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step.
+2.  **ATOMICITY IS LAW:** Each step must correspond to **ONE** single, simple block. Do not combine concepts. For example, to match \`[a-z]+\`, you must first generate a \`CHARACTER_CLASS\` block for \`a-z\`, and in the *next* step, generate the \`QUANTIFIER\` block for \`+\`.
+3.  **LOGICAL ORDER:** Build the regex in a logical order, usually from left to right as it would appear in the final expression. Analyze the \`existingSteps\` and the \`exampleTestText\` to decide what comes next. For an email, a good sequence would be: \`word characters\` -> \`+\` -> \`@\` -> \`domain characters\` -> \`+\` -> \`.\` -> \`tld characters\`. **Do not jump around.** If the user has just added \`@\`, the next step should be something that comes *after* it, like the domain name.
+4.  **USE PRE-DEFINED BLOCKS:** Your generated 'block' object MUST be one of the simple, predefined types our application supports. Do not invent complex blocks. Choose from this list:
+    *   **LITERAL:** For a single character or short, simple string (e.g., \`@\`, \`.\`).
+    *   **CHARACTER_CLASS:** For a set of characters. CRITICAL: Keep the \`pattern\` simple (e.g., \`a-z\`, \`0-9\`, or a single shorthand like \`\\w\`, \`\\s\`, \`\\d\`). **DO NOT** create complex patterns like \`[a-zA-Z0-9._%+-]\`. Break them down into multiple steps if needed.
+    *   **QUANTIFIER:** For repetition (e.g., \`+\`, \`*\`, \`?\`). This block always follows another block.
+    *   **ANCHOR:** For positions (e.g., \`^\`, \`$\`, \`\\b\`).
+    *   **GROUP:** To group other blocks together. Start with an empty group.
+5.  **EXPLANATION (in Russian):** Provide a very short, clear explanation of what this single block does and why it's the next logical step.
+6.  **CORRECT BLOCK STRUCTURE:** The 'block' object must be a valid JSON object matching the Block schema.
 
 Generate the JSON for the next single step, adhering strictly to the canons.
 `,
@@ -135,11 +142,17 @@ A user is building a regex and was not satisfied with the last step you provided
 Based on the goal and the previous steps, provide a **new, alternative, single, atomic step** to replace the rejected one.
 
 **CRITICAL CANONS OF REGEX CONSTRUCTION (YOU MUST OBEY THESE):**
-1.  **DIFFERENT & BETTER:** The new step should be a different approach or a more correct version of the rejected one.
-2.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step. Do NOT create a list.
-3.  **ATOMICITY IS LAW:** The step must correspond to **ONE** simple block (e.g., \`[a-z]\`, \`+\`, \`\\b\`).
-4.  **EXPLANATION:** Provide a very short, clear explanation in Russian for the new step.
-5.  **CORRECT BLOCK STRUCTURE:** The 'block' object must be a valid JSON object.
+1.  **DIFFERENT & BETTER:** The new step must be a different approach or a more correct version of the rejected one.
+2.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step.
+3.  **ATOMICITY IS LAW:** The step must correspond to **ONE** simple block (e.g., \`[a-z]\`, \`+\`, \`\\b\`). Do not combine concepts.
+4.  **USE PRE-DEFINED BLOCKS:** Your generated 'block' object MUST be one of the simple, predefined types our application supports. Do not invent complex blocks. Choose from this list:
+    *   **LITERAL:** For a single character or short, simple string (e.g., \`@\`, \`.\`).
+    *   **CHARACTER_CLASS:** For a set of characters. CRITICAL: Keep the \`pattern\` simple (e.g., \`a-z\`, \`0-9\`, or a single shorthand like \`\\w\`, \`\\s\`, \`\\d\`). **DO NOT** create complex patterns like \`[a-zA-Z0-9._%+-]\`.
+    *   **QUANTIFIER:** For repetition (e.g., \`+\`, \`*\`, \`?\`).
+    *   **ANCHOR:** For positions (e.g., \`^\`, \`$\`, \`\\b\`).
+    *   **GROUP:** To group other blocks together.
+5.  **EXPLANATION (in Russian):** Provide a very short, clear explanation for the new step.
+6.  **CORRECT BLOCK STRUCTURE:** The 'block' object must be a valid JSON object.
 
 Generate the JSON for the new alternative single step, adhering strictly to the canons.
 `,
