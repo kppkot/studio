@@ -1,3 +1,4 @@
+
 "use client";
 import React, { useState, useEffect, useCallback } from 'react';
 import type { BlockConfig } from './types';
@@ -176,81 +177,83 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
           </div>
         </CardHeader>
         
-        <ScrollArea className="overflow-y-auto">
-          <div className="p-3 space-y-2">
-            {isLoadingAi && <p className="text-sm text-muted-foreground p-2 text-center">Загрузка AI подсказок...</p>}
-            
-            {showAiSuggestions && (
-              <div className="mb-3">
-                <h4 className="text-xs font-semibold text-muted-foreground mb-1 uppercase flex items-center gap-1.5"><Bot size={14} /> AI Подсказки</h4>
-                {aiSuggestions.map((suggestion, index) => (
-                  <Button
-                    key={`ai-${index}`}
-                    variant="ghost"
-                    onClick={() => handleAddAiSuggestion(suggestion)}
-                    className="w-full justify-start h-auto py-2 px-3 text-left mb-1"
-                  >
-                    <span className="font-mono text-xs bg-accent/20 text-accent-foreground p-1 rounded-sm mr-2 break-all">{suggestion}</span>
-                  </Button>
-                ))}
-                <hr className="my-2"/>
-              </div>
-            )}
+        <div className="overflow-y-auto">
+          <ScrollArea className="h-full">
+            <div className="p-3 space-y-2">
+              {isLoadingAi && <p className="text-sm text-muted-foreground p-2 text-center">Загрузка AI подсказок...</p>}
+              
+              {showAiSuggestions && (
+                <div className="mb-3">
+                  <h4 className="text-xs font-semibold text-muted-foreground mb-1 uppercase flex items-center gap-1.5"><Bot size={14} /> AI Подсказки</h4>
+                  {aiSuggestions.map((suggestion, index) => (
+                    <Button
+                      key={`ai-${index}`}
+                      variant="ghost"
+                      onClick={() => handleAddAiSuggestion(suggestion)}
+                      className="w-full justify-start h-auto py-2 px-3 text-left mb-1"
+                    >
+                      <span className="font-mono text-xs bg-accent/20 text-accent-foreground p-1 rounded-sm mr-2 break-all">{suggestion}</span>
+                    </Button>
+                  ))}
+                  <hr className="my-2"/>
+                </div>
+              )}
 
-            {showWizard && !showAiSuggestions && (
-              <Accordion type="multiple" className="w-full" defaultValue={WIZARD_CATEGORIES.map(cat => cat.name)}>
-                {WIZARD_CATEGORIES.map((category, index) => (
-                  <AccordionItem value={category.name} key={category.name}>
-                    <AccordionTrigger className="text-sm font-semibold hover:no-underline py-2 px-1">
-                      <div className="flex items-center">
-                         {category.icon}
-                         {`${index + 1}. ${category.name}`}
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="pb-1">
-                      {category.actions.map(action => (
-                        <Button
-                          key={action.label}
-                          variant="ghost"
-                          onClick={() => handleAddBlockFromWizard(action.type, action.settings)}
-                          className="w-full justify-start h-auto py-2.5 px-2 text-left mb-1 flex flex-col items-start"
-                        >
-                          <div className="flex items-center w-full">
-                            <ChevronRight size={14} className="mr-1.5 text-muted-foreground" />
-                            <span className="font-medium text-sm">{action.label}</span>
-                          </div>
-                          {action.description && <p className="text-xs text-muted-foreground ml-[22px] mt-0.5 text-left">{action.description}</p>}
-                        </Button>
-                      ))}
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            )}
+              {showWizard && !showAiSuggestions && (
+                <Accordion type="multiple" className="w-full" defaultValue={WIZARD_CATEGORIES.map(cat => cat.name)}>
+                  {WIZARD_CATEGORIES.map((category, index) => (
+                    <AccordionItem value={category.name} key={category.name}>
+                      <AccordionTrigger className="text-sm font-semibold hover:no-underline py-2 px-1">
+                        <div className="flex items-center">
+                           {category.icon}
+                           {`${index + 1}. ${category.name}`}
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="pb-1">
+                        {category.actions.map(action => (
+                          <Button
+                            key={action.label}
+                            variant="ghost"
+                            onClick={() => handleAddBlockFromWizard(action.type, action.settings)}
+                            className="w-full justify-start h-auto py-2.5 px-2 text-left mb-1 flex flex-col items-start"
+                          >
+                            <div className="flex items-center w-full">
+                              <ChevronRight size={14} className="mr-1.5 text-muted-foreground" />
+                              <span className="font-medium text-sm">{action.label}</span>
+                            </div>
+                            {action.description && <p className="text-xs text-muted-foreground ml-[22px] mt-0.5 text-left">{action.description}</p>}
+                          </Button>
+                        ))}
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              )}
 
-            {showFilteredBlocks && filteredRawBlocks.length === 0 && !isLoadingAi && (
-              <p className="text-sm text-muted-foreground p-2 text-center">Блоки не найдены.</p>
-            )}
+              {showFilteredBlocks && filteredRawBlocks.length === 0 && !isLoadingAi && (
+                <p className="text-sm text-muted-foreground p-2 text-center">Блоки не найдены.</p>
+              )}
 
-            {showFilteredBlocks && filteredRawBlocks.map(([type, config]) => (
-              <Button
-                key={type}
-                variant="ghost"
-                onClick={() => handleAddPredefinedBlock(type)}
-                className="w-full justify-start h-auto py-2 px-3 text-left"
-              >
-                <span className={cn(
-                  "p-1.5 rounded-sm mr-2 flex items-center justify-center h-7 w-7",
-                  "bg-primary/10 text-primary"
-                )}>
-                   {typeof config.icon === 'string' ? <span className="font-mono text-xs">{config.icon}</span> : config.icon}
-                </span>
-                <span className="font-medium text-sm">{config.name}</span>
-                 {type === BlockType.QUANTIFIER && <span className="text-xs text-muted-foreground ml-1">(применяется к предыдущему)</span>}
-              </Button>
-            ))}
-          </div>
-        </ScrollArea>
+              {showFilteredBlocks && filteredRawBlocks.map(([type, config]) => (
+                <Button
+                  key={type}
+                  variant="ghost"
+                  onClick={() => handleAddPredefinedBlock(type)}
+                  className="w-full justify-start h-auto py-2 px-3 text-left"
+                >
+                  <span className={cn(
+                    "p-1.5 rounded-sm mr-2 flex items-center justify-center h-7 w-7",
+                    "bg-primary/10 text-primary"
+                  )}>
+                     {typeof config.icon === 'string' ? <span className="font-mono text-xs">{config.icon}</span> : config.icon}
+                  </span>
+                  <span className="font-medium text-sm">{config.name}</span>
+                   {type === BlockType.QUANTIFIER && <span className="text-xs text-muted-foreground ml-1">(применяется к предыдущему)</span>}
+                </Button>
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
       </Card>
     </>
   );
