@@ -8,40 +8,8 @@ const escapeRegexCharsForGenerator = (text: string): string => {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-export const createAnchor = (type: AnchorSettings['type']): Block => ({
-  id: generateId(), type: BlockType.ANCHOR, settings: { type } as AnchorSettings, children: [], isExpanded: false
-});
-
 export const createLiteral = (text: string, isRawRegex = false): Block => ({
   id: generateId(), type: BlockType.LITERAL, settings: {text, isRawRegex} as LiteralSettings, children: [], isExpanded: false
-});
-
-export const createCharClass = (pattern: string, negated = false): Block => ({
-  id: generateId(), type: BlockType.CHARACTER_CLASS, settings: {pattern, negated} as CharacterClassSettings, children: [], isExpanded: false
-});
-
-export const createQuantifier = (type: QuantifierSettings['type'], min?: number, max?: number | null, mode: QuantifierSettings['mode'] = 'greedy'): Block => ({
-  id: generateId(), type: BlockType.QUANTIFIER, settings: {type, min, max, mode} as QuantifierSettings, children: [], isExpanded: false
-});
-
-export const createSequenceGroup = (children: Block[], type: GroupSettings['type'] = 'non-capturing', name?:string): Block => ({
-  id: generateId(), type: BlockType.GROUP, settings: {type, name} as GroupSettings, children, isExpanded: true
-});
-
-export const createAlternation = (options: Block[]): Block => ({
-    id: generateId(),
-    type: BlockType.ALTERNATION,
-    children: options,
-    settings: {},
-    isExpanded: true
-});
-
-export const createLookaround = (type: LookaroundSettings['type'], children: Block[]): Block => ({
-  id: generateId(), type: BlockType.LOOKAROUND, settings: {type} as LookaroundSettings, children, isExpanded: true
-});
-
-export const createBackreference = (ref: string | number): Block => ({
-  id: generateId(), type: BlockType.BACKREFERENCE, settings: { ref } as BackreferenceSettings, children: [], isExpanded: false
 });
 
 export const cloneBlockForState = (block: Block): Block => {
@@ -56,103 +24,6 @@ export const cloneBlockForState = (block: Block): Block => {
       newBlock.children = newBlock.children || [];
   }
   return newBlock;
-};
-
-export const generateBlocksForEmail = (forExtraction: boolean = false): Block[] => {
-    const localPart = createCharClass('a-zA-Z0-9._%+-', false);
-    const localPartQuantifier = createQuantifier('+');
-    const at = createLiteral('@');
-    const domainPart = createCharClass('a-zA-Z0-9.-', false);
-    const domainPartQuantifier = createQuantifier('+');
-    const dot = createLiteral('.');
-    const tldPart = createCharClass('a-zA-Z', false);
-    const tldQuantifier = createQuantifier('{n,m}', 2, 6);
-
-    const emailCoreBlocks: Block[] = [
-        localPart, localPartQuantifier, at, domainPart, domainPartQuantifier, dot, tldPart, tldQuantifier
-    ];
-    if (forExtraction) {
-        return [createAnchor('\\b'), ...emailCoreBlocks, createAnchor('\\b')];
-    }
-    return [createAnchor('^'), ...emailCoreBlocks, createAnchor('$')];
-};
-
-export const generateBlocksForURL = (forExtraction: boolean = false, requireProtocol: boolean = true): Block[] => {
-    const protocolHttp = createLiteral('http');
-    const optionalS = createQuantifier('?');
-    const sWithQuantifier = createSequenceGroup([createLiteral('s'), optionalS], 'non-capturing');
-
-    const colonSlashSlash = createLiteral('://');
-    const protocolGroup = createSequenceGroup([protocolHttp, sWithQuantifier, colonSlashSlash], 'non-capturing');
-    
-    if (!requireProtocol) {
-      protocolGroup.children.push(createQuantifier('?'));
-    }
-
-    const domainChars = createCharClass('a-zA-Z0-9.-', false);
-    const domainQuant = createQuantifier('+');
-    
-    const pathChars = createCharClass('/a-zA-Z0-9._~:/?#\\[\\]@!$&\'()*+,;=-', false);
-    const pathQuant = createQuantifier('*');
-    
-    const urlCore = [protocolGroup, domainChars, domainQuant, pathChars, pathQuant];
-    
-    if (forExtraction) {
-        return [createAnchor('\\b'), ...urlCore, createAnchor('\\b')];
-    }
-    return [createAnchor('^'), ...urlCore, createAnchor('$')];
-};
-
-export const generateBlocksForIPv4 = (): Block[] => {
-  const buildOctet = () => [
-    createCharClass('\\d'),
-    createQuantifier('{n,m}', 1, 3)
-  ];
-  
-  const ipCore = [
-    ...buildOctet(), createLiteral('.'),
-    ...buildOctet(), createLiteral('.'),
-    ...buildOctet(), createLiteral('.'),
-    ...buildOctet()
-  ];
-  
-  return [createAnchor('\\b'), ...ipCore, createAnchor('\\b')];
-};
-
-export const generateBlocksForIPv6 = (): Block[] => {
-  const ipv6Regex = "(?:[0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,7}:|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}|(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}|(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}|(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:(?:(?::[0-9a-fA-F]{1,4}){1,6})|:(?:(?::[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(?::[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(?:ffff(?::0{1,4}){0,1}:){0,1}(?:(?:25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(?:25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9])|(?:[0-9a-fA-F]{1,4}:){1,4}:(?:(?:25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(?:25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9])";
-  const ipCore = [ { id: generateId(), type: BlockType.LITERAL, settings: { text: ipv6Regex, isRawRegex: true } as LiteralSettings, children: [], isExpanded: false } ];
-
-  return [createAnchor('\\b'), ...ipCore, createAnchor('\\b')];
-};
-
-export const generateBlocksForDuplicateWords = (): Block[] => {
-  const wordChars = createCharClass('\\w+');
-  const wordGroup = createSequenceGroup([wordChars], 'capturing');
-  const spaceChars = createCharClass('\\s+');
-  const backreference = createBackreference(1);
-  return [createAnchor('\\b'), wordGroup, spaceChars, backreference, createAnchor('\\b')];
-};
-
-export const generateBlocksForMultipleSpaces = (): Block[] => {
-  return [createCharClass('\\s'), createQuantifier('{n,}', 2)];
-};
-
-export const generateBlocksForTabsToSpaces = (): Block[] => {
-  return [createCharClass('\\t')];
-};
-
-export const generateBlocksForNumbers = (): Block[] => {
-    const sign = createCharClass('+-');
-    const optionalSign = createSequenceGroup([sign, createQuantifier('?')]);
-    
-    const digits = createCharClass('\\d+');
-    const decimalPart = createSequenceGroup([createLiteral('.'), createCharClass('\\d+')], 'non-capturing');
-    const optionalDecimal = createSequenceGroup([decimalPart, createQuantifier('?')]);
-    
-    const numberCore = [optionalSign, digits, optionalDecimal];
-    
-    return [createAnchor('\\b'), ...numberCore, createAnchor('\\b')];
 };
 
 export const generateRegexStringAndGroupInfo = (blocks: Block[]): { regexString: string; groupInfos: GroupInfo[] } => {

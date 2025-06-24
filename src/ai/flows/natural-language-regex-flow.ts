@@ -2,8 +2,6 @@
 'use server';
 /**
  * @fileOverview An AI agent that generates regular expressions from natural language.
- * It uses a router to handle known patterns with predefined generators, and
- * falls back to a general-purpose AI prompt for custom requests.
  *
  * - generateRegexFromNaturalLanguage - A function that handles regex generation.
  * - NaturalLanguageRegexInput - The input type.
@@ -12,9 +10,9 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import type { Block, CharacterClassSettings, GroupSettings, LiteralSettings, AnchorSettings, LookaroundSettings } from '@/components/regex-vision/types';
+import type { Block, LiteralSettings } from '@/components/regex-vision/types';
 import { BlockType } from '@/components/regex-vision/types';
-import { generateBlocksForIPv4, generateBlocksForIPv6, generateBlocksForEmail, generateBlocksForURL, generateBlocksForDuplicateWords, generateBlocksForMultipleSpaces, generateBlocksForTabsToSpaces, generateBlocksForNumbers, generateRegexStringAndGroupInfo, generateId, processAiBlocks, createLiteral, breakdownComplexCharClasses, correctAndSanitizeAiBlocks, isRegexValid } from '@/components/regex-vision/utils';
+import { generateRegexStringAndGroupInfo, generateId, processAiBlocks, breakdownComplexCharClasses, correctAndSanitizeAiBlocks, isRegexValid } from '@/components/regex-vision/utils';
 import { NaturalLanguageRegexOutputSchema, type NaturalLanguageRegexOutput } from './schemas';
 
 const NaturalLanguageRegexInputSchema = z.object({
@@ -22,123 +20,11 @@ const NaturalLanguageRegexInputSchema = z.object({
 });
 export type NaturalLanguageRegexInput = z.infer<typeof NaturalLanguageRegexInputSchema>;
 
-// Router prompt to classify the user's query
-const KnownPatternSchema = z.enum([
-    'email', 'url', 'ipv4', 'ipv6', 
-    'duplicate_words', 'multiple_spaces', 'tabs_to_spaces', 'numbers',
-    'unknown'
-]);
 
-const RouterOutputSchema = z.object({
-    pattern: KnownPatternSchema.describe("The general category of regex the user is asking for. If it's not a standard known pattern, classify as 'unknown'."),
-    urlRequiresProtocol: z.boolean().optional().describe("For URL patterns, set to true if the user explicitly requires http/https.")
-});
-
-const routerPrompt = ai.definePrompt({
-  name: 'regexRouterPrompt',
-  input: { schema: NaturalLanguageRegexInputSchema },
-  output: { schema: RouterOutputSchema },
-  prompt: `You are a regex query classifier. Analyze the user's query and classify it into one of the known patterns. Your goal is to handle simple, generic requests with predefined patterns, and pass more specific or complex requests to a more powerful AI by classifying them as 'unknown'.
-    
-    Known Patterns:
-    - email: For finding or validating any generic email addresses.
-    - url: For finding or validating any generic URLs.
-    - ipv4: For IPv4 addresses (e.g., 192.168.1.1).
-    - ipv6: For IPv6 addresses.
-    - duplicate_words: For finding repeated words next to each other.
-    - multiple_spaces: For finding blocks of 2 or more spaces.
-    - tabs_to_spaces: For finding tabs to replace them with spaces.
-    - numbers: For finding integers or decimal numbers.
-    - unknown: For any query that is more specific than the general patterns above.
-    
-    **CRITICAL RULE:** If the user's query is a specific *type* of a general category, you MUST classify it as 'unknown'. The 'unknown' classification will pass the query to a more powerful, general-purpose generator that can handle the specifics. Only classify as a known pattern if the user asks for the generic, broad case.
-
-    Examples:
-    - "find an email address" -> 'email'
-    - "find a gmail address" -> 'unknown' (This is a specific type of email)
-    - "match a URL" -> 'url'
-    - "extract a YouTube video ID from a URL" -> 'unknown' (This is a specific task related to URLs)
-    - "найти ЛЮБОЙ YOUTUBE ID" -> 'unknown'
-    - "find any number" -> 'numbers'
-    - "find a 5-digit number" -> 'unknown' (This is a specific type of number)
-    - "find duplicate words" -> 'duplicate_words'
-    
-    If the user asks to validate something, still classify it by the pattern type (e.g., "validate email" -> 'email'). The system will handle the generation logic.
-    
-    User Query: {{{query}}}
-    `,
-});
-
-// The main flow that orchestrates everything
+// The main flow that orchestrates everything.
+// The smart dispatch logic has been disabled as per request. Codeword: ОПТИМИЗАЦИЯ
 export async function generateRegexFromNaturalLanguage(input: NaturalLanguageRegexInput): Promise<NaturalLanguageRegexOutput> {
-  const { output: route } = await routerPrompt(input);
-
-  if (route && route.pattern !== 'unknown') {
-    let blocks: Block[] = [];
-    let explanation = "";
-    let exampleTestText = "";
-    let recommendedFlags = "";
-
-    switch (route.pattern) {
-      case 'ipv4':
-        blocks = generateBlocksForIPv4();
-        explanation = "Находит IPv4-адреса в тексте. Этот шаблон ищет адреса, окруженные границами слов (пробелы, начало/конец строки), но не проверяет, является ли вся строка IP-адресом.";
-        exampleTestText = "Primary server: 192.168.1.1, backup is 10.0.0.1. Invalid: 999.999.999.999";
-        break;
-      case 'ipv6':
-        blocks = generateBlocksForIPv6();
-        explanation = "Находит IPv6-адреса в тексте. Из-за сложности IPv6, он представлен как один блок.";
-        exampleTestText = "The server at 2001:0db8:85a3::8a2e:0370:7334 is the main one.";
-        break;
-      case 'email':
-        blocks = generateBlocksForEmail(true);
-        explanation = "Находит все email-адреса в тексте, используя границы слов для точности.";
-        exampleTestText = "Contact us at support@example.com or info@example.org.";
-        break;
-      case 'url':
-        blocks = generateBlocksForURL(true, route.urlRequiresProtocol ?? false);
-        explanation = "Находит все URL-адреса в тексте. Может включать или не включать требование протокола http/https.";
-        exampleTestText = "Visit our site: https://www.example.com or check www.anothersite.co.uk for more info.";
-        break;
-      case 'duplicate_words':
-         blocks = generateBlocksForDuplicateWords();
-         explanation = "Находит слова, которые повторяются подряд (например, 'the the').";
-         exampleTestText = "This is a a test of the the emergency system.";
-         recommendedFlags = "i";
-         break;
-      case 'multiple_spaces':
-         blocks = generateBlocksForMultipleSpaces();
-         explanation = "Находит два или более пробельных символа подряд.";
-         exampleTestText = "Too  many   spaces here.";
-         break;
-      case 'tabs_to_spaces':
-          blocks = generateBlocksForTabsToSpaces();
-          explanation = "Находит символы табуляции.";
-          exampleTestText = "Column1\tColumn2\tColumn3";
-          break;
-      case 'numbers':
-          blocks = generateBlocksForNumbers();
-          explanation = "Находит целые или десятичные числа, включая отрицательные. Использует границы слов, чтобы не совпадать с числами, являющимися частью слов.";
-          exampleTestText = "The values are -10, 3.14, and 42. But not value123.";
-          break;
-    }
-    
-    if (blocks.length > 0) {
-      const { regexString } = generateRegexStringAndGroupInfo(blocks);
-      const sanitizedBlocks = correctAndSanitizeAiBlocks(blocks);
-      const processedBlocks = breakdownComplexCharClasses(sanitizedBlocks);
-      const finalBlocks = processAiBlocks(processedBlocks);
-      return {
-        regex: regexString,
-        explanation,
-        parsedBlocks: finalBlocks,
-        exampleTestText,
-        recommendedFlags,
-      };
-    }
-  }
-
-  // Fallback to the general-purpose AI generator if router fails or classifies as 'unknown'
+  // Always use the general-purpose generator directly.
   return generalPurposeRegexGenerator(input);
 }
 
@@ -147,13 +33,25 @@ const generalPurposeGeneratorPrompt = ai.definePrompt({
   name: 'naturalLanguageRegexPrompt',
   input: {schema: NaturalLanguageRegexInputSchema},
   output: {schema: NaturalLanguageRegexOutputSchema},
-  prompt: `You are an expert Regex assistant. The user's query did not match any standard, pre-defined patterns, so you need to generate a custom regex. Based on the user's natural language query, generate an optimal and correct regular expression.
-Provide the regex string itself, a concise explanation in Russian of how it works, and if possible, a structured representation of the regex as an array of 'parsedBlocks'.
-Additionally, provide an 'exampleTestText' field containing a short, relevant example string that would be suitable for testing the generated regex. This text should ideally contain at least one match for the regex, but also some non-matching parts if appropriate for context.
+  prompt: `You are an expert Regex assistant. Your primary task is to help a user by generating a custom regex from their natural language query. Your process MUST follow two steps:
+
+**Step 1: Generate Example Text.**
+First, analyze the user's query. Based on the query, create a short but comprehensive 'exampleTestText'. This text is crucial. It must be relevant and suitable for testing the regex you are about to create. It should ideally contain examples of what should match and what shouldn't.
+
+**Step 2: Generate the Regex and its breakdown.**
+Second, using BOTH the original user query AND the 'exampleTestText' you just created as context, generate the final regular expression.
+
+Your output must be a single JSON object containing:
+1. 'regex': The final regex string.
+2. 'explanation': A concise explanation in Russian of how it works.
+3. 'exampleTestText': The test text you generated in Step 1.
+4. 'parsedBlocks': A structured representation of the regex as an array of 'parsedBlocks'.
+5. 'recommendedFlags': Any recommended flags (e.g., 'i', 'm').
 
 User Query: {{{query}}}
 
 **IMPORTANT INSTRUCTIONS:**
+*   **Follow the steps:** Do not skip Step 1. The 'exampleTestText' is mandatory.
 *   **Flags:** Do not include inline flags in the regex string (like \`(?i)\`). Instead, use the 'recommendedFlags' field in the output JSON. If the user asks for "case-insensitive", "ignore case", etc., add 'i' to the 'recommendedFlags' string. If they ask for "multiline", add 'm'. If they ask for "dot all" or "single line", add 's'. Combine flags if needed (e.g., "im"). Do NOT include the 'g' (global) flag, as the UI handles it by default.
 *   **Word Boundaries:** If the user asks to find a "word", you MUST wrap the pattern in \`\\b\` anchors. Example: for "find the word cat", generate \`\\bcat\\b\`.
 
@@ -185,7 +83,7 @@ If the query is too vague or cannot be reasonably translated, please indicate th
   },
 });
 
-// This flow is now the fallback for general-purpose requests.
+// This flow is now the primary generator.
 const generalPurposeRegexGenerator = ai.defineFlow(
   {
     name: 'generalPurposeRegexGenerator',
