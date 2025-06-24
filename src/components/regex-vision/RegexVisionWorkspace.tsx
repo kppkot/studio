@@ -586,7 +586,6 @@ const RegexVisionWorkspace: React.FC = () => {
 
   const selectedBlock = selectedBlockId ? findBlockRecursive(blocks, selectedBlockId) : null;
   
-  // Find the group index for the selected block if it's a capturing group
   const highlightedGroupIndex = React.useMemo(() => {
     if (selectedBlock && (selectedBlock.type === BlockType.GROUP)) {
       const groupInfo = regexOutput.groupInfos.find(gi => gi.blockId === selectedBlock.id);
@@ -765,7 +764,7 @@ const RegexVisionWorkspace: React.FC = () => {
         setBlocks(parsedBlocksFromAI);
         toast({ title: "Паттерн применен и разобран!", description: `"${pattern.name}" загружен и преобразован в блоки.` });
       } else {
-        const fallbackBlock = createLiteral(pattern.regexString); 
+        const fallbackBlock = createLiteral(pattern.regexString, true); 
         setBlocks([fallbackBlock]);
         toast({ title: "Паттерн применен (как литерал)", description: `"${pattern.name}" загружен. AI не смог разобрать его на блоки.` });
       }
@@ -774,7 +773,7 @@ const RegexVisionWorkspace: React.FC = () => {
       }
     } catch (error) {
       console.error("Error parsing pattern with AI:", error);
-      const fallbackBlock = createLiteral(pattern.regexString);
+      const fallbackBlock = createLiteral(pattern.regexString, true);
       setBlocks([fallbackBlock]);
       toast({ title: "Паттерн применен (ошибка AI)", description: `"${pattern.name}" загружен. Произошла ошибка при попытке разбора AI.`, variant: "destructive" });
     }
@@ -843,6 +842,23 @@ const RegexVisionWorkspace: React.FC = () => {
       toast({ title: "Блоки объединены!", description: `Добавлено ${movedCountResult} вариант(а).` });
     }
   }, [blocks, toast]);
+
+  const handleApplyFix = useCallback((fixResult: NaturalLanguageRegexOutput) => {
+    if (fixResult.parsedBlocks && fixResult.parsedBlocks.length > 0) {
+      setBlocks(fixResult.parsedBlocks);
+    }
+    if (fixResult.recommendedFlags) {
+       const currentGlobalFlag = regexFlags.includes('g') ? 'g' : '';
+      const otherFlags = fixResult.recommendedFlags.replace(/g/g, '');
+      const finalFlags = Array.from(new Set(currentGlobalFlag + otherFlags)).join('');
+      setRegexFlags(finalFlags);
+    }
+    if(fixResult.exampleTestText) {
+        setTestText(fixResult.exampleTestText);
+    }
+    setRegexError(null); 
+    setSelectedBlockId(null);
+  }, [regexFlags]);
 
 
   const headerHeight = "60px";
@@ -984,6 +1000,7 @@ const RegexVisionWorkspace: React.FC = () => {
                   generatedRegex={regexOutput.regexString}
                   testText={testText}
                   errorContext={regexError ?? undefined}
+                  onFixApplied={handleApplyFix}
                 />
               </div>
             </ResizablePanel>

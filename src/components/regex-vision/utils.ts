@@ -12,8 +12,8 @@ export const createAnchor = (type: AnchorSettings['type']): Block => ({
   id: generateId(), type: BlockType.ANCHOR, settings: { type } as AnchorSettings, children: [], isExpanded: false
 });
 
-export const createLiteral = (text: string): Block => ({
-  id: generateId(), type: BlockType.LITERAL, settings: {text} as LiteralSettings, children: [], isExpanded: false
+export const createLiteral = (text: string, isRawRegex = false): Block => ({
+  id: generateId(), type: BlockType.LITERAL, settings: {text, isRawRegex} as LiteralSettings, children: [], isExpanded: false
 });
 
 export const createCharClass = (pattern: string, negated = false): Block => ({
@@ -238,8 +238,8 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): { regexString:
       case BlockType.CONDITIONAL:
          const condSettings = settings as ConditionalSettings;
          const { condition, yesPattern, noPattern } = condSettings;
-         const yesStr = generateRecursiveWithGroupInfo(createLiteral(yesPattern));
-         const noStr = noPattern ? `|${generateRecursiveWithGroupInfo(createLiteral(noPattern))}` : '';
+         const yesStr = generateRecursiveWithGroupInfo(createLiteral(yesPattern, true));
+         const noStr = noPattern ? `|${generateRecursiveWithGroupInfo(createLiteral(noPattern, true))}` : '';
          return `(?(${condition})${yesStr}${noStr})`;
       default:
         return processChildren(block);
@@ -297,6 +297,42 @@ export const breakdownPatternIntoChildren = (pattern: string): Block[] => {
   }
   return components;
 }
+
+/**
+ * Recursively traverses blocks and breaks down complex character classes into child blocks.
+ * e.g., a CHARACTER_CLASS with pattern `[a-z0-9]` becomes a CHARACTER_CLASS
+ * with children: a CHARACTER_CLASS for `a-z` and a CHARACTER_CLASS for `0-9`.
+ */
+export const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
+  if (!blocks) return [];
+  return blocks.map(block => {
+    // Recurse first to handle nested blocks
+    if (block.children && block.children.length > 0) {
+      block.children = breakdownComplexCharClasses(block.children);
+    }
+
+    if (block.type === BlockType.CHARACTER_CLASS && (!block.children || block.children.length === 0)) {
+      const settings = block.settings as CharacterClassSettings;
+      const pattern = settings.pattern;
+      
+      const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];
+      if (pattern && !specialShorthands.includes(pattern)) {
+        const newChildren = breakdownPatternIntoChildren(pattern);
+        
+        if (newChildren.length > 1) { 
+          return {
+            ...block,
+            settings: { ...settings, pattern: '' }, // The pattern is now represented by children
+            children: newChildren,
+            isExpanded: true,
+          };
+        }
+      }
+    }
+    return block;
+  });
+};
+
 
 export const processAiBlocks = (aiBlocks: any[]): Block[] => {
   if (!aiBlocks || !Array.isArray(aiBlocks)) {
@@ -361,4 +397,60 @@ export const processAiBlocks = (aiBlocks: any[]): Block[] => {
 
     return newBlock;
   });
+};
+
+export const isRegexValid = (regex: string): boolean => {
+  if (!regex) return false;
+  try {
+    new RegExp(regex);
+    return true;
+  } catch (e) {
+    return false;
+  }
+};
+
+export const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
+    if (!blocks) return [];
+    return blocks.map(block => {
+        let correctedBlock = { ...block };
+
+        if (correctedBlock.type === BlockType.LITERAL) {
+            const settings = correctedBlock.settings as LiteralSettings;
+            if (settings.isRawRegex) { // Do not correct raw regex literals
+                return correctedBlock;
+            }
+            const text = settings.text || '';
+            
+            const knownCharClasses = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S'];
+            if (knownCharClasses.includes(text)) {
+                correctedBlock.type = BlockType.CHARACTER_CLASS;
+                correctedBlock.settings = { pattern: text, negated: false } as CharacterClassSettings;
+                return correctedBlock;
+            }
+            if (text === '.') {
+                correctedBlock.type = BlockType.CHARACTER_CLASS;
+                correctedBlock.settings = { pattern: '.', negated: false } as CharacterClassSettings;
+                return correctedBlock;
+            }
+
+            const knownAnchors = ['^', '$', '\\b', '\\B'];
+            if (knownAnchors.includes(text)) {
+                correctedBlock.type = BlockType.ANCHOR;
+                correctedBlock.settings = { type: text } as AnchorSettings;
+                return correctedBlock;
+            }
+            
+            if (text.startsWith('\\') && text.length === 2 && !knownCharClasses.includes(text) && !knownAnchors.includes(text)) {
+                 if(text !== '\\.'){
+                    (correctedBlock.settings as LiteralSettings).text = text.charAt(1);
+                 }
+            }
+        }
+        
+        if (correctedBlock.children && correctedBlock.children.length > 0) {
+            correctedBlock.children = correctAndSanitizeAiBlocks(correctedBlock.children);
+        }
+
+        return correctedBlock;
+    });
 };

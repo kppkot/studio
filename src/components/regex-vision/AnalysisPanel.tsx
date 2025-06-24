@@ -3,8 +3,9 @@ import React, { useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Lightbulb, Bot, Loader2, RefreshCw } from 'lucide-react';
+import { Lightbulb, Bot, Loader2, Sparkles } from 'lucide-react';
 import { analyzeRegex } from '@/ai/flows/analyze-regex-flow';
+import { fixRegex, type FixRegexOutput } from '@/ai/flows/fix-regex-flow';
 import { useToast } from '@/hooks/use-toast';
 
 interface AnalysisPanelProps {
@@ -13,19 +14,57 @@ interface AnalysisPanelProps {
   testText: string;
   errorContext?: string;
   isVisible: boolean;
+  onFixApplied: (fixResult: FixRegexOutput) => void;
 }
 
-const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ originalQuery, generatedRegex, testText, errorContext, isVisible }) => {
+const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ originalQuery, generatedRegex, testText, errorContext, isVisible, onFixApplied }) => {
   const [analysis, setAnalysis] = useState<string | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
 
+  const handleFixClick = useCallback(async () => {
+    setIsProcessing(true);
+    setAnalysis(null);
+    try {
+      const result = await fixRegex({
+        originalQuery: originalQuery || "Цель не была указана.",
+        faultyRegex: generatedRegex,
+        testText,
+        errorContext: errorContext || "Нет ошибок от движка.",
+      });
+      
+      setAnalysis(result.explanation);
+      if (result.parsedBlocks && result.parsedBlocks.length > 0) {
+        onFixApplied(result);
+        toast({
+          title: "AI предложил исправление!",
+          description: "Выражение в конструкторе было обновлено.",
+        });
+      } else {
+         toast({
+          title: "AI не смог предложить исправление",
+          description: result.explanation,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Fix AI Error:", error);
+      toast({
+        title: "Ошибка исправления",
+        description: "Не удалось получить исправление от AI.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [originalQuery, generatedRegex, testText, errorContext, toast, onFixApplied]);
+
   const handleAnalyzeClick = useCallback(async () => {
-    setIsAnalyzing(true);
+    setIsProcessing(true);
     setAnalysis(null);
     try {
       const result = await analyzeRegex({
-        originalQuery: originalQuery || "Цель не была указана (например, из библиотеки или ручной ввод).",
+        originalQuery: originalQuery || "Цель не была указана.",
         generatedRegex,
         testText,
         errorContext: errorContext || "Нет ошибок от движка.",
@@ -39,9 +78,10 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ originalQuery, generatedR
         variant: "destructive",
       });
     } finally {
-      setIsAnalyzing(false);
+      setIsProcessing(false);
     }
   }, [originalQuery, generatedRegex, testText, errorContext, toast]);
+
 
   if (!isVisible) {
     return null;
@@ -54,13 +94,18 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ originalQuery, generatedR
           <CardTitle className="text-base flex items-center gap-2 text-amber-700 dark:text-amber-400">
             <Bot size={18} /> AI Анализ и Помощь
           </CardTitle>
-          <Button onClick={handleAnalyzeClick} disabled={isAnalyzing} size="sm">
-            {isAnalyzing ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Анализирую...</>
-            ) : (
-              <><Lightbulb className="mr-2 h-4 w-4" /> Объяснить, почему это не работает</>
-            )}
-          </Button>
+          <div className="flex items-center gap-2">
+             <Button onClick={handleAnalyzeClick} disabled={isProcessing} size="sm" variant="outline">
+                <Lightbulb className="mr-2 h-4 w-4" /> Объяснить
+            </Button>
+            <Button onClick={handleFixClick} disabled={isProcessing} size="sm">
+              {isProcessing ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Обработка...</>
+              ) : (
+                <><Sparkles className="mr-2 h-4 w-4" /> Попробовать исправить</>
+              )}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       {analysis && (
@@ -71,12 +116,6 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ originalQuery, generatedR
                 {analysis}
              </AlertDescription>
           </Alert>
-          <div className="mt-3 text-right">
-              <Button variant="outline" disabled>
-                  <RefreshCw size={16} className="mr-2"/>
-                  Попробовать исправить (скоро)
-              </Button>
-          </div>
         </CardContent>
       )}
     </Card>

@@ -14,137 +14,13 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import type { Block, CharacterClassSettings, GroupSettings, LiteralSettings, AnchorSettings, LookaroundSettings } from '@/components/regex-vision/types';
 import { BlockType } from '@/components/regex-vision/types';
-import { generateBlocksForIPv4, generateBlocksForIPv6, generateBlocksForEmail, generateBlocksForURL, generateBlocksForDuplicateWords, generateBlocksForMultipleSpaces, generateBlocksForTabsToSpaces, generateBlocksForNumbers, generateRegexStringAndGroupInfo, generateId, processAiBlocks, createLiteral } from '@/components/regex-vision/utils';
+import { generateBlocksForIPv4, generateBlocksForIPv6, generateBlocksForEmail, generateBlocksForURL, generateBlocksForDuplicateWords, generateBlocksForMultipleSpaces, generateBlocksForTabsToSpaces, generateBlocksForNumbers, generateRegexStringAndGroupInfo, generateId, processAiBlocks, createLiteral, breakdownComplexCharClasses, correctAndSanitizeAiBlocks, isRegexValid } from '@/components/regex-vision/utils';
+import { NaturalLanguageRegexOutputSchema, type NaturalLanguageRegexOutput } from './schemas';
 
 const NaturalLanguageRegexInputSchema = z.object({
   query: z.string().describe('The natural language query describing the desired regex.'),
 });
 export type NaturalLanguageRegexInput = z.infer<typeof NaturalLanguageRegexInputSchema>;
-
-const BlockSchema: z.ZodTypeAny = z.lazy(() =>
-  z.object({
-    type: z.nativeEnum(BlockType).describe('The type of the block.'),
-    settings: z.any().describe('An object containing settings specific to the block type. Examples: LITERAL: {"text": "abc"}, CHARACTER_CLASS: {"pattern": "[a-z]", "negated": false}, QUANTIFIER: {"type": "*", "mode": "greedy"}, GROUP: {"type": "capturing", "name": "myGroup"}.'),
-    children: z.array(BlockSchema).optional().describe('An array of child block objects, used for container types like GROUP, ALTERNATION, LOOKAROUND, CONDITIONAL.'),
-  })
-);
-
-const NaturalLanguageRegexOutputSchema = z.object({
-  regex: z.string().describe('The generated regular expression string.'),
-  explanation: z.string().describe('A concise explanation of how the generated regex works.'),
-  parsedBlocks: z.array(BlockSchema).optional().describe('An array of block objects representing the parsed regex structure. If parsing is not possible, this can be empty or omitted.'),
-  exampleTestText: z.string().optional().describe('An example text string that would match the generated regex or be relevant for testing it.'),
-  recommendedFlags: z.string().optional().describe("A string of recommended flags based on the user's query (e.g., 'i', 'm', 's'). Only include flags if explicitly requested. Do not include 'g'."),
-});
-export type NaturalLanguageRegexOutput = z.infer<typeof NaturalLanguageRegexOutputSchema>;
-
-const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
-  return blocks.flatMap(block => {
-    if (block.type === BlockType.CHARACTER_CLASS) {
-      const settings = block.settings as CharacterClassSettings;
-      const pattern = settings.pattern;
-      
-      // Do not break down special shorthands (\d, \w, etc.), single characters, or negated classes
-      if (settings.negated || !pattern || pattern.length <= 1 || (pattern.startsWith('\\') && pattern.length === 2) || pattern === '.') {
-         if (block.children && block.children.length > 0) {
-            return { ...block, children: breakdownComplexCharClasses(block.children) };
-         }
-        return block;
-      }
-      
-      const components: Block[] = [];
-      const predefinedRanges: { [key: string]: string } = { 'a-z': 'a-z', 'A-Z': 'A-Z', '0-9': '0-9' };
-      let remainingPattern = pattern;
-
-      // Extract predefined ranges
-      Object.keys(predefinedRanges).forEach(rangeKey => {
-        if (remainingPattern.includes(rangeKey)) {
-          components.push({ id: generateId(), type: BlockType.CHARACTER_CLASS, settings: { pattern: rangeKey, negated: false } as CharacterClassSettings, children: [], isExpanded: false });
-          remainingPattern = remainingPattern.replace(new RegExp(rangeKey.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), '');
-        }
-      });
-      
-      // Treat remaining characters as individual literals
-      if (remainingPattern.length > 0) {
-         for (const char of remainingPattern) {
-           // If the char is a special regex char that needs escaping, treat it as a literal
-           components.push({ id: generateId(), type: BlockType.LITERAL, settings: { text: char } as LiteralSettings, children: [], isExpanded: false });
-        }
-      }
-      
-      if (components.length > 1) {
-        // Wrap multiple components in a non-capturing group with an alternation
-        return { id: generateId(), type: BlockType.CHARACTER_CLASS, settings: { pattern: '', negated: false } as CharacterClassSettings, children: components, isExpanded: true };
-      } else if (components.length === 1) {
-        // If only one component remains, return it directly
-        return components[0];
-      }
-    }
-
-    if (block.children && block.children.length > 0) {
-      return { ...block, children: breakdownComplexCharClasses(block.children) };
-    }
-    return block;
-  });
-};
-
-
-const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
-    if (!blocks) return [];
-    return blocks.map(block => {
-        let correctedBlock = { ...block };
-
-        if (correctedBlock.type === BlockType.LITERAL) {
-            const settings = correctedBlock.settings as LiteralSettings;
-            if (settings.isRawRegex) { // Do not correct raw regex literals
-                return correctedBlock;
-            }
-            const text = settings.text || '';
-            
-            const knownCharClasses = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S'];
-            if (knownCharClasses.includes(text)) {
-                correctedBlock.type = BlockType.CHARACTER_CLASS;
-                correctedBlock.settings = { pattern: text, negated: false } as CharacterClassSettings;
-                return correctedBlock;
-            }
-            if (text === '.') {
-                correctedBlock.type = BlockType.CHARACTER_CLASS;
-                correctedBlock.settings = { pattern: '.', negated: false } as CharacterClassSettings;
-                return correctedBlock;
-            }
-
-            const knownAnchors = ['^', '$', '\\b', '\\B'];
-            if (knownAnchors.includes(text)) {
-                correctedBlock.type = BlockType.ANCHOR;
-                correctedBlock.settings = { type: text } as AnchorSettings;
-                return correctedBlock;
-            }
-            
-            if (text.startsWith('\\') && text.length === 2 && !knownCharClasses.includes(text) && !knownAnchors.includes(text)) {
-                 if(text !== '\\.'){
-                    (correctedBlock.settings as LiteralSettings).text = text.charAt(1);
-                 }
-            }
-        }
-        
-        if (correctedBlock.children && correctedBlock.children.length > 0) {
-            correctedBlock.children = correctAndSanitizeAiBlocks(correctedBlock.children);
-        }
-
-        return correctedBlock;
-    });
-};
-
-const isRegexValid = (regex: string): boolean => {
-  if (!regex) return false;
-  try {
-    new RegExp(regex);
-    return true;
-  } catch (e) {
-    return false;
-  }
-};
-
 
 // Router prompt to classify the user's query
 const KnownPatternSchema = z.enum([
