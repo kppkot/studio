@@ -178,8 +178,8 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
             </div>
           </div>
 
-          <ScrollArea className="flex-1 p-3">
-            <div className="space-y-2">
+          <ScrollArea className="flex-1">
+            <div className="p-3 space-y-2">
               {isLoadingAi && <p className="text-sm text-muted-foreground p-2 text-center">Загрузка AI подсказок...</p>}
               
               {showAiSuggestions && (
@@ -260,5 +260,3 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
 };
 
 export default BlockPalette;
-
-    
