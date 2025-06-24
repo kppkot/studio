@@ -78,6 +78,7 @@ Based on all the information above, determine the **next single, atomic step**.
     *   **ALTERNATION:** This block is for creating 'OR' logic (like \`cat|dog\`). See the special rule below.
 5.  **EXPLANATION (in Russian):** Provide a very short, clear explanation of what this single block does and why it's the next logical step.
 6.  **CORRECT BLOCK STRUCTURE:** The 'block' object must be a valid JSON object matching the Block schema.
+7.  **FINAL STEP:** After analyzing the goal and existing steps, if you determine that this new step **completes** the regex and fully satisfies the user's request, you MUST set the \`isFinalStep\` field to \`true\` in your JSON output. Otherwise, omit it or set it to \`false\`.
 
 **SPECIAL RULE FOR ALTERNATION (CHOICES):**
 While most steps must be atomic, handling choices like "yahoo.com, hotmail.com, or gmail.com" is an exception. When you need to create a set of choices, you MUST generate the entire \`GROUP\` containing the \`ALTERNATION\` and its children as **ONE SINGLE STEP**.
@@ -159,6 +160,7 @@ Based on the goal and the previous steps, provide a **new, alternative, single, 
     *   **ALTERNATION:** To handle 'OR' logic. See special rule.
 5.  **EXPLANATION (in Russian):** Provide a very short, clear explanation for the new step.
 6.  **CORRECT BLOCK STRUCTURE:** The 'block' object must be a valid JSON object.
+7.  **FINAL STEP:** If this new, alternative step now **completes** the regex and fully satisfies the user's request, you MUST set the \`isFinalStep\` field to \`true\` in your JSON output.
 
 **SPECIAL RULE FOR ALTERNATION (CHOICES):**
 If you determine that the best alternative is a set of choices (e.g., matching 'cat' or 'dog'), you MUST generate the entire \\\`GROUP\\\` containing the \\\`ALTERNATION\\\` and its children as **ONE SINGLE STEP**.

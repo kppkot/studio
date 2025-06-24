@@ -34,6 +34,7 @@ export type GuidedRegexInput = z.infer<typeof GuidedRegexInputSchema>;
 export const GuidedRegexStepSchema = z.object({
     explanation: z.string().describe('A very short, clear explanation in Russian of what this block does and why it is the next logical step in building the regex.'),
     block: BlockSchema.describe('A single, atomic regex block for this step.'),
+    isFinalStep: z.boolean().optional().describe('Set to true if this is the final step needed to complete the regex. Otherwise, omit or set to false.'),
 });
 export type GuidedRegexStep = z.infer<typeof GuidedRegexStepSchema>;
 
