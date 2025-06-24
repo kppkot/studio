@@ -6,7 +6,7 @@ import { BLOCK_CONFIGS } from './constants';
 import { getRegexSuggestion } from '@/ai/flows/regex-suggestion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Plus, X, Search, Bot, ChevronRight, Sparkles, AlignLeft, Milestone, Combine, GitFork, Repeat, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -155,7 +155,7 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
   return (
     <>
       <div className="fixed inset-0 bg-black/30 z-40 backdrop-blur-sm" onClick={onToggle} aria-hidden="true" />
-      <Card className="fixed bottom-6 right-6 w-96 max-h-[calc(100vh-6rem)] flex flex-col shadow-xl z-50 border-primary">
+      <Card className="fixed bottom-6 right-6 w-96 max-h-[calc(100vh-6rem)] grid grid-rows-[auto_1fr] shadow-xl z-50 border-primary overflow-hidden">
         <CardHeader className="py-3 px-4 border-b">
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg">Добавить блок</CardTitle>
@@ -176,7 +176,7 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
           </div>
         </CardHeader>
         
-        <ScrollArea className="flex-1 min-h-0">
+        <ScrollArea className="overflow-y-auto">
           <div className="p-3 space-y-2">
             {isLoadingAi && <p className="text-sm text-muted-foreground p-2 text-center">Загрузка AI подсказок...</p>}
             
