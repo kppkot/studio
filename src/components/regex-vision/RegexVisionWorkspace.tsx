@@ -1095,7 +1095,7 @@ const RegexVisionWorkspace: React.FC = () => {
                 <ResizableHandle withHandle />
                  <ResizablePanel defaultSize={40} minSize={25} maxSize={50} className="overflow-hidden">
                    <div className="h-full m-2 ml-0 shadow-md border-primary/20 rounded-lg overflow-hidden bg-card">
-                      {selectedBlockId && selectedBlock ? (
+                      {selectedBlockId ? (
                         <SettingsPanel
                             block={selectedBlock}
                             onUpdate={handleUpdateBlock}
