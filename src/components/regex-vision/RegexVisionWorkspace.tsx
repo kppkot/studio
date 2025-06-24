@@ -354,9 +354,7 @@ const RegexVisionWorkspace: React.FC = () => {
     } else {
       setBlocks(prev => [...prev, processedBlock]);
     }
-    // Don't auto-select block when adding from guided mode to keep the panel open
-    // setSelectedBlockId(processedBlock.id);
-    toast({ title: 'Блок добавлен!', description: `Блок был добавлен в конструктор.` });
+    setSelectedBlockId(processedBlock.id);
   }, [toast, blocks, selectedBlockId]);
 
   const handleClearGuidedMode = useCallback(() => {
