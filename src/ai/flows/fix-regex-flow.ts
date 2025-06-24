@@ -2,6 +2,7 @@
 'use server';
 /**
  * @fileOverview An AI agent that attempts to fix a broken regular expression based on the user's original query and test data.
+ * This flow now uses a two-step process: first, it analyzes the faulty regex, then it uses that analysis to generate a fix.
  *
  * - fixRegex - A function that provides a corrected regex and its block structure.
  * - FixRegexInput - The input type.
@@ -14,15 +15,22 @@ import { type NaturalLanguageRegexOutput, NaturalLanguageRegexOutputSchema } fro
 import { processAiBlocks, isRegexValid, generateRegexStringAndGroupInfo, createLiteral, generateId, correctAndSanitizeAiBlocks, breakdownComplexCharClasses } from '@/components/regex-vision/utils';
 import type { Block, LiteralSettings } from '@/components/regex-vision/types';
 import { BlockType } from '@/components/regex-vision/types';
+import { analyzeRegex } from './analyze-regex-flow';
 
-// Reuse the input from analyze-regex-flow
-const FixRegexInputSchema = z.object({
+// Public input schema (what the client calls)
+const PublicFixRegexInputSchema = z.object({
   originalQuery: z.string().describe('The original natural language query from the user.'),
   faultyRegex: z.string().describe('The regular expression that was generated, which is incorrect.'),
   testText: z.string().describe('The text the user is trying to match against.'),
   errorContext: z.string().optional().describe('Any error message that was produced by the regex engine.'),
 });
-export type FixRegexInput = z.infer<typeof FixRegexInputSchema>;
+export type FixRegexInput = z.infer<typeof PublicFixRegexInputSchema>;
+
+// Internal schema for the prompt, which includes the analysis from the first step
+const InternalFixRegexPromptSchema = PublicFixRegexInputSchema.extend({
+  analysisContext: z.string().describe('A detailed analysis from a separate AI agent explaining what is wrong with the faulty regex. This should be trusted as the source of truth for the diagnosis.'),
+});
+
 
 // Reuse the output from natural-language-regex-flow
 export type FixRegexOutput = NaturalLanguageRegexOutput;
@@ -33,27 +41,30 @@ export async function fixRegex(input: FixRegexInput): Promise<FixRegexOutput> {
 
 const prompt = ai.definePrompt({
   name: 'fixRegexPrompt',
-  input: {schema: FixRegexInputSchema},
+  input: {schema: InternalFixRegexPromptSchema},
   output: {schema: NaturalLanguageRegexOutputSchema}, // Use the same output schema as the main generator
-  prompt: `You are a world-class regular expression debugging expert and fixer. A user is trying to build a regex, and it's not working. Your task is to analyze the situation and provide a corrected, working regular expression.
+  prompt: `You are a world-class regular expression construction expert. Your task is to provide a corrected, working regular expression based on a pre-flight analysis.
 
-You will be given the user's original goal, the faulty regex, the text they are testing against, and any errors the regex engine produced.
+**A trusted AI colleague has analyzed the user's problem and concluded the following:**
+--- ANALYSIS START ---
+{{{analysisContext}}}
+--- ANALYSIS END ---
 
-**Your Goal:** Generate a new, corrected regex that achieves the user's original goal and works for the provided test text.
+Your primary goal is to use this analysis to construct the correct regular expression and its block structure. The analysis is your source of truth for what went wrong.
 
-**Analysis of the problem:**
-1.  **User's Goal:** \`{{{originalQuery}}}\`
-2.  **Faulty Regex:** \`{{{faultyRegex}}}\`
-3.  **Test Text:** \`{{{testText}}}\`
-4.  **Error (if any):** \`{{{errorContext}}}\`
+**Original problem details (for context only):**
+- **User's Goal:** \`{{{originalQuery}}}\`
+- **Faulty Regex:** \`{{{faultyRegex}}}\`
+- **Test Text:** \`{{{testText}}}\`
+- **Error (if any):** \`{{{errorContext}}}\`
+
 
 **Instructions:**
-1.  **Understand the Goal:** First, fully understand what the user was trying to accomplish from \`originalQuery\`.
-2.  **Diagnose the Faulty Regex:** Identify why the \`faultyRegex\` fails. Is it a syntax error? A logical error? Does it not account for edge cases in the \`testText\`?
-3.  **Construct the Fix:** Create a new, correct regular expression.
-4.  **Provide a Clear Explanation (in Russian):** Your explanation should briefly state what was wrong with the old regex and how the new one solves the problem.
-5.  **Generate Blocks:** Provide a structured representation of the new, corrected regex as an array of 'parsedBlocks', following the same format as the main regex generator. This is crucial.
-6.  **Provide Flags:** If necessary (e.g., for case-insensitivity), include them in the 'recommendedFlags' field. Do not include the 'g' flag.
+1.  **Trust the Analysis:** Base your correction on the provided analysis.
+2.  **Construct the Fix:** Create a new, correct regular expression.
+3.  **Provide a Clear Explanation (in Russian):** Your explanation should briefly state what was wrong with the old regex and how the new one solves the problem, summarizing the key points from the analysis.
+4.  **Generate Blocks:** Provide a structured representation of the new, corrected regex as an array of 'parsedBlocks'. This is crucial.
+5.  **Provide Flags:** If necessary, include them in the 'recommendedFlags' field. Do not include the 'g' flag.
 
 Your output MUST be in the specified JSON format with fields: "regex", "explanation", "parsedBlocks", "exampleTestText" (can be the original testText), and "recommendedFlags".
 `,
@@ -70,11 +81,24 @@ Your output MUST be in the specified JSON format with fields: "regex", "explanat
 const fixRegexFlow = ai.defineFlow(
   {
     name: 'fixRegexFlow',
-    inputSchema: FixRegexInputSchema,
+    inputSchema: PublicFixRegexInputSchema,
     outputSchema: NaturalLanguageRegexOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
+    // Step 1: Analyze the problem to get a detailed breakdown of what's wrong.
+    const analysisResult = await analyzeRegex({
+      originalQuery: input.originalQuery,
+      generatedRegex: input.faultyRegex,
+      testText: input.testText,
+      errorContext: input.errorContext || 'Нет контекста ошибки.',
+    });
+
+    // Step 2: Call the fixing prompt with the analysis as trusted context.
+    const {output} = await prompt({
+        ...input,
+        analysisContext: analysisResult.analysis,
+    });
+
     if (!output || !isRegexValid(output.regex)) {
         return {
             regex: input.faultyRegex, // Return original faulty one on failure
