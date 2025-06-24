@@ -72,7 +72,7 @@ Based on all the information above, determine the **next single, atomic step**.
 4.  **USE PRE-DEFINED BLOCKS:** Your generated 'block' object MUST be one of the simple, predefined types our application supports. Do not invent complex blocks.
     *   **GROUP / ALTERNATION:** When the user's goal requires grouping or alternation (e.g., \`(cat|dog)\`), you must build it atomically. First, generate the empty \`GROUP\` or \`ALTERNATION\` block. In the *next step*, generate the first child (e.g., a \`LITERAL\` for "cat"). Do not generate containers with children already inside them.
     *   **LITERAL:** For a single character or short, simple string (e.g., \`@\`, \`.\`, \`cat\`). **DO NOT** generate the \`|\` character inside a \`LITERAL\` block. It must be created via an \`ALTERNATION\` block. Each \`LITERAL\` must contain non-empty text.
-    *   **CHARACTER_CLASS:** For a set of characters. CRITICAL: Keep the \`pattern\` simple (e.g., \`a-z\`, \`0-9\`, or a single shorthand like \`\\w\`, \`\\s\`, \`\\d\`). **DO NOT** create complex patterns like \`[a-zA-Z0-9._%+-]\`. Break them down into multiple steps if needed.
+    *   **CHARACTER_CLASS:** For a set of characters. CRITICAL: The \`pattern\` must be for **ONE ATOMIC ELEMENT**. Valid examples: \`a-z\`, \`A-Z\`, \`0-9\`, \`\\w\`, \`\\s\`, \`\\d\`. **YOU ARE FORBIDDEN** from creating complex patterns like \`[a-zA-Z0-9._%+-]\` in a single step. If a user needs a combination like "any letter or digit", you should suggest the \`\\w\` shorthand if it fits, or build it up over multiple steps.
     *   **QUANTIFIER:** For repetition (e.g., \`+\`, \`*\`, \`?\`). This block always follows another block.
     *   **ANCHOR:** For positions (e.g., \`^\`, \`$\`, \`\\b\`).
 5.  **EXPLANATION (in Russian):** Provide a very short, clear explanation of what this single block does and why it's the next logical step.
@@ -149,7 +149,7 @@ Based on the goal and the previous steps, provide a **new, alternative, single, 
 4.  **USE PRE-DEFINED BLOCKS:** Your generated 'block' object MUST be one of the simple, predefined types our application supports. Do not invent complex blocks.
     *   **GROUP / ALTERNATION:** When the user's goal requires grouping or alternation (e.g., \`(cat|dog)\`), you must build it atomically. First, generate the empty \`GROUP\` or \`ALTERNATION\` block. In the *next step*, generate the first child (e.g., a \`LITERAL\` for "cat"). Do not generate containers with children already inside them.
     *   **LITERAL:** For a single character or short, simple string (e.g., \`@\`, \`.\`, \`cat\`). **DO NOT** generate the \`|\` character inside a \`LITERAL\` block. It must be created via an \`ALTERNATION\` block. Each \`LITERAL\` must contain non-empty text.
-    *   **CHARACTER_CLASS:** For a set of characters. CRITICAL: Keep the \`pattern\` simple (e.g., \`a-z\`, \`0-9\`, or \`\\w\`).
+    *   **CHARACTER_CLASS:** For a set of characters. CRITICAL: The \`pattern\` must be for **ONE ATOMIC ELEMENT**. Valid examples: \`a-z\`, \`A-Z\`, \`0-9\`, \`\\w\`, \`\\s\`, \`\\d\`. **YOU ARE FORBIDDEN** from creating complex patterns like \`[a-zA-Z0-9._%+-]\` in a single step. If a user needs a combination like "any letter or digit", you should suggest the \`\\w\` shorthand if it fits, or build it up over multiple steps.
     *   **QUANTIFIER:** For repetition (e.g., \`+\`, \`*\`, \`?\`).
     *   **ANCHOR:** For positions (e.g., \`^\`, \`$\`, \`\\b\`).
 5.  **EXPLANATION (in Russian):** Provide a very short, clear explanation for the new step.
