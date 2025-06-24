@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, X, Search, Bot, ChevronRight, Sparkles, AlignLeft, Milestone, Combine, GitFork, Repeat, Eye } from 'lucide-react'; // Added Repeat, Eye
+import { Plus, X, Search, Bot, ChevronRight, Sparkles, AlignLeft, Milestone, Combine, GitFork, Repeat, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -162,96 +162,94 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
             <X size={18} />
           </Button>
         </CardHeader>
-        <CardContent className="p-0 flex-1 flex flex-col min-h-0">
-          <div className="p-3 border-b">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Поиск или / для AI..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
-                autoFocus
-              />
-            </div>
+        <div className="p-3 border-b">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Поиск или / для AI..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8"
+              autoFocus
+            />
           </div>
-          <ScrollArea className="flex-1">
-            <div className="p-3 space-y-2">
-              {isLoadingAi && <p className="text-sm text-muted-foreground p-2 text-center">Загрузка AI подсказок...</p>}
-              
-              {showAiSuggestions && (
-                <div className="mb-3">
-                  <h4 className="text-xs font-semibold text-muted-foreground mb-1 uppercase flex items-center gap-1.5"><Bot size={14} /> AI Подсказки</h4>
-                  {aiSuggestions.map((suggestion, index) => (
-                    <Button
-                      key={`ai-${index}`}
-                      variant="ghost"
-                      onClick={() => handleAddAiSuggestion(suggestion)}
-                      className="w-full justify-start h-auto py-2 px-3 text-left mb-1"
-                    >
-                      <span className="font-mono text-xs bg-accent/20 text-accent-foreground p-1 rounded-sm mr-2 break-all">{suggestion}</span>
-                    </Button>
-                  ))}
-                  <hr className="my-2"/>
-                </div>
-              )}
+        </div>
+        <ScrollArea className="flex-1">
+          <div className="p-3 space-y-2">
+            {isLoadingAi && <p className="text-sm text-muted-foreground p-2 text-center">Загрузка AI подсказок...</p>}
+            
+            {showAiSuggestions && (
+              <div className="mb-3">
+                <h4 className="text-xs font-semibold text-muted-foreground mb-1 uppercase flex items-center gap-1.5"><Bot size={14} /> AI Подсказки</h4>
+                {aiSuggestions.map((suggestion, index) => (
+                  <Button
+                    key={`ai-${index}`}
+                    variant="ghost"
+                    onClick={() => handleAddAiSuggestion(suggestion)}
+                    className="w-full justify-start h-auto py-2 px-3 text-left mb-1"
+                  >
+                    <span className="font-mono text-xs bg-accent/20 text-accent-foreground p-1 rounded-sm mr-2 break-all">{suggestion}</span>
+                  </Button>
+                ))}
+                <hr className="my-2"/>
+              </div>
+            )}
 
-              {showWizard && !showAiSuggestions && (
-                <Accordion type="multiple" className="w-full" defaultValue={WIZARD_CATEGORIES.map(cat => cat.name)}>
-                  {WIZARD_CATEGORIES.map(category => (
-                    <AccordionItem value={category.name} key={category.name}>
-                      <AccordionTrigger className="text-sm font-semibold hover:no-underline py-2 px-1">
-                        <div className="flex items-center">
-                           {category.icon}
-                           {category.name}
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="pb-1">
-                        {category.actions.map(action => (
-                          <Button
-                            key={action.label}
-                            variant="ghost"
-                            onClick={() => handleAddBlockFromWizard(action.type, action.settings)}
-                            className="w-full justify-start h-auto py-2.5 px-2 text-left mb-1 flex flex-col items-start"
-                          >
-                            <div className="flex items-center w-full">
-                              <ChevronRight size={14} className="mr-1.5 text-muted-foreground" />
-                              <span className="font-medium text-sm">{action.label}</span>
-                            </div>
-                            {action.description && <p className="text-xs text-muted-foreground ml-[22px] mt-0.5 text-left">{action.description}</p>}
-                          </Button>
-                        ))}
-                      </AccordionContent>
-                    </AccordionItem>
-                  ))}
-                </Accordion>
-              )}
+            {showWizard && !showAiSuggestions && (
+              <Accordion type="multiple" className="w-full" defaultValue={WIZARD_CATEGORIES.map(cat => cat.name)}>
+                {WIZARD_CATEGORIES.map(category => (
+                  <AccordionItem value={category.name} key={category.name}>
+                    <AccordionTrigger className="text-sm font-semibold hover:no-underline py-2 px-1">
+                      <div className="flex items-center">
+                         {category.icon}
+                         {category.name}
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="pb-1">
+                      {category.actions.map(action => (
+                        <Button
+                          key={action.label}
+                          variant="ghost"
+                          onClick={() => handleAddBlockFromWizard(action.type, action.settings)}
+                          className="w-full justify-start h-auto py-2.5 px-2 text-left mb-1 flex flex-col items-start"
+                        >
+                          <div className="flex items-center w-full">
+                            <ChevronRight size={14} className="mr-1.5 text-muted-foreground" />
+                            <span className="font-medium text-sm">{action.label}</span>
+                          </div>
+                          {action.description && <p className="text-xs text-muted-foreground ml-[22px] mt-0.5 text-left">{action.description}</p>}
+                        </Button>
+                      ))}
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            )}
 
-              {showFilteredBlocks && filteredRawBlocks.length === 0 && !isLoadingAi && (
-                <p className="text-sm text-muted-foreground p-2 text-center">Блоки не найдены.</p>
-              )}
+            {showFilteredBlocks && filteredRawBlocks.length === 0 && !isLoadingAi && (
+              <p className="text-sm text-muted-foreground p-2 text-center">Блоки не найдены.</p>
+            )}
 
-              {showFilteredBlocks && filteredRawBlocks.map(([type, config]) => (
-                <Button
-                  key={type}
-                  variant="ghost"
-                  onClick={() => handleAddPredefinedBlock(type)}
-                  className="w-full justify-start h-auto py-2 px-3 text-left"
-                >
-                  <span className={cn(
-                    "p-1.5 rounded-sm mr-2 flex items-center justify-center h-7 w-7",
-                    "bg-primary/10 text-primary"
-                  )}>
-                     {typeof config.icon === 'string' ? <span className="font-mono text-xs">{config.icon}</span> : config.icon}
-                  </span>
-                  <span className="font-medium text-sm">{config.name}</span>
-                   {type === BlockType.QUANTIFIER && <span className="text-xs text-muted-foreground ml-1">(применяется к предыдущему)</span>}
-                </Button>
-              ))}
-            </div>
-          </ScrollArea>
-        </CardContent>
+            {showFilteredBlocks && filteredRawBlocks.map(([type, config]) => (
+              <Button
+                key={type}
+                variant="ghost"
+                onClick={() => handleAddPredefinedBlock(type)}
+                className="w-full justify-start h-auto py-2 px-3 text-left"
+              >
+                <span className={cn(
+                  "p-1.5 rounded-sm mr-2 flex items-center justify-center h-7 w-7",
+                  "bg-primary/10 text-primary"
+                )}>
+                   {typeof config.icon === 'string' ? <span className="font-mono text-xs">{config.icon}</span> : config.icon}
+                </span>
+                <span className="font-medium text-sm">{config.name}</span>
+                 {type === BlockType.QUANTIFIER && <span className="text-xs text-muted-foreground ml-1">(применяется к предыдущему)</span>}
+              </Button>
+            ))}
+          </div>
+        </ScrollArea>
       </Card>
     </>
   );
