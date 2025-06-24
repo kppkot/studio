@@ -9,7 +9,6 @@ import { useToast } from '@/hooks/use-toast';
 import { generateRegexFromNaturalLanguage, type NaturalLanguageRegexOutput } from '@/ai/flows/natural-language-regex-flow';
 import type { GuidedRegexStep } from '@/ai/flows/schemas';
 
-import AppHeader from './AppHeader';
 import BlockNode from './BlockNode';
 import SettingsPanel from './SettingsPanel';
 import BlockPalette from './BlockPalette';
@@ -27,7 +26,15 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Sparkles, Gauge, Library, Lightbulb, Combine } from 'lucide-react'; 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Sparkles, Gauge, Library, Lightbulb, Combine, Menu, Puzzle, Share2, DownloadCloud, UploadCloud } from 'lucide-react'; 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
 const RegexVisionWorkspace: React.FC = () => {
@@ -889,8 +896,6 @@ const RegexVisionWorkspace: React.FC = () => {
   }, [regexFlags]);
 
 
-  const headerHeight = "60px";
-
   const renderBlockNodes = (nodes: Block[], parentId: string | null, depth: number, groupInfos: GroupInfo[]): React.ReactNode[] => {
     const nodeList: React.ReactNode[] = [];
     for (let i = 0; i < nodes.length; i++) {
@@ -978,9 +983,7 @@ const RegexVisionWorkspace: React.FC = () => {
 
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground" style={{ "--header-height": headerHeight } as React.CSSProperties}>
-      <AppHeader onShare={handleShare} onExport={handleExport} onImport={handleImport} />
-
+    <div className="flex flex-col h-screen bg-background text-foreground">
       <ResizablePanelGroup direction="vertical" className="flex-1 overflow-hidden">
         <ResizablePanel defaultSize={65} minSize={30}>
           <ResizablePanelGroup direction="horizontal" className="h-full">
@@ -989,7 +992,9 @@ const RegexVisionWorkspace: React.FC = () => {
                 <Card className="flex-1 flex flex-col shadow-md border-primary/20 overflow-hidden">
                   <CardHeader className="py-2 px-3 border-b">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-base flex items-center gap-2"><Edit3 size={18} className="text-primary"/> Дерево выражения</CardTitle>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Edit3 size={18} className="text-primary"/> Дерево выражения
+                      </CardTitle>
                       <div className="flex items-center gap-1">
                         <Button variant="outline" size="iconSm" onClick={handleExpandAll} title="Развернуть всё (Ctrl+Shift+Вниз)">
                           <UnfoldVertical size={14} />
@@ -1003,6 +1008,33 @@ const RegexVisionWorkspace: React.FC = () => {
                         <Button size="sm" onClick={() => { setParentIdForNewBlock(null); setIsPaletteVisible(true); }}>
                           <Plus size={16} className="mr-1" /> Добавить блок
                         </Button>
+                        
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <Menu size={16} />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel className="flex items-center gap-2 font-semibold">
+                                <Puzzle size={16} />
+                                RegexVision
+                            </DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={handleShare}>
+                              <Share2 className="mr-2 h-4 w-4" />
+                              <span>Поделиться</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={handleExport}>
+                              <DownloadCloud className="mr-2 h-4 w-4" />
+                              <span>Экспорт</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={handleImport}>
+                              <UploadCloud className="mr-2 h-4 w-4" />
+                              <span>Импорт</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
                   </CardHeader>
@@ -1142,3 +1174,5 @@ const RegexVisionWorkspace: React.FC = () => {
 };
 
 export default RegexVisionWorkspace;
+
+    
