@@ -7,6 +7,7 @@ import { BLOCK_CONFIGS } from './constants';
 import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks, cloneBlockForState, breakdownPatternIntoChildren, reconstructPatternFromChildren } from './utils'; 
 import { useToast } from '@/hooks/use-toast';
 import { generateRegexFromNaturalLanguage, type NaturalLanguageRegexOutput } from '@/ai/flows/natural-language-regex-flow';
+import { generateNextGuidedStep } from '@/ai/flows/guided-regex-flow';
 import type { GuidedRegexStep } from '@/ai/flows/schemas';
 
 import BlockNode from './BlockNode';
@@ -34,8 +35,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Sparkles, Gauge, Library, Lightbulb, Combine, Menu, Puzzle, Share2, DownloadCloud, UploadCloud } from 'lucide-react'; 
+import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Sparkles, Gauge, Library, Lightbulb, Combine, Menu, Puzzle, Share2, DownloadCloud, UploadCloud, Loader2 } from 'lucide-react'; 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+
+interface GuidedModeState {
+    query: string;
+    exampleTestText: string;
+    steps: GuidedRegexStep[];
+    isLoading: boolean;
+}
 
 const RegexVisionWorkspace: React.FC = () => {
   const [blocks, setBlocks] = useState<Block[]>([]);
@@ -52,8 +60,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const [regexError, setRegexError] = useState<string | null>(null);
   const [lastWizardQuery, setLastWizardQuery] = useState('');
   
-  const [guidedSteps, setGuidedSteps] = useState<GuidedRegexStep[]>([]);
-  const [addedStepIndices, setAddedStepIndices] = useState<Set<number>>(new Set());
+  const [guidedModeState, setGuidedModeState] = useState<GuidedModeState | null>(null);
 
 
   const { toast } = useToast();
@@ -221,12 +228,13 @@ const RegexVisionWorkspace: React.FC = () => {
   }, [toast, blocks, selectedBlockId]);
 
 
-  const handleAddBlocksFromWizard = useCallback((query: string, newBlocks: Block[], parentIdFromWizard: string | null, exampleTestText?: string, recommendedFlags?: string) => {
+  const handleAddBlocksFromQuickGen = useCallback((query: string, newBlocks: Block[], parentId: string | null, exampleTestText?: string, recommendedFlags?: string) => {
     if (newBlocks.length === 0) return;
     
     setLastWizardQuery(query);
+    setGuidedModeState(null); // Exit guided mode if active
 
-    let targetParentId = parentIdFromWizard;
+    let targetParentId = parentId;
 
     if (!targetParentId && selectedBlockId) {
       const selBlock = findBlockRecursive(blocks, selectedBlockId);
@@ -272,28 +280,40 @@ const RegexVisionWorkspace: React.FC = () => {
     toast({ title: "Блоки добавлены", description: "Блоки из Помощника успешно добавлены." });
   }, [toast, blocks, selectedBlockId, regexFlags]);
 
-  const handleAddStep = useCallback((block: Block, index: number) => {
+  const handleStartGuidedMode = useCallback(async (query: string, exampleTestText: string) => {
+    setLastWizardQuery(query);
+    setTestText(exampleTestText);
+    setBlocks([]); // Clear existing blocks for a fresh start
+    setSelectedBlockId(null);
+    setGuidedModeState({ query, exampleTestText, steps: [], isLoading: true });
+
+    try {
+        const firstStep = await generateNextGuidedStep({ query, exampleTestText, existingSteps: [] });
+        setGuidedModeState({ query, exampleTestText, steps: [firstStep], isLoading: false });
+        toast({ title: "Пошаговый режим запущен!", description: "AI предложил первый шаг." });
+    } catch (error) {
+        console.error("Failed to start guided mode:", error);
+        toast({ title: "Ошибка AI", description: "Не удалось получить первый шаг от AI.", variant: "destructive" });
+        setGuidedModeState(null); // Cancel guided mode on error
+    }
+  }, [toast]);
+
+  const handleAddStepBlock = useCallback((block: Block) => {
       const processedBlock = processAiBlocks([block])[0];
       if (processedBlock) {
           setBlocks(prev => [...prev, processedBlock]);
           setSelectedBlockId(null);
       }
-      setAddedStepIndices(prev => new Set(prev).add(index));
-      toast({ title: 'Блок добавлен!', description: `Шаг ${index + 1} выполнен.` });
+      toast({ title: 'Блок добавлен!', description: `Блок был добавлен в конструктор.` });
+  }, [toast]);
+
+  const handleClearGuidedMode = useCallback(() => {
+    setGuidedModeState(null);
   }, []);
 
-  const handleGuidedPlanReady = useCallback((query: string, steps: GuidedRegexStep[], exampleTestText: string) => {
-      setLastWizardQuery(query);
-      setGuidedSteps(steps);
-      setTestText(exampleTestText);
-      setAddedStepIndices(new Set());
-      setIsWizardModalOpen(false);
-      setSelectedBlockId(null);
-  }, []);
-
-  const handleClearGuidedPlan = useCallback(() => {
-    setGuidedSteps([]);
-    setAddedStepIndices(new Set());
+  const handleResetAndClearGuidedMode = useCallback(() => {
+    setBlocks([]);
+    setGuidedModeState(null);
   }, []);
 
 
@@ -676,6 +696,7 @@ const RegexVisionWorkspace: React.FC = () => {
               setRegexFlags(imported.regexFlags);
               setTestText(imported.testText);
               setSelectedBlockId(null);
+              setGuidedModeState(null);
               toast({ title: "Импортировано!", description: "Конфигурация загружена." });
             } else {
               throw new Error("Неверный формат файла");
@@ -791,7 +812,7 @@ const RegexVisionWorkspace: React.FC = () => {
     setSelectedBlockId(null); 
     setHoveredBlockId(null);
     setLastWizardQuery(pattern.name); 
-    handleClearGuidedPlan();
+    handleClearGuidedMode();
 
     try {
       const aiResult: NaturalLanguageRegexOutput = await generateRegexFromNaturalLanguage({ query: pattern.regexString });
@@ -894,8 +915,10 @@ const RegexVisionWorkspace: React.FC = () => {
     }
     setRegexError(null); 
     setSelectedBlockId(null);
+    setGuidedModeState(null);
   }, [regexFlags]);
 
+  const showRightPanel = selectedBlockId || guidedModeState;
 
   const renderBlockNodes = (nodes: Block[], parentId: string | null, depth: number, groupInfos: GroupInfo[]): React.ReactNode[] => {
     const nodeList: React.ReactNode[] = [];
@@ -988,7 +1011,7 @@ const RegexVisionWorkspace: React.FC = () => {
       <ResizablePanelGroup direction="vertical" className="flex-1 overflow-hidden">
         <ResizablePanel defaultSize={65} minSize={30}>
           <ResizablePanelGroup direction="horizontal" className="h-full">
-            <ResizablePanel defaultSize={(selectedBlockId || guidedSteps.length > 0) ? 60 : 100} minSize={30} className="flex flex-col overflow-hidden">
+            <ResizablePanel defaultSize={showRightPanel ? 60 : 100} minSize={30} className="flex flex-col overflow-hidden">
               <div className="flex-1 flex flex-col m-2 overflow-hidden">
                 <Card className="flex-1 flex flex-col shadow-md border-primary/20 overflow-hidden">
                   <CardHeader className="py-2 px-3 border-b">
@@ -1066,25 +1089,32 @@ const RegexVisionWorkspace: React.FC = () => {
               </div>
             </ResizablePanel>
             
-            {(selectedBlockId || guidedSteps.length > 0) && (
+            {showRightPanel && (
               <>
                 <ResizableHandle withHandle />
                  <ResizablePanel defaultSize={40} minSize={25} maxSize={50} className="overflow-hidden">
                    <div className="h-full m-2 ml-0 shadow-md border-primary/20 rounded-lg overflow-hidden bg-card">
-                      {selectedBlockId && selectedBlock ? (
+                      {guidedModeState ? (
+                        guidedModeState.isLoading ? (
+                            <div className="flex items-center justify-center h-full text-muted-foreground">
+                                <Loader2 className="h-6 w-6 animate-spin mr-3" />
+                                <span>AI генерирует первый шаг...</span>
+                            </div>
+                        ) : (
+                            <GuidedStepsPanel
+                                query={guidedModeState.query}
+                                exampleTestText={guidedModeState.exampleTestText}
+                                initialSteps={guidedModeState.steps}
+                                onAddStep={handleAddStepBlock}
+                                onFinish={handleClearGuidedMode}
+                                onResetAndFinish={handleResetAndClearGuidedMode}
+                            />
+                        )
+                      ) : selectedBlockId && selectedBlock ? (
                         <SettingsPanel
                             block={selectedBlock}
                             onUpdate={handleUpdateBlock}
                             onClose={() => setSelectedBlockId(null)}
-                        />
-                      ) : guidedSteps.length > 0 ? (
-                        <GuidedStepsPanel
-                          steps={guidedSteps}
-                          addedIndices={addedStepIndices}
-                          onAddStep={handleAddStep}
-                          onFinish={handleClearGuidedPlan}
-                          onCancel={handleClearGuidedPlan}
-                          onReset={() => setBlocks([])}
                         />
                       ) : null}
                    </div>
@@ -1161,12 +1191,8 @@ const RegexVisionWorkspace: React.FC = () => {
             setIsWizardModalOpen(false);
             setParentIdForNewBlock(null);
           }}
-          onComplete={(query, wizardBlocks, parentId, exampleText, flags) => { 
-            handleAddBlocksFromWizard(query, wizardBlocks, parentId, exampleText, flags); 
-            setIsWizardModalOpen(false);
-            setParentIdForNewBlock(null);
-          }}
-          onGuidedPlanReady={handleGuidedPlanReady}
+          onCompleteQuickGen={handleAddBlocksFromQuickGen}
+          onStartGuidedMode={handleStartGuidedMode}
           initialParentId={parentIdForNewBlock}
         />
       )}

@@ -3,8 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import type { Block } from './types';
 import { generateRegexFromNaturalLanguage, type NaturalLanguageRegexOutput } from '@/ai/flows/natural-language-regex-flow';
-import { generateGuidedRegexPlan } from '@/ai/flows/guided-regex-flow';
-import type { GuidedRegexStep } from '@/ai/flows/schemas';
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -18,29 +16,27 @@ import { Label } from '../ui/label';
 interface RegexWizardModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onComplete: (query: string, blocks: Block[], parentId: string | null, exampleTestText?: string, recommendedFlags?: string) => void;
-  onGuidedPlanReady: (query: string, steps: GuidedRegexStep[], exampleTestText: string) => void;
+  onStartGuidedMode: (query: string, exampleTestText: string) => void;
+  onCompleteQuickGen: (query: string, blocks: Block[], parentId: string | null, exampleTestText?: string, recommendedFlags?: string) => void;
   initialParentId: string | null;
 }
 
-// State for the two-step guided flow
-interface StagedForGuidedResult {
-  explanation: string;
-  exampleTestText: string;
-}
+type WizardMode = 'choice' | 'quick-gen-result' | 'guided-context';
 
-const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, onComplete, onGuidedPlanReady, initialParentId }) => {
+const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, onStartGuidedMode, onCompleteQuickGen, initialParentId }) => {
   const [query, setQuery] = useState('');
   const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [mode, setMode] = useState<WizardMode>('choice');
   const [quickGenResult, setQuickGenResult] = useState<NaturalLanguageRegexOutput | null>(null);
-  const [stagedForGuided, setStagedForGuided] = useState<StagedForGuidedResult | null>(null);
+  const [guidedContextText, setGuidedContextText] = useState<string>('');
   const { toast } = useToast();
 
   const resetState = () => {
     setQuery('');
     setIsLoadingAI(false);
     setQuickGenResult(null);
-    setStagedForGuided(null);
+    setGuidedContextText('');
+    setMode('choice');
   };
   
   const handleClose = () => {
@@ -64,6 +60,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     try {
       const aiResult = await generateRegexFromNaturalLanguage({ query });
       setQuickGenResult(aiResult);
+      setMode('quick-gen-result');
     } catch (error) {
       console.error("AI Regex Generation Error:", error);
       toast({ title: "Ошибка AI", description: "Не удалось связаться с AI сервисом.", variant: "destructive" });
@@ -78,14 +75,13 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
       return;
     }
     setIsLoadingAI(true);
-    setStagedForGuided(null);
+    setGuidedContextText('');
     try {
+      // We only need the example text, but the flow gives us everything.
       const aiResult = await generateRegexFromNaturalLanguage({ query });
-      if (aiResult.exampleTestText && aiResult.explanation) {
-        setStagedForGuided({
-          explanation: aiResult.explanation,
-          exampleTestText: aiResult.exampleTestText,
-        });
+      if (aiResult.exampleTestText) {
+        setGuidedContextText(aiResult.exampleTestText);
+        setMode('guided-context');
       } else {
         toast({ title: "Ошибка AI", description: "AI не смог сгенерировать пример текста.", variant: "destructive" });
       }
@@ -97,32 +93,18 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     }
   };
 
-  const handleGenerateGuidedSteps = async () => {
-    if (!query.trim() || !stagedForGuided) return;
-    setIsLoadingAI(true);
-    try {
-      const planResult = await generateGuidedRegexPlan({ 
-        query,
-        exampleTestText: stagedForGuided.exampleTestText,
-      });
-      if (planResult.steps.length > 0) {
-        onGuidedPlanReady(query, planResult.steps, stagedForGuided.exampleTestText);
-        toast({ title: "AI построил пошаговый план!", description: "Панель с шагами появилась справа." });
-        handleClose();
-      } else {
-        toast({ title: "AI не смог построить план", description: "Попробуйте переформулировать запрос или использовать быструю генерацию.", variant: "destructive" });
-      }
-    } catch (error) {
-      console.error("AI Guided Generation Error:", error);
-      toast({ title: "Ошибка AI", description: "Не удалось построить пошаговый план.", variant: "destructive" });
-    } finally {
-      setIsLoadingAI(false);
+  const handleConfirmGuidedStart = () => {
+    if (!query.trim() || !guidedContextText.trim()) {
+       toast({ title: "Контекст не может быть пустым", variant: "destructive" });
+       return;
     }
+    onStartGuidedMode(query, guidedContextText);
+    handleClose();
   };
 
   const handleCompleteQuickGen = () => {
     if (quickGenResult?.parsedBlocks && quickGenResult.parsedBlocks.length > 0) {
-      onComplete(query, quickGenResult.parsedBlocks, initialParentId, quickGenResult.exampleTestText, quickGenResult.recommendedFlags);
+      onCompleteQuickGen(query, quickGenResult.parsedBlocks, initialParentId, quickGenResult.exampleTestText, quickGenResult.recommendedFlags);
     } else if (quickGenResult?.regex) {
       const fallbackBlock: Block = {
         id: 'fallback-literal-' + Date.now(),
@@ -130,38 +112,12 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         settings: { text: quickGenResult.regex, isRawRegex: true } as LiteralSettings,
         children: [],
       };
-      onComplete(query, [fallbackBlock], initialParentId, quickGenResult.exampleTestText, quickGenResult.recommendedFlags);
+      onCompleteQuickGen(query, [fallbackBlock], initialParentId, quickGenResult.exampleTestText, quickGenResult.recommendedFlags);
     }
     handleClose();
   };
-
-  const renderFooter = () => {
-    if (isLoadingAI) {
-      return <Button disabled className="w-full"><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Обработка...</Button>;
-    }
-    if (quickGenResult) {
-      return (
-        <div className="w-full flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => setQuickGenResult(null)}>Назад</Button>
-          <Button onClick={handleCompleteQuickGen}>Добавить в выражение</Button>
-        </div>
-      );
-    }
-    if (stagedForGuided) {
-      return (
-        <div className="w-full flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => setStagedForGuided(null)}>Назад</Button>
-          <Button onClick={handleGenerateGuidedSteps}>Создать пошаговый план</Button>
-        </div>
-      );
-    }
-    return (
-      <div className="w-full flex justify-end gap-2">
-        <Button variant="outline" onClick={handlePreAnalysisForGuided} disabled={!query.trim()}>Пошаговый конструктор</Button>
-        <Button onClick={handleGenerateQuick} disabled={!query.trim()}>Быстрая генерация</Button>
-      </div>
-    );
-  };
+  
+  const isInputDisabled = isLoadingAI || mode !== 'choice';
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
@@ -181,12 +137,12 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                 className="h-24"
                 placeholder="Я хочу найти..."
                 autoFocus
-                disabled={isLoadingAI || !!quickGenResult || !!stagedForGuided}
+                disabled={isInputDisabled}
             />
 
            {isLoadingAI && <div className="flex items-center justify-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin mr-2" /> AI думает...</div>}
            
-           {quickGenResult && !isLoadingAI && (
+           {mode === 'quick-gen-result' && quickGenResult && !isLoadingAI && (
               <div className="space-y-3 animate-in fade-in-50">
                   <p className="text-sm font-medium">Предложение от AI:</p>
                   <Card className="p-3 bg-muted/50">
@@ -202,13 +158,13 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
               </div>
            )}
 
-           {stagedForGuided && !isLoadingAI && (
+           {mode === 'guided-context' && !isLoadingAI && (
              <div className="space-y-2 animate-in fade-in-50">
-                 <Label htmlFor="guidedContext" className="text-sm font-medium">Контекст для AI</Label>
+                 <Label htmlFor="guidedContext" className="text-sm font-medium">Контекст для пошагового плана</Label>
                  <Textarea
                     id="guidedContext"
-                    value={stagedForGuided.exampleTestText}
-                    onChange={(e) => setStagedForGuided(prev => prev ? { ...prev, exampleTestText: e.target.value } : null)}
+                    value={guidedContextText}
+                    onChange={(e) => setGuidedContextText(e.target.value)}
                     className="font-mono text-xs h-28"
                     placeholder="Введите или отредактируйте пример текста"
                  />
@@ -220,8 +176,30 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         </div>
 
         <DialogFooter className="pt-4 border-t flex-col sm:flex-row sm:justify-between sm:space-x-2">
-          <Button variant="outline" onClick={handleClose}>Отмена</Button>
-          {renderFooter()}
+           {mode === 'choice' && <Button variant="outline" onClick={handleClose}>Отмена</Button>}
+           
+           {mode !== 'choice' && !isLoadingAI && (
+                <Button variant="outline" onClick={() => setMode('choice')}>Назад</Button>
+           )}
+
+            <div className="flex justify-end gap-2">
+                {isLoadingAI && <Button disabled className="w-full"><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Обработка...</Button>}
+                
+                {mode === 'choice' && !isLoadingAI && (
+                    <>
+                        <Button variant="outline" onClick={handlePreAnalysisForGuided} disabled={!query.trim()}>Пошаговый конструктор</Button>
+                        <Button onClick={handleGenerateQuick} disabled={!query.trim()}>Быстрая генерация</Button>
+                    </>
+                )}
+
+                {mode === 'quick-gen-result' && !isLoadingAI && (
+                    <Button onClick={handleCompleteQuickGen}>Добавить в выражение</Button>
+                )}
+
+                {mode === 'guided-context' && !isLoadingAI && (
+                     <Button onClick={handleConfirmGuidedStart}>Создать пошаговый план</Button>
+                )}
+            </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -37,6 +37,19 @@ export const GuidedRegexStepSchema = z.object({
 });
 export type GuidedRegexStep = z.infer<typeof GuidedRegexStepSchema>;
 
+export const NextGuidedStepInputSchema = z.object({
+  query: z.string().describe('The original natural language query from the user.'),
+  exampleTestText: z.string().describe('The text the user is trying to match against.'),
+  existingSteps: z.array(GuidedRegexStepSchema).describe('An array of the steps that have already been generated.'),
+});
+
+export const RegenerateGuidedStepInputSchema = z.object({
+  query: z.string().describe('The original natural language query from the user.'),
+  exampleTestText: z.string().describe('The text the user is trying to match against.'),
+  stepsSoFar: z.array(GuidedRegexStepSchema).describe('The sequence of steps leading up to the one being regenerated.'),
+  stepToRegenerate: GuidedRegexStepSchema.describe('The step that the user was unhappy with and wants to replace.'),
+});
+
 export const GuidedRegexOutputSchema = z.object({
   steps: z.array(GuidedRegexStepSchema).describe('An array of guided steps to build the regex.'),
 });

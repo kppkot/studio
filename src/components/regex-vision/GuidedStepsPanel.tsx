@@ -1,79 +1,142 @@
 
 "use client";
-import React from 'react';
+import React, { useState } from 'react';
 import type { Block } from './types';
 import type { GuidedRegexStep } from '@/ai/flows/schemas';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { PlusCircle, CheckCircle, RefreshCw } from 'lucide-react';
-import { BLOCK_CONFIGS } from './constants';
-import { reconstructPatternFromChildren } from './utils';
+import { PlusCircle, CheckCircle, RefreshCw, Bot, Loader2, Wand2 } from 'lucide-react';
+import { generateNextGuidedStep, regenerateGuidedStep } from '@/ai/flows/guided-regex-flow';
+import { useToast } from '@/hooks/use-toast';
 
 interface GuidedStepsPanelProps {
-  steps: GuidedRegexStep[];
-  addedIndices: Set<number>;
-  onAddStep: (block: Block, index: number) => void;
+  query: string;
+  exampleTestText: string;
+  initialSteps: GuidedRegexStep[];
+  onAddStep: (block: Block) => void;
   onFinish: () => void;
-  onCancel: () => void;
-  onReset: () => void;
+  onResetAndFinish: () => void;
 }
 
-const getBlockPreview = (block: Block): string => {
-    const config = BLOCK_CONFIGS[block.type];
-    if (!config) return "Неизвестный блок";
-    
-    let details = "";
-    switch (block.type) {
-        case block.type.LITERAL: details = `"${(block.settings as any).text}"`; break;
-        case block.type.CHARACTER_CLASS: 
-            const pattern = reconstructPatternFromChildren(block.children) || (block.settings as any).pattern;
-            details = (block.settings as any).negated ? `[^${pattern}]` : `[${pattern}]`; 
-            break;
-        case block.type.QUANTIFIER: details = (block.settings as any).type; break;
-        default: details = config.name;
-    }
-    return details;
-};
+const GuidedStepsPanel: React.FC<GuidedStepsPanelProps> = ({
+  query,
+  exampleTestText,
+  initialSteps,
+  onAddStep,
+  onFinish,
+  onResetAndFinish,
+}) => {
+  const [steps, setSteps] = useState<GuidedRegexStep[]>(initialSteps);
+  const [addedIndices, setAddedIndices] = useState<Set<number>>(new Set());
+  const [isLoadingNext, setIsLoadingNext] = useState(false);
+  const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null);
+  const { toast } = useToast();
 
-const GuidedStepsPanel: React.FC<GuidedStepsPanelProps> = ({ steps, addedIndices, onAddStep, onFinish, onCancel, onReset }) => {
-  const allStepsAdded = addedIndices.size === steps.length;
-
-  const handleResetAndFinish = () => {
-    onReset();
-    onFinish();
+  const handleAdd = (block: Block, index: number) => {
+    onAddStep(block);
+    setAddedIndices(prev => new Set(prev).add(index));
   };
+
+  const handleNextStep = async () => {
+    setIsLoadingNext(true);
+    try {
+      const newStep = await generateNextGuidedStep({
+        query,
+        exampleTestText,
+        existingSteps: steps,
+      });
+      setSteps(prev => [...prev, newStep]);
+    } catch (error) {
+      console.error("Failed to generate next step:", error);
+      toast({ title: "Ошибка AI", description: "Не удалось сгенерировать следующий шаг.", variant: "destructive" });
+    } finally {
+      setIsLoadingNext(false);
+    }
+  };
+  
+  const handleRegenerate = async (indexToRegen: number) => {
+    setRegeneratingIndex(indexToRegen);
+    try {
+        const stepToRegenerate = steps[indexToRegen];
+        const stepsSoFar = steps.slice(0, indexToRegen);
+
+        const newStep = await regenerateGuidedStep({
+            query,
+            exampleTestText,
+            stepsSoFar,
+            stepToRegenerate
+        });
+
+        setSteps(prev => {
+            const newSteps = [...prev];
+            newSteps[indexToRegen] = newStep;
+            return newSteps;
+        });
+        // Allow re-adding the new step
+        setAddedIndices(prev => {
+            const newAdded = new Set(prev);
+            newAdded.delete(indexToRegen);
+            return newAdded;
+        });
+
+    } catch (error) {
+      console.error("Failed to regenerate step:", error);
+      toast({ title: "Ошибка AI", description: "Не удалось перегенерировать шаг.", variant: "destructive" });
+    } finally {
+        setRegeneratingIndex(null);
+    }
+  };
+
 
   return (
     <Card className="h-full shadow-none border-0 flex flex-col">
       <CardHeader className="py-3 px-4 border-b">
-        <CardTitle className="text-lg">Пошаговый план от AI</CardTitle>
+        <CardTitle className="text-lg flex items-center gap-2"><Bot size={20} /> Пошаговый план от AI</CardTitle>
       </CardHeader>
       <CardContent className="p-4 flex-1 min-h-0">
         <ScrollArea className="h-full pr-3">
-          <div className="space-y-2">
+          <div className="space-y-3">
             {steps.map((step, index) => (
-              <Card key={index} className="p-2 flex items-center gap-3">
-                <div className="flex-shrink-0 font-bold text-primary text-lg">{index + 1}</div>
-                <div className="flex-1">
-                  <p className="text-xs text-muted-foreground">{step.explanation}</p>
-                  <p className="font-mono text-xs bg-muted p-1 rounded mt-1">{getBlockPreview(step.block)}</p>
+              <Card key={`${step.block.id}-${index}`} className="p-2.5 flex flex-col gap-2">
+                <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0 font-bold text-primary text-lg mt-0.5">{index + 1}.</div>
+                    <div className="flex-1">
+                      <p className="text-sm">{step.explanation}</p>
+                    </div>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => onAddStep(step.block, index)} disabled={addedIndices.has(index)}>
-                  {addedIndices.has(index) ? <CheckCircle size={16} className="mr-2 text-green-600"/> : <PlusCircle size={16} className="mr-2"/>}
-                  {addedIndices.has(index) ? "Добавлено" : "Добавить"}
-                </Button>
+                <div className="flex items-center justify-end gap-2">
+                   <Button size="sm" variant="ghost" onClick={() => handleRegenerate(index)} disabled={regeneratingIndex !== null || isLoadingNext}>
+                       {regeneratingIndex === index ? (
+                           <><Loader2 size={16} className="mr-2 animate-spin"/> Перегенерация...</>
+                       ) : (
+                           <><RefreshCw size={16} className="mr-2"/> Перегенерировать шаг</>
+                       )}
+                   </Button>
+                   <Button size="sm" variant="outline" onClick={() => handleAdd(step.block, index)} disabled={addedIndices.has(index)}>
+                      {addedIndices.has(index) ? <CheckCircle size={16} className="mr-2 text-green-600"/> : <PlusCircle size={16} className="mr-2"/>}
+                      {addedIndices.has(index) ? "Добавлено" : "Добавить"}
+                    </Button>
+                </div>
               </Card>
             ))}
+             {isLoadingNext && (
+                <div className="flex items-center justify-center p-4 text-muted-foreground">
+                    <Loader2 size={20} className="mr-2 animate-spin" />
+                    <span>AI генерирует следующий шаг...</span>
+                </div>
+             )}
           </div>
         </ScrollArea>
       </CardContent>
-      <CardFooter className="pt-4 border-t flex justify-between">
-         <Button variant="destructive" size="sm" onClick={handleResetAndFinish}>
-            <RefreshCw size={16} className="mr-2"/> Очистить и завершить
+      <CardFooter className="pt-4 border-t flex flex-col gap-3">
+        <Button onClick={handleNextStep} disabled={isLoadingNext || regeneratingIndex !== null} className="w-full">
+            {isLoadingNext ? <><Loader2 size={16} className="mr-2 animate-spin" /> Загрузка...</> : <><Wand2 size={16} className="mr-2"/> Сгенерировать следующий шаг</>}
         </Button>
-        <Button variant="outline" size="sm" onClick={onCancel}>Отменить план</Button>
-        {allStepsAdded && <Button size="sm" onClick={onFinish}>Завершить</Button>}
+        <div className="w-full flex justify-between gap-2">
+            <Button variant="secondary" size="sm" onClick={onResetAndFinish}>Очистить и завершить</Button>
+            <Button variant="outline" size="sm" onClick={onFinish}>Завершить план</Button>
+        </div>
       </CardFooter>
     </Card>
   );
