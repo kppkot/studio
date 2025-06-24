@@ -261,6 +261,20 @@ const RegexVisionWorkspace: React.FC = () => {
     toast({ title: "Блоки добавлены", description: "Блоки из Помощника успешно добавлены." });
   }, [toast, blocks, selectedBlockId, regexFlags]);
 
+  const handleAddSingleBlockFromWizard = useCallback((block: Block) => {
+      const processedBlock = processAiBlocks([block])[0];
+      if (processedBlock) {
+          // If a container block is selected, add the new block inside it
+          const selBlock = selectedBlockId ? findBlockRecursive(blocks, selectedBlockId) : null;
+          if (selBlock && [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(selBlock.type)) {
+               setBlocks(prev => addChildRecursive(prev, selectedBlockId!, processedBlock));
+          } else {
+               setBlocks(prev => [...prev, processedBlock]);
+          }
+          setSelectedBlockId(processedBlock.id);
+      }
+  }, [blocks, selectedBlockId]);
+
 
   const handleUpdateBlock = useCallback((id: string, updatedBlockData: Partial<Block>) => {
       // Special handling for Character Class pattern changes
@@ -1092,6 +1106,7 @@ const RegexVisionWorkspace: React.FC = () => {
             setIsWizardModalOpen(false);
             setParentIdForNewBlock(null);
           }}
+          onAddSingleBlock={handleAddSingleBlockFromWizard}
           initialParentId={parentIdForNewBlock}
         />
       )}
