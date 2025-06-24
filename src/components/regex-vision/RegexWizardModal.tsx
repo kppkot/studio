@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Lightbulb, Bot, Loader2 } from 'lucide-react';
+import { Bot, Loader2 } from 'lucide-react';
 import { BlockType } from './types';
 import type { LiteralSettings } from './types';
 
@@ -22,17 +22,24 @@ interface RegexWizardModalProps {
   initialParentId: string | null;
 }
 
+// State for the two-step guided flow
+interface StagedForGuidedResult {
+  explanation: string;
+  exampleTestText: string;
+}
+
 const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, onComplete, onGuidedPlanReady, initialParentId }) => {
   const [query, setQuery] = useState('');
   const [isLoadingAI, setIsLoadingAI] = useState(false);
-  const [result, setResult] = useState<NaturalLanguageRegexOutput | null>(null);
-
+  const [quickGenResult, setQuickGenResult] = useState<NaturalLanguageRegexOutput | null>(null);
+  const [stagedForGuided, setStagedForGuided] = useState<StagedForGuidedResult | null>(null);
   const { toast } = useToast();
 
   const resetState = () => {
     setQuery('');
     setIsLoadingAI(false);
-    setResult(null);
+    setQuickGenResult(null);
+    setStagedForGuided(null);
   };
   
   const handleClose = () => {
@@ -46,16 +53,16 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     }
   }, [isOpen]);
 
-  const handleGenerateSingle = async () => {
+  const handleGenerateQuick = async () => {
     if (!query.trim()) {
       toast({ title: "Запрос не может быть пустым", variant: "destructive" });
       return;
     }
     setIsLoadingAI(true);
-    setResult(null);
+    setQuickGenResult(null);
     try {
       const aiResult = await generateRegexFromNaturalLanguage({ query });
-      setResult(aiResult);
+      setQuickGenResult(aiResult);
     } catch (error) {
       console.error("AI Regex Generation Error:", error);
       toast({ title: "Ошибка AI", description: "Не удалось связаться с AI сервисом.", variant: "destructive" });
@@ -64,17 +71,43 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     }
   };
 
-  const handleGenerateGuided = async () => {
+  const handlePreAnalysisForGuided = async () => {
     if (!query.trim()) {
       toast({ title: "Запрос не может быть пустым", variant: "destructive" });
       return;
     }
     setIsLoadingAI(true);
+    setStagedForGuided(null);
     try {
-      const planResult = await generateGuidedRegexPlan({ query });
+      const aiResult = await generateRegexFromNaturalLanguage({ query });
+      if (aiResult.exampleTestText && aiResult.explanation) {
+        setStagedForGuided({
+          explanation: aiResult.explanation,
+          exampleTestText: aiResult.exampleTestText,
+        });
+      } else {
+        toast({ title: "Ошибка AI", description: "AI не смог сгенерировать пример текста.", variant: "destructive" });
+      }
+    } catch (error) {
+      console.error("AI Guided Pre-analysis Error:", error);
+      toast({ title: "Ошибка AI", description: "Не удалось сгенерировать контекст.", variant: "destructive" });
+    } finally {
+      setIsLoadingAI(false);
+    }
+  };
+
+  const handleGenerateGuidedSteps = async () => {
+    if (!query.trim() || !stagedForGuided) return;
+    setIsLoadingAI(true);
+    try {
+      const planResult = await generateGuidedRegexPlan({ 
+        query,
+        exampleTestText: stagedForGuided.exampleTestText,
+      });
       if (planResult.steps.length > 0) {
         onGuidedPlanReady(query, planResult.steps);
         toast({ title: "AI построил пошаговый план!", description: "Панель с шагами появилась справа." });
+        handleClose();
       } else {
         toast({ title: "AI не смог построить план", description: "Попробуйте переформулировать запрос или использовать быструю генерацию.", variant: "destructive" });
       }
@@ -86,19 +119,47 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
     }
   };
 
-  const handleCompleteSingle = () => {
-    if (result?.parsedBlocks && result.parsedBlocks.length > 0) {
-      onComplete(query, result.parsedBlocks, initialParentId, result.exampleTestText, result.recommendedFlags);
-    } else if (result?.regex) {
+  const handleCompleteQuickGen = () => {
+    if (quickGenResult?.parsedBlocks && quickGenResult.parsedBlocks.length > 0) {
+      onComplete(query, quickGenResult.parsedBlocks, initialParentId, quickGenResult.exampleTestText, quickGenResult.recommendedFlags);
+    } else if (quickGenResult?.regex) {
       const fallbackBlock: Block = {
         id: 'fallback-literal-' + Date.now(),
         type: BlockType.LITERAL,
-        settings: { text: result.regex, isRawRegex: true } as LiteralSettings,
+        settings: { text: quickGenResult.regex, isRawRegex: true } as LiteralSettings,
         children: [],
       };
-      onComplete(query, [fallbackBlock], initialParentId, result.exampleTestText, result.recommendedFlags);
+      onComplete(query, [fallbackBlock], initialParentId, quickGenResult.exampleTestText, quickGenResult.recommendedFlags);
     }
     handleClose();
+  };
+
+  const renderFooter = () => {
+    if (isLoadingAI) {
+      return <Button disabled className="w-full"><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Обработка...</Button>;
+    }
+    if (quickGenResult) {
+      return (
+        <div className="w-full flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setQuickGenResult(null)}>Назад</Button>
+          <Button onClick={handleCompleteQuickGen}>Добавить в выражение</Button>
+        </div>
+      );
+    }
+    if (stagedForGuided) {
+      return (
+        <div className="w-full flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setStagedForGuided(null)}>Назад</Button>
+          <Button onClick={handleGenerateGuidedSteps}>Создать пошаговый план</Button>
+        </div>
+      );
+    }
+    return (
+      <div className="w-full flex justify-end gap-2">
+        <Button variant="outline" onClick={handlePreAnalysisForGuided} disabled={!query.trim()}>Пошаговый конструктор</Button>
+        <Button onClick={handleGenerateQuick} disabled={!query.trim()}>Быстрая генерация</Button>
+      </div>
+    );
   };
 
   return (
@@ -119,42 +180,42 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
                 className="h-24"
                 placeholder="Я хочу найти..."
                 autoFocus
-                disabled={isLoadingAI}
+                disabled={isLoadingAI || !!quickGenResult || !!stagedForGuided}
             />
 
            {isLoadingAI && <div className="flex items-center justify-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin mr-2" /> AI думает...</div>}
            
-           {result && !isLoadingAI && (
+           {quickGenResult && !isLoadingAI && (
               <div className="space-y-3 animate-in fade-in-50">
                   <p className="text-sm font-medium">Предложение от AI:</p>
                   <Card className="p-3 bg-muted/50">
                      <p className="text-sm font-semibold">Regex:</p>
-                     <p className="font-mono text-xs bg-background p-1.5 rounded-md">/{result.regex}/{result.recommendedFlags || ''}</p>
+                     <p className="font-mono text-xs bg-background p-1.5 rounded-md">/{quickGenResult.regex}/{quickGenResult.recommendedFlags || ''}</p>
                   </Card>
                   <div className="mt-3">
                       <p className="text-sm font-medium">Объяснение:</p>
                       <Card className="p-3 bg-muted/30 text-xs max-h-40 overflow-y-auto">
-                          <p className="whitespace-pre-wrap">{result.explanation}</p>
+                          <p className="whitespace-pre-wrap">{quickGenResult.explanation}</p>
                       </Card>
                   </div>
               </div>
            )}
+
+           {stagedForGuided && !isLoadingAI && (
+             <div className="space-y-3 animate-in fade-in-50">
+                 <p className="text-sm font-medium">Сгенерированный пример текста:</p>
+                 <Card className="p-3 bg-muted/50">
+                    <p className="text-sm font-semibold">Контекст для AI:</p>
+                    <p className="font-mono text-xs bg-background p-1.5 rounded-md whitespace-pre-wrap">{stagedForGuided.exampleTestText}</p>
+                 </Card>
+                 <p className="text-xs text-muted-foreground">AI будет использовать этот текст как основу для построения пошагового плана.</p>
+             </div>
+           )}
         </div>
 
-        <DialogFooter className="pt-4 border-t">
+        <DialogFooter className="pt-4 border-t flex-col sm:flex-row sm:justify-between sm:space-x-2">
           <Button variant="outline" onClick={handleClose}>Отмена</Button>
-          <div className="flex-grow"></div>
-           {result && !isLoadingAI ? (
-            <div className="flex gap-2">
-              <Button variant="secondary" onClick={() => setResult(null)}>Назад</Button>
-              <Button onClick={handleCompleteSingle}>Добавить в выражение</Button>
-            </div>
-           ) : (
-            <div className="flex gap-2">
-                 <Button onClick={handleGenerateGuided} disabled={!query.trim() || isLoadingAI}>Пошаговый конструктор</Button>
-                 <Button onClick={handleGenerateSingle} disabled={!query.trim() || isLoadingAI}>Быстрая генерация</Button>
-            </div>
-           )}
+          {renderFooter()}
         </DialogFooter>
       </DialogContent>
     </Dialog>

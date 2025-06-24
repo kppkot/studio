@@ -27,6 +27,7 @@ export type NaturalLanguageRegexOutput = z.infer<typeof NaturalLanguageRegexOutp
 // Schemas for Guided Regex Flow
 export const GuidedRegexInputSchema = z.object({
   query: z.string().describe('The natural language query describing the desired regex.'),
+  exampleTestText: z.string().optional().describe('A pre-generated example text to provide context for the plan.'),
 });
 export type GuidedRegexInput = z.infer<typeof GuidedRegexInputSchema>;
 

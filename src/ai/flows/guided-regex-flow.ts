@@ -25,7 +25,15 @@ const prompt = ai.definePrompt({
   input: {schema: GuidedRegexInputSchema},
   output: {schema: GuidedRegexOutputSchema},
   prompt: `You are a world-class regular expression expert who teaches users how to build regex step-by-step.
-Your task is to take a user's query and break it down into a logical sequence of individual, atomic regex blocks.
+Your task is to take a user's query and an example text, and break down the regex creation into a logical sequence of individual, atomic regex blocks based on them.
+
+**User Query:**
+"{{{query}}}"
+
+**Use this Example Text as the primary context for your plan:**
+\`\`\`
+{{{exampleTestText}}}
+\`\`\`
 
 For each step, you must provide:
 1.  A single regex block object.
@@ -35,31 +43,6 @@ For each step, you must provide:
 -   **Atomic Steps:** Each step should correspond to ONE block. Do not combine things. For "find the word 'cat'", you should have THREE steps: one for \`\\b\`, one for \`cat\`, one for \`\\b\`.
 -   **Clear Explanations:** The explanation should be simple enough for a beginner to understand.
 -   **Correct Block Structure:** The 'block' object must be a valid JSON object matching the Block schema definition.
-
-**Example Query:** "Найти 5-значный почтовый индекс"
-**Correct Output:**
-\`\`\`json
-{
-  "steps": [
-    {
-      "explanation": "Сначала найдем одну любую цифру.",
-      "block": {
-        "type": "CHARACTER_CLASS",
-        "settings": { "pattern": "\\\\d", "negated": false }
-      }
-    },
-    {
-      "explanation": "Теперь укажем, что цифра должна повторяться ровно 5 раз.",
-      "block": {
-        "type": "QUANTIFIER",
-        "settings": { "type": "{n}", "min": 5, "mode": "greedy" }
-      }
-    }
-  ]
-}
-\`\`\`
-
-User Query: {{{query}}}
 
 Produce the JSON output with the 'steps' array.
 `,
