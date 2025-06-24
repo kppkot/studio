@@ -2,6 +2,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import type { Block } from './types';
+import { BlockType } from './types';
 import type { GuidedRegexStep } from '@/ai/flows/schemas';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,9 +15,11 @@ interface GuidedStepsPanelProps {
   query: string;
   exampleTestText: string;
   initialSteps: GuidedRegexStep[];
-  onAddStep: (block: Block) => void;
+  onAddStep: (block: Block, parentId: string | null) => void;
   onFinish: () => void;
   onResetAndFinish: () => void;
+  selectedBlockId: string | null;
+  blocks: Block[];
 }
 
 const GuidedStepsPanel: React.FC<GuidedStepsPanelProps> = ({
@@ -26,6 +29,8 @@ const GuidedStepsPanel: React.FC<GuidedStepsPanelProps> = ({
   onAddStep,
   onFinish,
   onResetAndFinish,
+  selectedBlockId,
+  blocks,
 }) => {
   const [steps, setSteps] = useState<GuidedRegexStep[]>(initialSteps);
   const [addedIndices, setAddedIndices] = useState<Set<number>>(new Set());
@@ -45,7 +50,25 @@ const GuidedStepsPanel: React.FC<GuidedStepsPanelProps> = ({
 
 
   const handleAdd = (block: Block, index: number) => {
-    onAddStep(block);
+    let parentId: string | null = null;
+    if (selectedBlockId) {
+        const findBlockRecursive = (searchBlocks: Block[], id: string): Block | null => {
+            for (const b of searchBlocks) {
+                if (b.id === id) return b;
+                if (b.children) {
+                    const found = findBlockRecursive(b.children, id);
+                    if (found) return found;
+                }
+            }
+            return null;
+        };
+        const selectedBlock = findBlockRecursive(blocks, selectedBlockId);
+        if (selectedBlock && [BlockType.GROUP, BlockType.ALTERNATION, BlockType.LOOKAROUND, BlockType.CONDITIONAL, BlockType.CHARACTER_CLASS].includes(selectedBlock.type)) {
+            parentId = selectedBlockId;
+        }
+    }
+    
+    onAddStep(block, parentId);
     setAddedIndices(prev => new Set(prev).add(index));
   };
 

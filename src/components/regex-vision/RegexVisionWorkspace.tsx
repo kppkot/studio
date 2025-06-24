@@ -182,7 +182,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const addChildRecursive = (currentBlocks: Block[], pId: string, newBlock: Block): Block[] => {
     return currentBlocks.map(block => {
       if (block.id === pId) {
-        const parentCanBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(block.type);
+        const parentCanBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL, BlockType.CHARACTER_CLASS].includes(block.type);
         return { ...block, children: [...(block.children || []), newBlock], isExpanded: parentCanBeExpanded ? true : block.isExpanded };
       }
       if (block.children) {
@@ -299,12 +299,16 @@ const RegexVisionWorkspace: React.FC = () => {
     }
   }, [toast]);
 
-  const handleAddStepBlock = useCallback((block: Block) => {
+  const handleAddStepBlock = useCallback((block: Block, parentId: string | null) => {
       const processedBlock = processAiBlocks([block])[0];
-      if (processedBlock) {
-          setBlocks(prev => [...prev, processedBlock]);
-          setSelectedBlockId(null);
+      if (!processedBlock) return;
+
+      if (parentId) {
+        setBlocks(prev => addChildRecursive(prev, parentId, processedBlock));
+      } else {
+        setBlocks(prev => [...prev, processedBlock]);
       }
+      setSelectedBlockId(processedBlock.id);
       toast({ title: 'Блок добавлен!', description: `Блок был добавлен в конструктор.` });
   }, [toast]);
 
@@ -715,7 +719,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const toggleAllBlocksExpansion = (expand: boolean) => {
     const toggleRecursively = (currentBlocks: Block[]): Block[] => {
       return currentBlocks.map(b => {
-        const canBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(b.type);
+        const canBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL, BlockType.CHARACTER_CLASS].includes(b.type);
         return {
           ...b,
           isExpanded: canBeExpanded ? expand : b.isExpanded,
@@ -757,7 +761,7 @@ const RegexVisionWorkspace: React.FC = () => {
         const { block: currentBlock, parent, indexInParent } = findBlockAndParentRecursive(blocks, selectedBlockId);
         if (!currentBlock) return;
 
-        const canBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(currentBlock.type);
+        const canBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL, BlockType.CHARACTER_CLASS].includes(currentBlock.type);
 
         if (event.key === 'ArrowUp') {
           event.preventDefault();
@@ -1115,6 +1119,8 @@ const RegexVisionWorkspace: React.FC = () => {
                                 onAddStep={handleAddStepBlock}
                                 onFinish={handleClearGuidedMode}
                                 onResetAndFinish={handleResetAndClearGuidedMode}
+                                selectedBlockId={selectedBlockId}
+                                blocks={blocks}
                             />
                         )
                       ) : null}
