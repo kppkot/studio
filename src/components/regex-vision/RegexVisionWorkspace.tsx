@@ -7,6 +7,7 @@ import { BLOCK_CONFIGS } from './constants';
 import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks, cloneBlockForState, breakdownPatternIntoChildren, reconstructPatternFromChildren } from './utils'; 
 import { useToast } from '@/hooks/use-toast';
 import { generateRegexFromNaturalLanguage, type NaturalLanguageRegexOutput } from '@/ai/flows/natural-language-regex-flow';
+import type { GuidedRegexStep } from '@/ai/flows/schemas';
 
 import AppHeader from './AppHeader';
 import BlockNode from './BlockNode';
@@ -20,6 +21,7 @@ import PerformanceAnalyzerView from './PerformanceAnalyzerView';
 import PatternLibraryView from './PatternLibraryView';
 import RegexWizardModal from './RegexWizardModal';
 import AnalysisPanel from './AnalysisPanel';
+import GuidedStepsPanel from './GuidedStepsPanel';
 import { Button } from '@/components/ui/button';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -27,7 +29,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Sparkles, Gauge, Library, Lightbulb, Combine } from 'lucide-react'; 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
-import { cn } from '@/lib/utils';
 
 const RegexVisionWorkspace: React.FC = () => {
   const [blocks, setBlocks] = useState<Block[]>([]);
@@ -43,6 +44,9 @@ const RegexVisionWorkspace: React.FC = () => {
   const [regexOutput, setRegexOutput] = useState<{ regexString: string; groupInfos: GroupInfo[] }>({ regexString: '', groupInfos: [] });
   const [regexError, setRegexError] = useState<string | null>(null);
   const [lastWizardQuery, setLastWizardQuery] = useState('');
+  
+  const [guidedSteps, setGuidedSteps] = useState<GuidedRegexStep[]>([]);
+  const [addedStepIndices, setAddedStepIndices] = useState<Set<number>>(new Set());
 
 
   const { toast } = useToast();
@@ -261,19 +265,28 @@ const RegexVisionWorkspace: React.FC = () => {
     toast({ title: "Блоки добавлены", description: "Блоки из Помощника успешно добавлены." });
   }, [toast, blocks, selectedBlockId, regexFlags]);
 
-  const handleAddSingleBlockFromWizard = useCallback((block: Block) => {
+  const handleAddStep = useCallback((block: Block, index: number) => {
       const processedBlock = processAiBlocks([block])[0];
       if (processedBlock) {
-          // If a container block is selected, add the new block inside it
-          const selBlock = selectedBlockId ? findBlockRecursive(blocks, selectedBlockId) : null;
-          if (selBlock && [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(selBlock.type)) {
-               setBlocks(prev => addChildRecursive(prev, selectedBlockId!, processedBlock));
-          } else {
-               setBlocks(prev => [...prev, processedBlock]);
-          }
-          setSelectedBlockId(processedBlock.id);
+          setBlocks(prev => [...prev, processedBlock]);
+          setSelectedBlockId(null);
       }
-  }, [blocks, selectedBlockId]);
+      setAddedStepIndices(prev => new Set(prev).add(index));
+      toast({ title: 'Блок добавлен!', description: `Шаг ${index + 1} выполнен.` });
+  }, []);
+
+  const handleGuidedPlanReady = useCallback((query: string, steps: GuidedRegexStep[]) => {
+      setLastWizardQuery(query);
+      setGuidedSteps(steps);
+      setAddedStepIndices(new Set());
+      setIsWizardModalOpen(false);
+      setSelectedBlockId(null);
+  }, []);
+
+  const handleClearGuidedPlan = useCallback(() => {
+    setGuidedSteps([]);
+    setAddedStepIndices(new Set());
+  }, []);
 
 
   const handleUpdateBlock = useCallback((id: string, updatedBlockData: Partial<Block>) => {
@@ -770,6 +783,7 @@ const RegexVisionWorkspace: React.FC = () => {
     setSelectedBlockId(null); 
     setHoveredBlockId(null);
     setLastWizardQuery(pattern.name); 
+    handleClearGuidedPlan();
 
     try {
       const aiResult: NaturalLanguageRegexOutput = await generateRegexFromNaturalLanguage({ query: pattern.regexString });
@@ -970,7 +984,7 @@ const RegexVisionWorkspace: React.FC = () => {
       <ResizablePanelGroup direction="vertical" className="flex-1 overflow-hidden">
         <ResizablePanel defaultSize={65} minSize={30}>
           <ResizablePanelGroup direction="horizontal" className="h-full">
-            <ResizablePanel defaultSize={selectedBlockId ? 60 : 100} minSize={30} className="flex flex-col overflow-hidden">
+            <ResizablePanel defaultSize={(selectedBlockId || guidedSteps.length > 0) ? 60 : 100} minSize={30} className="flex flex-col overflow-hidden">
               <div className="flex-1 flex flex-col m-2 overflow-hidden">
                 <Card className="flex-1 flex flex-col shadow-md border-primary/20 overflow-hidden">
                   <CardHeader className="py-2 px-3 border-b">
@@ -1018,20 +1032,33 @@ const RegexVisionWorkspace: React.FC = () => {
                 />
               </div>
             </ResizablePanel>
-            {selectedBlockId && selectedBlock && (
+            
+            {(selectedBlockId || guidedSteps.length > 0) && (
               <>
                 <ResizableHandle withHandle />
-                <ResizablePanel defaultSize={40} minSize={25} maxSize={50} className="overflow-hidden">
+                 <ResizablePanel defaultSize={40} minSize={25} maxSize={50} className="overflow-hidden">
                    <div className="h-full m-2 ml-0 shadow-md border-primary/20 rounded-lg overflow-hidden bg-card">
-                     <SettingsPanel
-                        block={selectedBlock}
-                        onUpdate={handleUpdateBlock}
-                        onClose={() => setSelectedBlockId(null)}
-                      />
+                      {selectedBlockId && selectedBlock ? (
+                        <SettingsPanel
+                            block={selectedBlock}
+                            onUpdate={handleUpdateBlock}
+                            onClose={() => setSelectedBlockId(null)}
+                        />
+                      ) : guidedSteps.length > 0 ? (
+                        <GuidedStepsPanel
+                          steps={guidedSteps}
+                          addedIndices={addedStepIndices}
+                          onAddStep={handleAddStep}
+                          onFinish={handleClearGuidedPlan}
+                          onCancel={handleClearGuidedPlan}
+                          onReset={() => setBlocks([])}
+                        />
+                      ) : null}
                    </div>
                 </ResizablePanel>
               </>
             )}
+            
           </ResizablePanelGroup>
         </ResizablePanel>
         <ResizableHandle withHandle />
@@ -1106,7 +1133,7 @@ const RegexVisionWorkspace: React.FC = () => {
             setIsWizardModalOpen(false);
             setParentIdForNewBlock(null);
           }}
-          onAddSingleBlock={handleAddSingleBlockFromWizard}
+          onGuidedPlanReady={handleGuidedPlanReady}
           initialParentId={parentIdForNewBlock}
         />
       )}
