@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card";
 import { Bot, Loader2 } from 'lucide-react';
 import { BlockType } from './types';
 import type { LiteralSettings } from './types';
+import { Label } from '../ui/label';
 
 interface RegexWizardModalProps {
   isOpen: boolean;
@@ -202,13 +203,18 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
            )}
 
            {stagedForGuided && !isLoadingAI && (
-             <div className="space-y-3 animate-in fade-in-50">
-                 <p className="text-sm font-medium">Сгенерированный пример текста:</p>
-                 <Card className="p-3 bg-muted/50">
-                    <p className="text-sm font-semibold">Контекст для AI:</p>
-                    <p className="font-mono text-xs bg-background p-1.5 rounded-md whitespace-pre-wrap">{stagedForGuided.exampleTestText}</p>
-                 </Card>
-                 <p className="text-xs text-muted-foreground">AI будет использовать этот текст как основу для построения пошагового плана.</p>
+             <div className="space-y-2 animate-in fade-in-50">
+                 <Label htmlFor="guidedContext" className="text-sm font-medium">Контекст для AI</Label>
+                 <Textarea
+                    id="guidedContext"
+                    value={stagedForGuided.exampleTestText}
+                    onChange={(e) => setStagedForGuided(prev => prev ? { ...prev, exampleTestText: e.target.value } : null)}
+                    className="font-mono text-xs h-28"
+                    placeholder="Введите или отредактируйте пример текста"
+                 />
+                 <p className="text-xs text-muted-foreground px-1">
+                    Вы можете отредактировать этот текст. AI будет использовать его как основу для построения пошагового плана.
+                 </p>
              </div>
            )}
         </div>
