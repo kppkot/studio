@@ -7,8 +7,8 @@ import { BLOCK_CONFIGS } from './constants';
 import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks, cloneBlockForState, breakdownPatternIntoChildren, reconstructPatternFromChildren } from './utils'; 
 import { useToast } from '@/hooks/use-toast';
 import { generateRegexFromNaturalLanguage, type NaturalLanguageRegexOutput } from '@/ai/flows/natural-language-regex-flow';
-import { generateNextGuidedStep } from '@/ai/flows/guided-regex-flow';
-import type { GuidedRegexStep } from '@/ai/flows/schemas';
+import { generateNextGuidedStep, regenerateGuidedStep } from '@/ai/flows/guided-regex-flow';
+import type { GuidedRegexStep, NextGuidedStepInput, RegenerateGuidedStepInput } from '@/ai/flows/schemas';
 
 import BlockNode from './BlockNode';
 import SettingsPanel from './SettingsPanel';
@@ -288,7 +288,8 @@ const RegexVisionWorkspace: React.FC = () => {
     setGuidedModeState({ query, exampleTestText, steps: [], isLoading: true });
 
     try {
-        const firstStep = await generateNextGuidedStep({ query, exampleTestText, existingSteps: [] });
+        const input: NextGuidedStepInput = { query, exampleTestText, existingSteps: [] };
+        const firstStep = await generateNextGuidedStep(input);
         setGuidedModeState({ query, exampleTestText, steps: [firstStep], isLoading: false });
         toast({ title: "Пошаговый режим запущен!", description: "AI предложил первый шаг." });
     } catch (error) {
@@ -1094,7 +1095,13 @@ const RegexVisionWorkspace: React.FC = () => {
                 <ResizableHandle withHandle />
                  <ResizablePanel defaultSize={40} minSize={25} maxSize={50} className="overflow-hidden">
                    <div className="h-full m-2 ml-0 shadow-md border-primary/20 rounded-lg overflow-hidden bg-card">
-                      {guidedModeState ? (
+                      {selectedBlockId && selectedBlock ? (
+                        <SettingsPanel
+                            block={selectedBlock}
+                            onUpdate={handleUpdateBlock}
+                            onClose={() => setSelectedBlockId(null)}
+                        />
+                      ) : guidedModeState ? (
                         guidedModeState.isLoading ? (
                             <div className="flex items-center justify-center h-full text-muted-foreground">
                                 <Loader2 className="h-6 w-6 animate-spin mr-3" />
@@ -1110,12 +1117,6 @@ const RegexVisionWorkspace: React.FC = () => {
                                 onResetAndFinish={handleResetAndClearGuidedMode}
                             />
                         )
-                      ) : selectedBlockId && selectedBlock ? (
-                        <SettingsPanel
-                            block={selectedBlock}
-                            onUpdate={handleUpdateBlock}
-                            onClose={() => setSelectedBlockId(null)}
-                        />
                       ) : null}
                    </div>
                 </ResizablePanel>
