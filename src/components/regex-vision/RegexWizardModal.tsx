@@ -19,7 +19,7 @@ import type { LiteralSettings } from './types';
 interface RegexWizardModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onComplete: (blocks: Block[], parentId: string | null, exampleTestText?: string, recommendedFlags?: string) => void;
+  onComplete: (query: string, blocks: Block[], parentId: string | null, exampleTestText?: string, recommendedFlags?: string) => void;
   initialParentId: string | null;
 }
 
@@ -65,7 +65,15 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
 
   const handleComplete = () => {
     if (result?.parsedBlocks && result.parsedBlocks.length > 0) {
-      onComplete(result.parsedBlocks, initialParentId, result.exampleTestText || undefined, result.recommendedFlags || undefined);
+      onComplete(query, result.parsedBlocks, initialParentId, result.exampleTestText || undefined, result.recommendedFlags || undefined);
+    } else if (result?.regex) {
+      const fallbackBlock: Block = {
+        id: 'fallback-literal-' + Date.now(),
+        type: BlockType.LITERAL,
+        settings: { text: result.regex, isRawRegex: true } as LiteralSettings,
+        children: [],
+      };
+      onComplete(query, [fallbackBlock], initialParentId, result.exampleTestText || undefined, result.recommendedFlags || undefined);
     } else {
         onClose();
     }
@@ -169,7 +177,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
             <div className="flex-grow"></div>
             <Button
                 onClick={handleComplete}
-                disabled={isLoadingAI || !result || !result.parsedBlocks || result.parsedBlocks.length === 0}
+                disabled={isLoadingAI || !result}
             >
                 Добавить в выражение
             </Button>

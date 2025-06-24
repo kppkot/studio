@@ -19,6 +19,7 @@ import DebugView from './DebugView';
 import PerformanceAnalyzerView from './PerformanceAnalyzerView';
 import PatternLibraryView from './PatternLibraryView';
 import RegexWizardModal from './RegexWizardModal';
+import AnalysisPanel from './AnalysisPanel';
 import { Button } from '@/components/ui/button';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -40,6 +41,8 @@ const RegexVisionWorkspace: React.FC = () => {
   const [regexFlags, setRegexFlags] = useState<string>('g');
   const [matches, setMatches] = useState<RegexMatch[]>([]);
   const [regexOutput, setRegexOutput] = useState<{ regexString: string; groupInfos: GroupInfo[] }>({ regexString: '', groupInfos: [] });
+  const [regexError, setRegexError] = useState<string | null>(null);
+  const [lastWizardQuery, setLastWizardQuery] = useState('');
 
 
   const { toast } = useToast();
@@ -60,18 +63,22 @@ const RegexVisionWorkspace: React.FC = () => {
           groups: Array.from(rawMatch).slice(1), 
         }));
         setMatches(formattedMatches);
+        setRegexError(null);
       } catch (error) {
         setMatches([]);
         if (error instanceof Error) {
+            const errorMessage = `Ошибка: ${error.message}. Пожалуйста, исправьте блоки в конструкторе.`;
             toast({
                 title: "Некорректное регулярное выражение",
-                description: `Ошибка: ${error.message}. Пожалуйста, исправьте блоки в конструкторе.`,
+                description: errorMessage,
                 variant: "destructive",
             });
+            setRegexError(error.message);
         }
       }
     } else {
       setMatches([]);
+       setRegexError(null);
     }
   }, [blocks, testText, regexFlags, toast]);
 
@@ -203,8 +210,10 @@ const RegexVisionWorkspace: React.FC = () => {
   }, [toast, blocks, selectedBlockId]);
 
 
-  const handleAddBlocksFromWizard = useCallback((newBlocks: Block[], parentIdFromWizard: string | null, exampleTestText?: string, recommendedFlags?: string) => {
+  const handleAddBlocksFromWizard = useCallback((query: string, newBlocks: Block[], parentIdFromWizard: string | null, exampleTestText?: string, recommendedFlags?: string) => {
     if (newBlocks.length === 0) return;
+    
+    setLastWizardQuery(query);
 
     let targetParentId = parentIdFromWizard;
 
@@ -746,7 +755,8 @@ const RegexVisionWorkspace: React.FC = () => {
     setRegexFlags(pattern.flags);
     setTestText(pattern.testString || '');
     setSelectedBlockId(null); 
-    setHoveredBlockId(null); 
+    setHoveredBlockId(null);
+    setLastWizardQuery(pattern.name); 
 
     try {
       const aiResult: NaturalLanguageRegexOutput = await generateRegexFromNaturalLanguage({ query: pattern.regexString });
@@ -931,42 +941,51 @@ const RegexVisionWorkspace: React.FC = () => {
         <ResizablePanel defaultSize={65} minSize={30}>
           <ResizablePanelGroup direction="horizontal" className="h-full">
             <ResizablePanel defaultSize={selectedBlockId ? 60 : 100} minSize={30} className="flex flex-col overflow-hidden">
-              <Card className="m-2 flex-1 flex flex-col shadow-md border-primary/20 overflow-hidden">
-                <CardHeader className="py-2 px-3 border-b">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base flex items-center gap-2"><Edit3 size={18} className="text-primary"/> Дерево выражения</CardTitle>
-                    <div className="flex items-center gap-1">
-                      <Button variant="outline" size="iconSm" onClick={handleExpandAll} title="Развернуть всё (Ctrl+Shift+Вниз)">
-                        <UnfoldVertical size={14} />
-                      </Button>
-                      <Button variant="outline" size="iconSm" onClick={handleCollapseAll} title="Свернуть всё (Ctrl+Shift+Вверх)">
-                        <FoldVertical size={14} />
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => { setParentIdForNewBlock(null); setIsWizardModalOpen(true); }}>
-                        <Sparkles size={16} className="mr-1 text-amber-500" /> AI Помощник
-                      </Button>
-                      <Button size="sm" onClick={() => { setParentIdForNewBlock(null); setIsPaletteVisible(true); }}>
-                        <Plus size={16} className="mr-1" /> Добавить блок
-                      </Button>
+              <div className="flex-1 flex flex-col m-2 overflow-hidden">
+                <Card className="flex-1 flex flex-col shadow-md border-primary/20 overflow-hidden">
+                  <CardHeader className="py-2 px-3 border-b">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base flex items-center gap-2"><Edit3 size={18} className="text-primary"/> Дерево выражения</CardTitle>
+                      <div className="flex items-center gap-1">
+                        <Button variant="outline" size="iconSm" onClick={handleExpandAll} title="Развернуть всё (Ctrl+Shift+Вниз)">
+                          <UnfoldVertical size={14} />
+                        </Button>
+                        <Button variant="outline" size="iconSm" onClick={handleCollapseAll} title="Свернуть всё (Ctrl+Shift+Вверх)">
+                          <FoldVertical size={14} />
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => { setParentIdForNewBlock(null); setIsWizardModalOpen(true); }}>
+                          <Sparkles size={16} className="mr-1 text-amber-500" /> AI Помощник
+                        </Button>
+                        <Button size="sm" onClick={() => { setParentIdForNewBlock(null); setIsPaletteVisible(true); }}>
+                          <Plus size={16} className="mr-1" /> Добавить блок
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-3 flex-1 min-h-0">
-                  <ScrollArea className="h-full pr-2">
-                    {blocks.length === 0 ? (
-                      <div className="text-center text-muted-foreground py-10 flex flex-col items-center justify-center h-full">
-                        <Layers size={48} className="mb-3 opacity-50" />
-                        <p className="font-medium">Начните строить свой regex!</p>
-                        <p className="text-sm">Нажмите "Добавить блок" или используйте "AI Помощник".</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-0.5"> 
-                         {renderBlockNodes(blocks, null, 0, regexOutput.groupInfos)}
-                      </div>
-                    )}
-                  </ScrollArea>
-                </CardContent>
-              </Card>
+                  </CardHeader>
+                  <CardContent className="p-3 flex-1 min-h-0">
+                    <ScrollArea className="h-full pr-2">
+                      {blocks.length === 0 ? (
+                        <div className="text-center text-muted-foreground py-10 flex flex-col items-center justify-center h-full">
+                          <Layers size={48} className="mb-3 opacity-50" />
+                          <p className="font-medium">Начните строить свой regex!</p>
+                          <p className="text-sm">Нажмите "Добавить блок" или используйте "AI Помощник".</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-0.5"> 
+                          {renderBlockNodes(blocks, null, 0, regexOutput.groupInfos)}
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+                <AnalysisPanel
+                  isVisible={regexError !== null}
+                  originalQuery={lastWizardQuery}
+                  generatedRegex={regexOutput.regexString}
+                  testText={testText}
+                  errorContext={regexError ?? undefined}
+                />
+              </div>
             </ResizablePanel>
             {selectedBlockId && selectedBlock && (
               <>
@@ -1051,8 +1070,8 @@ const RegexVisionWorkspace: React.FC = () => {
             setIsWizardModalOpen(false);
             setParentIdForNewBlock(null);
           }}
-          onComplete={(wizardBlocks, parentId, exampleText, flags) => { 
-            handleAddBlocksFromWizard(wizardBlocks, parentId, exampleText, flags); 
+          onComplete={(query, wizardBlocks, parentId, exampleText, flags) => { 
+            handleAddBlocksFromWizard(query, wizardBlocks, parentId, exampleText, flags); 
             setIsWizardModalOpen(false);
             setParentIdForNewBlock(null);
           }}
