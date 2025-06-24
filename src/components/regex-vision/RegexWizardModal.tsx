@@ -181,23 +181,25 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         return (
             <div className="flex-1 min-h-0 flex flex-col">
                 <Label className="text-sm font-medium mb-2">Пошаговый план от AI:</Label>
-                <ScrollArea className="flex-1 pr-4 -mr-4 border rounded-md p-2 bg-muted/30">
-                    <div className="space-y-2">
-                        {guidedSteps.map((step, index) => (
-                            <Card key={index} className="p-2 flex items-center gap-3">
-                                <div className="flex-shrink-0 font-bold text-primary text-lg">{index + 1}</div>
-                                <div className="flex-1">
-                                    <p className="text-xs text-muted-foreground">{step.explanation}</p>
-                                    <p className="font-mono text-xs bg-background p-1 rounded mt-1">{getBlockPreview(step.block)}</p>
-                                </div>
-                                <Button size="sm" variant="outline" onClick={() => handleAddStep(step.block, index)} disabled={addedStepIndices.has(index)}>
-                                    {addedStepIndices.has(index) ? <CheckCircle size={16} className="mr-2 text-green-600"/> : <PlusCircle size={16} className="mr-2"/>}
-                                    {addedStepIndices.has(index) ? "Добавлено" : "Добавить"}
-                                </Button>
-                            </Card>
-                        ))}
-                    </div>
-                </ScrollArea>
+                <div className="flex-1 min-h-0">
+                  <ScrollArea className="h-full pr-4 -mr-4 border rounded-md p-2 bg-muted/30">
+                      <div className="space-y-2">
+                          {guidedSteps.map((step, index) => (
+                              <Card key={index} className="p-2 flex items-center gap-3">
+                                  <div className="flex-shrink-0 font-bold text-primary text-lg">{index + 1}</div>
+                                  <div className="flex-1">
+                                      <p className="text-xs text-muted-foreground">{step.explanation}</p>
+                                      <p className="font-mono text-xs bg-background p-1 rounded mt-1">{getBlockPreview(step.block)}</p>
+                                  </div>
+                                  <Button size="sm" variant="outline" onClick={() => handleAddStep(step.block, index)} disabled={addedStepIndices.has(index)}>
+                                      {addedStepIndices.has(index) ? <CheckCircle size={16} className="mr-2 text-green-600"/> : <PlusCircle size={16} className="mr-2"/>}
+                                      {addedStepIndices.has(index) ? "Добавлено" : "Добавить"}
+                                  </Button>
+                              </Card>
+                          ))}
+                      </div>
+                  </ScrollArea>
+                </div>
             </div>
         )
     }
