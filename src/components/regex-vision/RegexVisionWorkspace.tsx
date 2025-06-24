@@ -282,9 +282,10 @@ const RegexVisionWorkspace: React.FC = () => {
       toast({ title: 'Блок добавлен!', description: `Шаг ${index + 1} выполнен.` });
   }, []);
 
-  const handleGuidedPlanReady = useCallback((query: string, steps: GuidedRegexStep[]) => {
+  const handleGuidedPlanReady = useCallback((query: string, steps: GuidedRegexStep[], exampleTestText: string) => {
       setLastWizardQuery(query);
       setGuidedSteps(steps);
+      setTestText(exampleTestText);
       setAddedStepIndices(new Set());
       setIsWizardModalOpen(false);
       setSelectedBlockId(null);
@@ -1174,5 +1175,3 @@ const RegexVisionWorkspace: React.FC = () => {
 };
 
 export default RegexVisionWorkspace;
-
-    

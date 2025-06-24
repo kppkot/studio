@@ -19,7 +19,7 @@ interface RegexWizardModalProps {
   isOpen: boolean;
   onClose: () => void;
   onComplete: (query: string, blocks: Block[], parentId: string | null, exampleTestText?: string, recommendedFlags?: string) => void;
-  onGuidedPlanReady: (query: string, steps: GuidedRegexStep[]) => void;
+  onGuidedPlanReady: (query: string, steps: GuidedRegexStep[], exampleTestText: string) => void;
   initialParentId: string | null;
 }
 
@@ -106,7 +106,7 @@ const RegexWizardModal: React.FC<RegexWizardModalProps> = ({ isOpen, onClose, on
         exampleTestText: stagedForGuided.exampleTestText,
       });
       if (planResult.steps.length > 0) {
-        onGuidedPlanReady(query, planResult.steps);
+        onGuidedPlanReady(query, planResult.steps, stagedForGuided.exampleTestText);
         toast({ title: "AI построил пошаговый план!", description: "Панель с шагами появилась справа." });
         handleClose();
       } else {
