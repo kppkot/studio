@@ -156,14 +156,14 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
     <>
       <div className="fixed inset-0 bg-black/30 z-40 backdrop-blur-sm" onClick={onToggle} aria-hidden="true" />
       <Card className="fixed bottom-6 right-6 w-96 max-h-[calc(100vh-6rem)] flex flex-col shadow-xl z-50 border-primary">
-        <CardHeader className="py-3 px-4 border-b flex flex-row items-center justify-between">
-          <CardTitle className="text-lg">Добавить блок</CardTitle>
-          <Button variant="ghost" size="icon" onClick={onToggle} className="h-8 w-8">
-            <X size={18} />
-          </Button>
-        </CardHeader>
-        <div className="p-3 border-b">
-          <div className="relative">
+        <CardHeader className="py-3 px-4 border-b">
+          <div className="flex items-center justify-between mb-2">
+            <CardTitle className="text-lg">Добавить блок</CardTitle>
+            <Button variant="ghost" size="icon" onClick={onToggle} className="h-8 w-8">
+              <X size={18} />
+            </Button>
+          </div>
+           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               type="text"
@@ -174,7 +174,8 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
               autoFocus
             />
           </div>
-        </div>
+        </CardHeader>
+        
         <ScrollArea className="flex-1">
           <div className="p-3 space-y-2">
             {isLoadingAi && <p className="text-sm text-muted-foreground p-2 text-center">Загрузка AI подсказок...</p>}
