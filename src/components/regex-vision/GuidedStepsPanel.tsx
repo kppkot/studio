@@ -1,7 +1,7 @@
 
 "use client";
 import React, { useState, useEffect, useMemo } from 'react';
-import type { Block } from './types';
+import type { Block, CharacterClassSettings } from './types';
 import { BlockType } from './types';
 import type { GuidedRegexStep } from '@/ai/flows/schemas';
 import { Button } from "@/components/ui/button";
@@ -64,8 +64,17 @@ const GuidedStepsPanel: React.FC<GuidedStepsPanelProps> = ({
             return null;
         };
         const selectedBlock = findBlockRecursive(blocks, selectedBlockId);
-        if (selectedBlock && [BlockType.GROUP, BlockType.ALTERNATION, BlockType.LOOKAROUND, BlockType.CONDITIONAL, BlockType.CHARACTER_CLASS].includes(selectedBlock.type)) {
-            parentId = selectedBlockId;
+        
+        if (selectedBlock) {
+            const isGenericContainer = [BlockType.GROUP, BlockType.ALTERNATION, BlockType.LOOKAROUND, BlockType.CONDITIONAL].includes(selectedBlock.type);
+            // A CHARACTER_CLASS is a container only if it's being used to build a set, 
+            // which we can infer if its main `pattern` property is empty or if it already has children.
+            const isCharClassAsContainer = selectedBlock.type === BlockType.CHARACTER_CLASS && 
+                (!(selectedBlock.settings as CharacterClassSettings).pattern || (selectedBlock.children && selectedBlock.children.length > 0));
+
+            if (isGenericContainer || isCharClassAsContainer) {
+                 parentId = selectedBlockId;
+            }
         }
     }
     

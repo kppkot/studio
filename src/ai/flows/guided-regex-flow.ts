@@ -82,7 +82,7 @@ Based on all the information above, determine the **next single, atomic step**.
     *   **ANCHOR:** For positions (e.g., \`^\`, \`$\`, \`\\b\`).
     *   **GROUP / ALTERNATION**: These are containers and should be generated empty. Their children are added in subsequent steps.
 5.  **EXPLANATION (in Russian):** Provide a very short, clear explanation of what this single block does and why it's the next logical step.
-6.  **FINAL STEP:** If you determine that this new step **completes** the regex and fully satisfies the user's request, you MUST set the \`isFinalStep\` field to \`true\`. Otherwise, omit it or set it to \`false\`.
+6.  **FINAL STEP:** If you determine that this new step **completes** the regex and fully satisfies the user's request, you MUST set the \`isFinalStep\` field to \`true\`. Do not mark simple, incomplete patterns as final. For a query like 'find an email address', a pattern of just \`\\w+@\` is NOT a final step. The expression must be reasonably complete. Otherwise, omit it or set it to \`false\`.
 
 Generate the JSON for the next single step, adhering strictly to the canons.
 `,
@@ -162,7 +162,7 @@ Based on the goal and the previous steps, provide a **new, alternative, single, 
     *   **ANCHOR:** For positions (e.g., \`^\`, \`$\`, \`\\b\`).
     *   **GROUP / ALTERNATION**: These are containers and should be generated empty.
 5.  **EXPLANATION (in Russian):** Provide a very short, clear explanation for the new step.
-6.  **FINAL STEP:** If this new, alternative step now **completes** the regex and fully satisfies the user's request, you MUST set the \`isFinalStep\` field to \`true\`.
+6.  **FINAL STEP:** If this new, alternative step now **completes** the regex and fully satisfies the user's request, you MUST set the \`isFinalStep\` field to \`true\`. An expression is complete when it can reasonably match the user's full intent (e.g., a full email pattern, not just the start of one).
 
 Generate the JSON for the new alternative single step, adhering strictly to the canons.
 `,
