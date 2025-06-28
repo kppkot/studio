@@ -341,20 +341,31 @@ const RegexVisionWorkspace: React.FC = () => {
       return;
     }
 
-    let targetParentId = parentId;
+    let targetParentId: string | null = parentId;
+    let parentBlock: Block | null = null;
+    
     if (!targetParentId && selectedBlockId) {
       const selBlock = findBlockRecursive(blocks, selectedBlockId);
       if (selBlock && [BlockType.GROUP, BlockType.ALTERNATION, BlockType.LOOKAROUND, BlockType.CONDITIONAL, BlockType.CHARACTER_CLASS].includes(selBlock.type)) {
         targetParentId = selectedBlockId;
+        parentBlock = selBlock;
       }
+    } else if (targetParentId) {
+        parentBlock = findBlockRecursive(blocks, targetParentId);
     }
 
     if (targetParentId) {
       setBlocks(prev => addChildRecursive(prev, targetParentId, processedBlock));
+      
+      if (parentBlock && parentBlock.type === BlockType.ALTERNATION) {
+          setSelectedBlockId(targetParentId);
+      } else {
+          setSelectedBlockId(processedBlock.id);
+      }
     } else {
       setBlocks(prev => [...prev, processedBlock]);
+      setSelectedBlockId(processedBlock.id);
     }
-    setSelectedBlockId(processedBlock.id);
   }, [toast, blocks, selectedBlockId]);
 
   const handleClearGuidedMode = useCallback(() => {
