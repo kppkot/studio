@@ -75,7 +75,7 @@ Based on all the information above, determine the **next single, atomic step**.
     *   Step N+2: Create a \`LITERAL\` block for "A" (which will be placed inside the alternation).
     *   Step N+3: Create a \`LITERAL\` block for "B".
     *   Step N+4: Create a \`LITERAL\` block for "C".
-    *   You are **STRICTLY FORBIDDEN** from creating a single \`LITERAL\` that contains multiple options like \`"A|B|C"\`. Each option is its own atomic step.
+    *   You are **STRICTLY FORBIDDEN** from creating a single \`LITERAL\` that contains multiple options like \`"A|B|C"\`.
 5.  **SIMPLE BLOCKS ONLY:** Your generated 'block' object MUST be one of the simple, predefined types.
     *   **LITERAL:** For a single character or short, simple string (e.g., \`@\`, \`.\`, \`cat\`). DO NOT generate the \`|\` character inside a \`LITERAL\` block. Each \`LITERAL\` must contain non-empty text.
     *   **CHARACTER_CLASS:** For a set of characters. The \`pattern\` must be for **ONE ATOMIC ELEMENT**. Valid examples: \`a-z\`, \`A-Z\`, \`0-9\`, \`\\w\`, \`\\s\`, \`\\d\`. **YOU ARE FORBIDDEN** from creating complex patterns like \`[a-zA-Z0-9._%+-]\` in a single step.
