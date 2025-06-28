@@ -69,12 +69,11 @@ Based on all the information above, determine the **next single, atomic step**.
 1.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step. Each step must correspond to **ONE** single, simple block. Do not combine concepts. For example, to match \`[a-z]+\`, you must first generate a \`CHARACTER_CLASS\` block for \`a-z\`, and in the *next* step, generate the \`QUANTIFIER\` block for \`+\`.
 2.  **LEFT-TO-RIGHT CONSTRUCTION:** Your primary strategy should be to build the expression sequentially, matching the user's textual goal from left to right. For "find an email address," start with the username, then '@', then the domain. Do not start in the middle.
 3.  **CONTEXT IS KING:** Look at the \`existingSteps\`. If the last step created an empty container (like \`GROUP\` or \`ALTERNATION\`), your next step **MUST** be to add the first child for that container. Do not add new top-level blocks when a container is waiting to be filled.
-4.  **HOW TO BUILD \`(A or B or C)\`:** To match one of several options, you MUST follow this **exact** sequence over multiple steps:
-    *   Step N: Create the \`GROUP\` block.
-    *   Step N+1: Create the \`ALTERNATION\` block (which will be placed inside the group).
-    *   Step N+2: Create a \`LITERAL\` block for "A" (which will be placed inside the alternation).
-    *   Step N+3: Create a \`LITERAL\` block for "B".
-    *   Step N+4: Create a \`LITERAL\` block for "C".
+4.  **HOW TO BUILD AND EXPLAIN \`(A or B or C)\`:** To match one of several options, you MUST follow this **exact** sequence over multiple steps. Your explanations must also follow a clear logic:
+    *   Step N: Create the \`GROUP\` block. **Explanation:** Explain this as creating a 'container' for the options. DO NOT mention 'OR' in this step.
+    *   Step N+1: Create the \`ALTERNATION\` block (which will be placed inside the group). **Explanation:** Explain that this block *activates* the 'OR' logic for the items inside the container.
+    *   Step N+2: Create a \`LITERAL\` block for option "A". **Explanation:** Explain that you are adding the first option to the list.
+    *   Step N+3: Create a \`LITERAL\` block for option "B". **Explanation:** Explain that you are adding the next option.
     *   You are **STRICTLY FORBIDDEN** from creating a single \`LITERAL\` that contains multiple options like \`"A|B|C"\`.
 5.  **SIMPLE BLOCKS ONLY:** Your generated 'block' object MUST be one of the simple, predefined types.
     *   **LITERAL:** For a single character or short, simple string (e.g., \`@\`, \`.\`, \`cat\`). DO NOT generate the \`|\` character inside a \`LITERAL\` block. Each \`LITERAL\` must contain non-empty text.
@@ -152,10 +151,10 @@ Based on the goal and the previous steps, provide a **new, alternative, single, 
 1.  **DIFFERENT & BETTER:** The new step must be a different approach or a more correct version of the rejected one.
 2.  **LEFT-TO-RIGHT CONSTRUCTION:** Your primary strategy should be to build the expression sequentially, matching the user's textual goal from left to right. A regenerated step should still logically follow the sequence built so far.
 3.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step. The step must correspond to **ONE** simple block (e.g., \`[a-z]\`, \`+\`, \`\\b\`). Do not combine concepts.
-4.  **HOW TO BUILD \`(A or B or C)\`:** To match one of several options, you MUST follow this **exact** sequence over multiple steps:
-    *   Step N: Create the \`GROUP\` block.
-    *   Step N+1: Create the \`ALTERNATION\` block (which will be placed inside the group).
-    *   Step N+2: Create a \`LITERAL\` block for "A" (which will be placed inside the alternation).
+4.  **HOW TO BUILD AND EXPLAIN \`(A or B or C)\`:** To match one of several options, you MUST follow this **exact** sequence over multiple steps. Your explanations must also follow a clear logic:
+    *   Step N: Create the \`GROUP\` block. **Explanation:** Explain this as creating a 'container' for the options. DO NOT mention 'OR' in this step.
+    *   Step N+1: Create the \`ALTERNATION\` block (which will be placed inside the group). **Explanation:** Explain that this block *activates* the 'OR' logic for the items inside the container.
+    *   Step N+2: Create a \`LITERAL\` block for option "A". **Explanation:** Explain that you are adding the first option to the list.
     *   You are **STRICTLY FORBIDDEN** from creating a single \`LITERAL\` that contains multiple options like \`"A|B|C"\`. Each option is its own atomic step.
 5.  **SIMPLE BLOCKS ONLY:** Your generated 'block' object MUST be one of the simple, predefined types.
     *   **LITERAL:** For a single character or short, simple string (e.g., \`@\`, \`.\`, \`cat\`). DO NOT generate the \`|\` character inside a \`LITERAL\` block. Each \`LITERAL\` must contain non-empty text.
