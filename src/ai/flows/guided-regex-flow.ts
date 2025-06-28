@@ -67,22 +67,23 @@ Based on all the information above, determine the **next single, atomic step**.
 
 **CRITICAL CANONS OF REGEX CONSTRUCTION (YOU MUST OBEY THESE):**
 1.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step. Each step must correspond to **ONE** single, simple block. Do not combine concepts. For example, to match \`[a-z]+\`, you must first generate a \`CHARACTER_CLASS\` block for \`a-z\`, and in the *next* step, generate the \`QUANTIFIER\` block for \`+\`.
-2.  **CONTEXT IS KING:** Look at the \`existingSteps\`. If the last step created an empty container (like \`GROUP\` or \`ALTERNATION\`), your next step **MUST** be to add the first child for that container. Do not add new top-level blocks when a container is waiting to be filled.
-3.  **HOW TO BUILD \`(A or B or C)\`:** To match one of several options, you MUST follow this **exact** sequence over multiple steps:
+2.  **LEFT-TO-RIGHT CONSTRUCTION:** Your primary strategy should be to build the expression sequentially, matching the user's textual goal from left to right. For "find an email address," start with the username, then '@', then the domain. Do not start in the middle.
+3.  **CONTEXT IS KING:** Look at the \`existingSteps\`. If the last step created an empty container (like \`GROUP\` or \`ALTERNATION\`), your next step **MUST** be to add the first child for that container. Do not add new top-level blocks when a container is waiting to be filled.
+4.  **HOW TO BUILD \`(A or B or C)\`:** To match one of several options, you MUST follow this **exact** sequence over multiple steps:
     *   Step N: Create the \`GROUP\` block.
     *   Step N+1: Create the \`ALTERNATION\` block (which will be placed inside the group).
     *   Step N+2: Create a \`LITERAL\` block for "A" (which will be placed inside the alternation).
     *   Step N+3: Create a \`LITERAL\` block for "B".
     *   Step N+4: Create a \`LITERAL\` block for "C".
     *   You are **STRICTLY FORBIDDEN** from creating a single \`LITERAL\` that contains multiple options like \`"A|B|C"\`. Each option is its own atomic step.
-4.  **SIMPLE BLOCKS ONLY:** Your generated 'block' object MUST be one of the simple, predefined types.
+5.  **SIMPLE BLOCKS ONLY:** Your generated 'block' object MUST be one of the simple, predefined types.
     *   **LITERAL:** For a single character or short, simple string (e.g., \`@\`, \`.\`, \`cat\`). DO NOT generate the \`|\` character inside a \`LITERAL\` block. Each \`LITERAL\` must contain non-empty text.
     *   **CHARACTER_CLASS:** For a set of characters. The \`pattern\` must be for **ONE ATOMIC ELEMENT**. Valid examples: \`a-z\`, \`A-Z\`, \`0-9\`, \`\\w\`, \`\\s\`, \`\\d\`. **YOU ARE FORBIDDEN** from creating complex patterns like \`[a-zA-Z0-9._%+-]\` in a single step.
     *   **QUANTIFIER:** For repetition (e.g., \`+\`, \`*\`, \`?\`). This block always follows another block.
     *   **ANCHOR:** For positions (e.g., \`^\`, \`$\`, \`\\b\`).
     *   **GROUP / ALTERNATION**: These are containers and should be generated empty. Their children are added in subsequent steps.
-5.  **EXPLANATION (in Russian):** Provide a very short, clear explanation of what this single block does and why it's the next logical step.
-6.  **FINAL STEP:** If you determine that this new step **completes** the regex and fully satisfies the user's request, you MUST set the \`isFinalStep\` field to \`true\`. Do not mark simple, incomplete patterns as final. For a query like 'find an email address', a pattern of just \`\\w+@\` is NOT a final step. The expression must be reasonably complete. Otherwise, omit it or set it to \`false\`.
+6.  **EXPLANATION (in Russian):** Provide a very short, clear explanation of what this single block does and why it's the next logical step.
+7.  **FINAL STEP:** If you determine that this new step **completes** the regex and fully satisfies the user's request, you MUST set the \`isFinalStep\` field to \`true\`. Do not mark simple, incomplete patterns as final. For a query like 'find an email address', a pattern of just \`\\w+@\` is NOT a final step. The expression must be reasonably complete. Otherwise, omit it or set it to \`false\`.
 
 Generate the JSON for the next single step, adhering strictly to the canons.
 `,
@@ -149,20 +150,21 @@ Based on the goal and the previous steps, provide a **new, alternative, single, 
 
 **CRITICAL CANONS OF REGEX CONSTRUCTION (YOU MUST OBEY THESE):**
 1.  **DIFFERENT & BETTER:** The new step must be a different approach or a more correct version of the rejected one.
-2.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step. The step must correspond to **ONE** simple block (e.g., \`[a-z]\`, \`+\`, \`\\b\`). Do not combine concepts.
-3.  **HOW TO BUILD \`(A or B or C)\`:** To match one of several options, you MUST follow this **exact** sequence over multiple steps:
+2.  **LEFT-TO-RIGHT CONSTRUCTION:** Your primary strategy should be to build the expression sequentially, matching the user's textual goal from left to right. A regenerated step should still logically follow the sequence built so far.
+3.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step. The step must correspond to **ONE** simple block (e.g., \`[a-z]\`, \`+\`, \`\\b\`). Do not combine concepts.
+4.  **HOW TO BUILD \`(A or B or C)\`:** To match one of several options, you MUST follow this **exact** sequence over multiple steps:
     *   Step N: Create the \`GROUP\` block.
     *   Step N+1: Create the \`ALTERNATION\` block (which will be placed inside the group).
     *   Step N+2: Create a \`LITERAL\` block for "A" (which will be placed inside the alternation).
     *   You are **STRICTLY FORBIDDEN** from creating a single \`LITERAL\` that contains multiple options like \`"A|B|C"\`. Each option is its own atomic step.
-4.  **SIMPLE BLOCKS ONLY:** Your generated 'block' object MUST be one of the simple, predefined types.
+5.  **SIMPLE BLOCKS ONLY:** Your generated 'block' object MUST be one of the simple, predefined types.
     *   **LITERAL:** For a single character or short, simple string (e.g., \`@\`, \`.\`, \`cat\`). DO NOT generate the \`|\` character inside a \`LITERAL\` block. Each \`LITERAL\` must contain non-empty text.
     *   **CHARACTER_CLASS:** For a set of characters. The \`pattern\` must be for **ONE ATOMIC ELEMENT**. Valid examples: \`a-z\`, \`A-Z\`, \`0-9\`, \`\\w\`, \`\\s\`, \`\\d\`. **YOU ARE FORBIDDEN** from creating complex patterns like \`[a-zA-Z0-9._%+-]\` in a single step.
     *   **QUANTIFIER:** For repetition (e.g., \`+\`, \`*\`, \`?\`).
     *   **ANCHOR:** For positions (e.g., \`^\`, \`$\`, \`\\b\`).
     *   **GROUP / ALTERNATION**: These are containers and should be generated empty.
-5.  **EXPLANATION (in Russian):** Provide a very short, clear explanation for the new step.
-6.  **FINAL STEP:** If this new, alternative step now **completes** the regex and fully satisfies the user's request, you MUST set the \`isFinalStep\` field to \`true\`. An expression is complete when it can reasonably match the user's full intent (e.g., a full email pattern, not just the start of one).
+6.  **EXPLANATION (in Russian):** Provide a very short, clear explanation for the new step.
+7.  **FINAL STEP:** If this new, alternative step now **completes** the regex and fully satisfies the user's request, you MUST set the \`isFinalStep\` field to \`true\`. An expression is complete when it can reasonably match the user's full intent (e.g., a full email pattern, not just the start of one).
 
 Generate the JSON for the new alternative single step, adhering strictly to the canons.
 `,
