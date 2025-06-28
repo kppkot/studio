@@ -346,9 +346,15 @@ const RegexVisionWorkspace: React.FC = () => {
     
     if (!targetParentId && selectedBlockId) {
       const selBlock = findBlockRecursive(blocks, selectedBlockId);
-      if (selBlock && [BlockType.GROUP, BlockType.ALTERNATION, BlockType.LOOKAROUND, BlockType.CONDITIONAL, BlockType.CHARACTER_CLASS].includes(selBlock.type)) {
-        targetParentId = selectedBlockId;
-        parentBlock = selBlock;
+      if (selBlock) {
+        const isGenericContainer = [BlockType.GROUP, BlockType.ALTERNATION, BlockType.LOOKAROUND, BlockType.CONDITIONAL].includes(selBlock.type);
+        const isCharClassAsContainer = selBlock.type === BlockType.CHARACTER_CLASS && 
+            (!(selBlock.settings as CharacterClassSettings).pattern || (selBlock.children && selBlock.children.length > 0));
+
+        if (isGenericContainer || isCharClassAsContainer) {
+             targetParentId = selectedBlockId;
+             parentBlock = selBlock;
+        }
       }
     } else if (targetParentId) {
         parentBlock = findBlockRecursive(blocks, targetParentId);

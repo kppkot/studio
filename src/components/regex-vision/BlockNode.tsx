@@ -475,5 +475,3 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 };
 
 export default BlockNode;
-
-    
