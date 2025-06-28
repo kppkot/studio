@@ -312,6 +312,8 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     }
     document.body.removeAttribute('data-drag-target-role');
   };
+  
+  const hasAlternationChild = hasChildren && block.children.some(c => c.type === BlockType.ALTERNATION);
 
   return (
     <div
@@ -329,74 +331,77 @@ const BlockNode: React.FC<BlockNodeProps> = ({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <Card 
-        className={cn(
-            "shadow-sm hover:shadow-md", 
-            selectedId === block.id && "border-primary ring-2 ring-primary bg-primary/5",
-            isEmptyContainer && "border-dashed bg-muted/30"
-        )}
-        onClick={(e) => handleSelectBlock(e, block.id)}
-        onMouseEnter={(e) => handleHoverBlock(e, block.id)}
-        onMouseLeave={(e) => handleHoverBlock(e, null)}
-      >
-        <CardContent className="p-2">
-          <div className="flex items-center gap-2">
-            <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab flex-shrink-0" />
+      {/* Do not render a Card for the ALTERNATION block itself */}
+      {block.type !== BlockType.ALTERNATION && (
+        <Card 
+          className={cn(
+              "shadow-sm hover:shadow-md", 
+              selectedId === block.id && "border-primary ring-2 ring-primary bg-primary/5",
+              isEmptyContainer && "border-dashed bg-muted/30"
+          )}
+          onClick={(e) => handleSelectBlock(e, block.id)}
+          onMouseEnter={(e) => handleHoverBlock(e, block.id)}
+          onMouseLeave={(e) => handleHoverBlock(e, null)}
+        >
+          <CardContent className="p-2">
+            <div className="flex items-center gap-2">
+              <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab flex-shrink-0" />
 
-            {isContainerBlock ? (
-              <Button variant="ghost" size="iconSm" onClick={handleToggleExpand} className="flex-shrink-0">
-                {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-              </Button>
-            ) : (
-                <div className="w-7 h-7 flex-shrink-0" />
-            )}
-
-            <div className="flex items-center gap-1.5 flex-1 min-w-0">
-              <span className={cn(
-                  "text-primary p-1 bg-primary/10 rounded-sm flex items-center justify-center h-7 w-7 flex-shrink-0",
-                  selectedId === block.id && "ring-1 ring-primary",
-                  isEmptyContainer && "opacity-50"
-                )}>
-                {block.type === BlockType.CHARACTER_CLASS && hasChildren ? <Combine size={18} /> : (typeof config.icon === 'string' ? <span className="font-mono text-xs">{config.icon}</span> : config.icon)}
-              </span>
-              <span className={cn(
-                  "font-medium text-sm whitespace-nowrap", 
-                  selectedId === block.id && "text-primary font-semibold",
-                  isEmptyContainer && "text-muted-foreground italic"
-              )}>
-                  {descriptiveTitle}
-              </span>
-              {descriptiveDetails && descriptiveTitle !== descriptiveDetails && (
-                  <span className="text-xs text-muted-foreground font-mono truncate hidden md:inline">
-                      {descriptiveDetails}
-                  </span>
-              )}
-            </div>
-
-            <div className={cn("flex items-center gap-0.5 transition-opacity flex-shrink-0", (isInternallyHovered && selectedId !== quantifierToRender?.id) || selectedId === block.id ? "opacity-100" : "opacity-0 focus-within:opacity-100 group-hover/blocknode:opacity-100")}>
-              {canAddNewChildren && (
-                   <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onAddChild(block.id);}} title="Добавить дочерний элемент">
-                      <PlusCircle size={14} className="text-green-600"/>
-                   </Button>
-              )}
-              <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onWrapBlock(block.id); }} title="Обернуть в группу">
-                <PackagePlus size={14} className="text-indigo-600"/>
-              </Button>
-              {canBeUngrouped && (
-                <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onUngroup(block.id);}} title="Разгруппировать">
-                  <Ungroup size={14} className="text-purple-600"/>
+              {isContainerBlock ? (
+                <Button variant="ghost" size="iconSm" onClick={handleToggleExpand} className="flex-shrink-0">
+                  {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                 </Button>
+              ) : (
+                  <div className="w-7 h-7 flex-shrink-0" />
               )}
-              <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onDuplicate(block.id); }} title="Копировать">
-                <Copy size={14} className="text-blue-600"/>
-              </Button>
-              <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onDelete(block.id, true); }} title="Удалить">
-                <Trash2 size={14} className="text-destructive"/>
-              </Button>
+
+              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                <span className={cn(
+                    "text-primary p-1 bg-primary/10 rounded-sm flex items-center justify-center h-7 w-7 flex-shrink-0",
+                    selectedId === block.id && "ring-1 ring-primary",
+                    isEmptyContainer && "opacity-50"
+                  )}>
+                  {block.type === BlockType.CHARACTER_CLASS && hasChildren ? <Combine size={18} /> : (typeof config.icon === 'string' ? <span className="font-mono text-xs">{config.icon}</span> : config.icon)}
+                </span>
+                <span className={cn(
+                    "font-medium text-sm whitespace-nowrap", 
+                    selectedId === block.id && "text-primary font-semibold",
+                    isEmptyContainer && "text-muted-foreground italic"
+                )}>
+                    {descriptiveTitle}
+                </span>
+                {descriptiveDetails && descriptiveTitle !== descriptiveDetails && (
+                    <span className="text-xs text-muted-foreground font-mono truncate hidden md:inline">
+                        {descriptiveDetails}
+                    </span>
+                )}
+              </div>
+
+              <div className={cn("flex items-center gap-0.5 transition-opacity flex-shrink-0", (isInternallyHovered && selectedId !== quantifierToRender?.id) || selectedId === block.id ? "opacity-100" : "opacity-0 focus-within:opacity-100 group-hover/blocknode:opacity-100")}>
+                {canAddNewChildren && (
+                     <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onAddChild(block.id);}} title="Добавить дочерний элемент">
+                        <PlusCircle size={14} className="text-green-600"/>
+                     </Button>
+                )}
+                <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onWrapBlock(block.id); }} title="Обернуть в группу">
+                  <PackagePlus size={14} className="text-indigo-600"/>
+                </Button>
+                {canBeUngrouped && (
+                  <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onUngroup(block.id);}} title="Разгруппировать">
+                    <Ungroup size={14} className="text-purple-600"/>
+                  </Button>
+                )}
+                <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onDuplicate(block.id); }} title="Копировать">
+                  <Copy size={14} className="text-blue-600"/>
+                </Button>
+                <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onDelete(block.id, true); }} title="Удалить">
+                  <Trash2 size={14} className="text-destructive"/>
+                </Button>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
       
       {quantifierToRender && (
          <Card 
@@ -440,38 +445,46 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           </div>
         </div>
       )}
-
-      {block.type === BlockType.ALTERNATION && isCurrentlyExpanded && hasChildren && (
-        <div className="mt-1 pt-1 border-l-2 border-primary/60 bg-primary/10 rounded-r-md ml-14 mr-px pr-2">
-          {block.children.map((altChild, index) => (
-            <React.Fragment key={altChild.id}>
-              <div className="py-1">
-                {renderChildNodes([altChild], block.id, depth + 1, groupInfos)}
-              </div>
-              {index < block.children.length - 1 && (
-                <div className="alternation-separator my-1.5 flex items-center justify-center" aria-hidden="true">
-                  <hr className="flex-grow border-t-0 border-b border-dashed border-primary/40" />
-                  <span className="mx-2 px-1.5 py-0.5 text-xs font-semibold text-primary/80 bg-primary/10 border border-primary/20 rounded-full">
-                    ИЛИ
-                  </span>
-                  <hr className="flex-grow border-t-0 border-b border-dashed border-primary/40" />
-                </div>
-              )}
-            </React.Fragment>
-          ))}
-        </div>
-      )}
-
-      {block.type !== BlockType.ALTERNATION && isContainerBlock && isCurrentlyExpanded && hasChildren && (
-        <div className={cn("mt-1 pt-1 pl-3 pr-2 rounded-r-md ml-14 mr-px", {
-          "border-l-2 border-primary/60 bg-primary/10": block.type !== BlockType.CHARACTER_CLASS,
-          "border-l-2 border-purple-500/60 bg-purple-500/10": block.type === BlockType.CHARACTER_CLASS
+      
+      {/* NEW RENDER LOGIC FOR CONTAINER CHILDREN */}
+      {isContainerBlock && isCurrentlyExpanded && hasChildren && (
+        <div className={cn("mt-1 pt-1 pr-2 rounded-r-md ml-14 mr-px", {
+          "border-l-2 border-primary/60 bg-primary/10": !hasAlternationChild && block.type !== BlockType.CHARACTER_CLASS,
+          "border-l-2 border-purple-500/60 bg-purple-500/10": !hasAlternationChild && block.type === BlockType.CHARACTER_CLASS,
+          // If it's a group with an alternation child, don't add its own background, let the alternation handle it
+          "pl-3": !hasAlternationChild,
+          "pl-0": hasAlternationChild,
         })}>
           {renderChildNodes(block.children, block.id, depth + 1, groupInfos)}
         </div>
       )}
+
+       {/* NEW RENDER LOGIC for ALTERNATION specifically */}
+       {block.type === BlockType.ALTERNATION && hasChildren && (
+          <div className="mt-1 pt-1 border-l-2 border-primary/60 bg-primary/10 rounded-r-md ml-14 mr-px pr-2">
+            {block.children.map((altChild, index) => (
+              <React.Fragment key={altChild.id}>
+                <div className="py-1 pl-3">
+                  {renderChildNodes([altChild], block.id, depth + 1, groupInfos)}
+                </div>
+                {index < block.children.length - 1 && (
+                  <div className="alternation-separator my-1.5 flex items-center justify-center" aria-hidden="true">
+                    <hr className="flex-grow border-t-0 border-b border-dashed border-primary/40" />
+                    <span className="mx-2 px-1.5 py-0.5 text-xs font-semibold text-primary/80 bg-primary/10 border border-primary/20 rounded-full">
+                      ИЛИ
+                    </span>
+                    <hr className="flex-grow border-t-0 border-b border-dashed border-primary/40" />
+                  </div>
+                )}
+              </React.Fragment>
+            ))}
+          </div>
+       )}
+
     </div>
   );
 };
 
 export default BlockNode;
+
+    
