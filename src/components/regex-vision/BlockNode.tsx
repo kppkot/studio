@@ -307,7 +307,9 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     document.body.removeAttribute('data-drag-target-role');
   };
   
-  const hasAlternationChild = hasChildren && block.children.some(c => c.type === BlockType.ALTERNATION);
+  const isAlternationGroup = block.type === BlockType.GROUP && 
+                           block.children?.length === 1 && 
+                           block.children[0].type === BlockType.ALTERNATION;
 
   return (
     <div className="relative">
@@ -331,7 +333,9 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             "block-main-content bg-card border rounded-md relative transition-all",
             "hover:border-primary/50 hover:shadow-md",
             isSelected && "border-primary ring-2 ring-primary/80 shadow-lg",
-            isEmptyContainer && "border-dashed border-muted-foreground/50 bg-muted/20"
+            isEmptyContainer && "border-dashed border-muted-foreground/50 bg-muted/20",
+            // Special styling for standalone alternation block
+            block.type === BlockType.ALTERNATION && "border-purple-500/50 bg-purple-500/5 border-dashed"
           )}
           onMouseEnter={(e) => handleHoverBlock(e, block.id)}
           onMouseLeave={(e) => handleHoverBlock(e, null)}
@@ -351,7 +355,8 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                 <span className={cn(
                     "text-primary p-1 bg-primary/10 rounded-sm flex items-center justify-center h-7 w-7 flex-shrink-0",
                     selectedId === block.id && "ring-1 ring-primary",
-                    isEmptyContainer && "opacity-50"
+                    isEmptyContainer && "opacity-50",
+                    block.type === BlockType.ALTERNATION && "text-purple-600 bg-purple-500/10"
                   )}>
                   {block.type === BlockType.CHARACTER_CLASS && hasChildren ? <Combine size={18} /> : 
                    block.type === BlockType.ALTERNATION ? <GitFork size={18} className="transform -rotate-90" /> :
@@ -421,41 +426,34 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         {isContainerBlock && isCurrentlyExpanded && (
           <div className="children-container mt-1 pl-6 relative">
             <div className="absolute left-[18px] top-0 bottom-2 w-px bg-primary/20"></div>
-            {isEmptyContainer ? (
+             {isEmptyContainer ? (
                <div className="pt-2 pb-1">
                  <div className="ml-5 pl-4 pr-2 py-4 border-l-2 border-dashed border-muted-foreground/50 bg-muted/30 rounded-r-md text-center text-muted-foreground text-xs italic">
                   <p>{block.type === BlockType.ALTERNATION ? 'Добавьте дочерний блок как первую альтернативу' : 'Добавьте или перетащите дочерние блоки сюда'}</p>
                  </div>
                </div>
-            ) : hasAlternationChild ? (
-                renderChildNodes(block.children, block.id, depth + 1, groupInfos)
+            ) : isAlternationGroup ? (
+                 <div className="space-y-1 pt-1">
+                    {(block.children[0]?.children || []).map((altChild, index, arr) => (
+                      <React.Fragment key={altChild.id}>
+                        {renderChildNodes([altChild], block.id, depth + 1, groupInfos)}
+                        {index < arr.length - 1 && (
+                          <div className="alternation-separator my-2 flex items-center justify-center ml-5" aria-hidden="true">
+                            <hr className="flex-grow border-t-0 border-b border-dashed border-purple-500/40" />
+                            <span className="mx-2 px-1.5 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 rounded-full">
+                              ИЛИ
+                            </span>
+                            <hr className="flex-grow border-t-0 border-b border-dashed border-purple-500/40" />
+                          </div>
+                        )}
+                      </React.Fragment>
+                    ))}
+                </div>
             ) : (
                 <div className="space-y-1 pt-1">
                   {renderChildNodes(block.children, block.id, depth + 1, groupInfos)}
                 </div>
             )}
-          </div>
-        )}
-
-        {block.type === BlockType.ALTERNATION && (
-          <div className="children-container mt-1 pl-6 relative">
-             <div className="absolute left-[18px] top-0 bottom-2 w-px bg-purple-500/20"></div>
-             <div className="space-y-1 pt-1">
-                {block.children.map((altChild, index) => (
-                  <React.Fragment key={altChild.id}>
-                    {renderChildNodes([altChild], block.id, depth + 1, groupInfos)}
-                    {index < block.children.length - 1 && (
-                      <div className="alternation-separator my-2 flex items-center justify-center ml-5" aria-hidden="true">
-                        <hr className="flex-grow border-t-0 border-b border-dashed border-purple-500/40" />
-                        <span className="mx-2 px-1.5 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 rounded-full">
-                          ИЛИ
-                        </span>
-                        <hr className="flex-grow border-t-0 border-b border-dashed border-purple-500/40" />
-                      </div>
-                    )}
-                  </React.Fragment>
-                ))}
-            </div>
           </div>
         )}
       </div>
@@ -464,3 +462,5 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 };
 
 export default BlockNode;
+
+    
