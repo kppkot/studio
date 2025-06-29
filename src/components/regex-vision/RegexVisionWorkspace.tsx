@@ -1153,21 +1153,6 @@ const RegexVisionWorkspace: React.FC = () => {
                     </ScrollArea>
                   </CardContent>
                 </Card>
-                <Card className="mt-2 border-yellow-500/80 bg-yellow-500/10 shadow-sm">
-                    <CardHeader className="py-2 px-3">
-                        <CardTitle className="text-base flex items-center gap-2 text-yellow-800 dark:text-yellow-300">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-rss"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
-                            Диспетчерская панель визуализации
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-3 pt-0 text-xs text-muted-foreground">
-                        <div className="font-mono text-yellow-900 dark:text-yellow-200 bg-yellow-500/20 px-2 py-1 rounded">
-                           [СИГНАЛ] Активен движок рендеринга v4.1 (Paired Quantifier Engine).
-                           Квантификаторы теперь передаются как 'спутники' (prop: quantifierToRender).
-                        </div>
-                         <p className="mt-1.5">Если вы видите эту панель, значит, новая логика отрисовки дерева активна. Оцените, пожалуйста, новый внешний вид дерева выше, особенно отображение блоков "Повтор".</p>
-                    </CardContent>
-                </Card>
                 <AnalysisPanel
                   isVisible={regexError !== null}
                   originalQuery={lastWizardQuery}
@@ -1289,5 +1274,3 @@ const RegexVisionWorkspace: React.FC = () => {
 };
 
 export default RegexVisionWorkspace;
-
-    

@@ -332,12 +332,12 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         onMouseLeave={handleMouseLeave}
       >
         {block.type !== BlockType.ALTERNATION && (
-          <div className={cn(isSelected && "outline-primary outline-2 outline-dashed outline-offset-2 rounded-lg")}>
+          <div className={cn(isSelected && "outline-blue-500 outline-2 outline-dashed outline-offset-2 rounded-lg")}>
             <Card 
               className={cn(
-                  "shadow-sm hover:shadow-md", 
-                  selectedId === block.id && "border-primary ring-2 ring-primary bg-primary/5",
-                  isEmptyContainer && "border-dashed bg-muted/30"
+                  "shadow-sm hover:shadow-md bg-green-200 border-green-500 border-2", 
+                  selectedId === block.id && "border-blue-500 ring-2 ring-blue-500",
+                  isEmptyContainer && "border-dashed bg-green-100"
               )}
               onClick={(e) => handleSelectBlock(e, block.id)}
               onMouseEnter={(e) => handleHoverBlock(e, block.id)}
@@ -405,8 +405,8 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             {quantifierToRender && (
               <Card 
                   className={cn(
-                      "ml-8 mt-1 shadow-sm hover:shadow-md border-l-4 border-orange-400 dark:border-orange-600",
-                      selectedId === quantifierToRender.id && "border-primary ring-2 ring-primary bg-primary/5"
+                      "ml-8 mt-1 shadow-sm hover:shadow-md bg-green-200 border-green-500 border-2",
+                      selectedId === quantifierToRender.id && "border-blue-500 ring-2 ring-blue-500"
                   )}
                   onClick={(e) => handleSelectBlock(e, quantifierToRender.id)}
                   onMouseEnter={(e) => handleHoverBlock(e, quantifierToRender.id)}
@@ -488,5 +488,3 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 };
 
 export default BlockNode;
-
-    
