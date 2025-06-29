@@ -39,8 +39,11 @@ const getDescriptiveBlockTitle = (block: Block, config: BlockConfig, groupInfo?:
     case BlockType.LITERAL:
       const ls = settings as LiteralSettings;
       title = `Текст: "${ls.text || '...'}"`;
-      if ((ls.text || '').length > 15) details = `"${ls.text.substring(0, 15)}..."`;
-      else details = `"${ls.text || '...'}"`;
+      if (ls.isRawRegex) {
+        details = ls.text;
+      } else {
+        details = (ls.text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      }
       break;
     case BlockType.CHARACTER_CLASS:
       const cs = settings as CharacterClassSettings;
@@ -65,8 +68,8 @@ const getDescriptiveBlockTitle = (block: Block, config: BlockConfig, groupInfo?:
           details = cs.pattern;
       } else {
         patternDesc = cs.pattern?.length > 10 ? `[${cs.pattern.substring(0,10)}...]` : `[${cs.pattern || '...'}]`;
-        title = cs.negated ? `Символы: НЕ ${patternDesc}` : `Символы: ${patternDesc}`;
-        details = `${cs.negated ? '[^' : '['}${cs.pattern || ''}${cs.negated ? ']' : ']'}`;
+        title = cs.negated ? `Символы: НЕ из набора` : `Символы: из набора`;
+        details = `[${cs.negated ? '^' : ''}${cs.pattern || ''}]`;
       }
       break;
     case BlockType.QUANTIFIER:
@@ -365,8 +368,8 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                   )}>
                       {descriptiveTitle}
                   </span>
-                  {descriptiveDetails && descriptiveTitle !== descriptiveDetails && (
-                      <span className="text-xs text-muted-foreground font-mono truncate hidden md:inline">
+                  {descriptiveDetails && (
+                      <span className="text-xs text-muted-foreground font-mono truncate hidden md:inline-block">
                           {descriptiveDetails}
                       </span>
                   )}
@@ -457,3 +460,5 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 };
 
 export default BlockNode;
+
+    
