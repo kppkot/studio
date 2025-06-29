@@ -4,9 +4,8 @@ import React, { useState } from 'react';
 import type { Block, BlockConfig, LiteralSettings, CharacterClassSettings, QuantifierSettings, GroupSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, ConditionalSettings, GroupInfo } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { ChevronDown, ChevronRight, PlusCircle, Trash2, GripVertical, Copy, Ungroup, PackagePlus, Asterisk, Combine } from 'lucide-react';
+import { ChevronDown, ChevronRight, PlusCircle, Trash2, GripVertical, Copy, Ungroup, PackagePlus, Asterisk, Combine, GitFork } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { reconstructPatternFromChildren } from './utils';
 
@@ -73,18 +72,18 @@ const getDescriptiveBlockTitle = (block: Block, config: BlockConfig, groupInfo?:
     case BlockType.QUANTIFIER:
       const qs = settings as QuantifierSettings;
       let quantType = qs.type;
-      if (quantType === '{n}') quantType = `ровно ${qs.min} раз`;
-      else if (quantType === '{n,}') quantType = `от ${qs.min} раз`;
-      else if (quantType === '{n,m}') quantType = `от ${qs.min ?? '∞'} до ${qs.max ?? '∞'} раз`;
-      else if (quantType === '*') quantType = '0 или более раз';
-      else if (quantType === '+') quantType = '1 или более раз';
+      if (quantType === '{n}') quantType = `ровно ${qs.min} р.`;
+      else if (quantType === '{n,}') quantType = `от ${qs.min} р.`;
+      else if (quantType === '{n,m}') quantType = `от ${qs.min ?? ''} до ${qs.max ?? ''} р.`;
+      else if (quantType === '*') quantType = '0+ раз';
+      else if (quantType === '+') quantType = '1+ раз';
       else if (quantType === '?') quantType = '0 или 1 раз';
       
       let modeDesc = '';
       if (qs.mode === 'lazy') modeDesc = ', лениво';
       else if (qs.mode === 'possessive') modeDesc = ', ревниво';
       
-      title = `Повтор: ${quantType}${modeDesc}`;
+      title = `${quantType}${modeDesc}`;
       details = `${qs.type}${qs.mode === 'lazy' ? '?' : qs.mode === 'possessive' ? '+' : ''}`;
       if (qs.type?.includes('{')) {
         details = `{${qs.min ?? 0}${qs.type === '{n,m}' ? ',' + (qs.max ?? '') : qs.type === '{n,}' ? ',' : ''}}`;
@@ -95,16 +94,16 @@ const getDescriptiveBlockTitle = (block: Block, config: BlockConfig, groupInfo?:
         const gs = settings as GroupSettings;
         if (!hasChildren) {
             if (gs.type === 'capturing' && groupInfo) title = `Пустая группа (захват №${groupInfo.groupIndex})`;
-            else if (gs.type === 'named' && gs.name) title = `Пустая группа (захват как "${gs.name}")`;
-            else if (gs.type === 'non-capturing') title = `Пустой контейнер (для группировки)`;
+            else if (gs.type === 'named' && gs.name) title = `Пустая группа ("${gs.name}")`;
+            else if (gs.type === 'non-capturing') title = `Пустой контейнер`;
             else title = 'Пустая группа';
-            details = '(добавьте элементы внутрь)';
+            details = '(добавьте элементы)';
             break;
         }
         if (gs.type === 'non-capturing') {
-            title = 'Группа (только для порядка)';
+            title = 'Группа (для порядка)';
         } else if (gs.type === 'named' && gs.name) {
-            title = `Группа (захват как "${gs.name}")`;
+            title = `Группа ("${gs.name}")`;
         } else if (gs.type === 'capturing' && groupInfo) {
             title = `Группа (захват №${groupInfo.groupIndex})`;
         } else {
@@ -116,8 +115,8 @@ const getDescriptiveBlockTitle = (block: Block, config: BlockConfig, groupInfo?:
         break;
     case BlockType.ALTERNATION:
         if (!hasChildren) {
-            title = "Пустой выбор 'ИЛИ'";
-            details = '(добавьте 1-ю альтернативу)';
+            title = "Выбор 'ИЛИ' (пустой)";
+            details = '(добавьте альтернативы)';
             break;
         }
         title = 'Чередование (ИЛИ)';
@@ -127,14 +126,14 @@ const getDescriptiveBlockTitle = (block: Block, config: BlockConfig, groupInfo?:
       const los = settings as LookaroundSettings;
       let lookDesc = '';
       let lookSymbol = '';
-      if (los.type === 'positive-lookahead') { lookDesc = 'Просмотр вперед (позитивный)'; lookSymbol = '(?=...)'; }
-      else if (los.type === 'negative-lookahead') { lookDesc = 'Просмотр вперед (негативный)'; lookSymbol = '(?!...)'; }
-      else if (los.type === 'positive-lookbehind') { lookDesc = 'Просмотр назад (позитивный)'; lookSymbol = '(?<=...)'; }
-      else if (los.type === 'negative-lookbehind') { lookDesc = 'Просмотр назад (негативный)'; lookSymbol = '(?<!...)'; }
+      if (los.type === 'positive-lookahead') { lookDesc = 'Просмотр вперед (+)'; lookSymbol = '(?=...)'; }
+      else if (los.type === 'negative-lookahead') { lookDesc = 'Просмотр вперед (-)'; lookSymbol = '(?!...)'; }
+      else if (los.type === 'positive-lookbehind') { lookDesc = 'Просмотр назад (+)'; lookSymbol = '(?<=...)'; }
+      else if (los.type === 'negative-lookbehind') { lookDesc = 'Просмотр назад (-)'; lookSymbol = '(?<!...)'; }
       
       if (!hasChildren) {
-          title = `Пустой контейнер (${lookDesc})`;
-          details = '(добавьте элементы внутрь)';
+          title = `Пустой ${lookDesc}`;
+          details = '(добавьте элементы)';
           break;
       }
       title = lookDesc;
@@ -220,15 +219,10 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   const { title: descriptiveTitle, details: descriptiveDetails } = getDescriptiveBlockTitle(block, config, groupInfo);
 
   let quantifierTitle = "";
-  let quantifierDetails = "";
-  let quantifierIcon: React.ReactNode = <Asterisk size={14}/>;
-
   if (quantifierToRender) {
     const qConfig = BLOCK_CONFIGS[quantifierToRender.type];
     const qDesc = getDescriptiveBlockTitle(quantifierToRender, qConfig);
     quantifierTitle = qDesc.title;
-    quantifierDetails = qDesc.details;
-    quantifierIcon = qConfig.icon;
   }
 
 
@@ -267,7 +261,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     }
   };
 
-  const canBeUngrouped = isContainerBlock && hasChildren && block.type !== BlockType.CHARACTER_CLASS;
+  const canBeUngrouped = isContainerBlock && hasChildren && block.type !== BlockType.CHARACTER_CLASS && block.type !== BlockType.ALTERNATION;
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
     e.stopPropagation();
@@ -316,7 +310,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   const hasAlternationChild = hasChildren && block.children.some(c => c.type === BlockType.ALTERNATION);
 
   return (
-    <div className="relative my-1">
+    <div className="relative">
       <div
         draggable
         onDragStart={handleDragStart}
@@ -324,164 +318,146 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
-          "transition-all relative group/blocknode",
-          isDraggingOver && !showAsParentDropTarget && "bg-accent/20 rounded-md",
-          showAsParentDropTarget && "bg-green-100 dark:bg-green-800/30 ring-2 ring-green-500 rounded-md",
+          "transition-all relative group/blocknode rounded-md",
+          isDraggingOver && !showAsParentDropTarget && "bg-accent/20",
+          showAsParentDropTarget && "bg-green-100 dark:bg-green-800/30 ring-2 ring-green-500",
         )}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
+        onClick={(e) => handleSelectBlock(e, block.id)}
       >
-        {block.type !== BlockType.ALTERNATION && (
-          <div className={cn(isSelected && "outline-blue-500 outline-2 outline-dashed outline-offset-2 rounded-lg")}>
-            <Card 
-              className={cn(
-                  "shadow-sm hover:shadow-md border", 
-                  selectedId === block.id ? "border-blue-500 ring-2 ring-blue-500" : "border-border",
-                  isEmptyContainer && "border-dashed"
+        <div 
+          className={cn(
+            "block-main-content bg-card border rounded-md relative transition-all",
+            "hover:border-primary/50 hover:shadow-md",
+            isSelected && "border-primary ring-2 ring-primary/80 shadow-lg",
+            isEmptyContainer && "border-dashed border-muted-foreground/50 bg-muted/20"
+          )}
+          onMouseEnter={(e) => handleHoverBlock(e, block.id)}
+          onMouseLeave={(e) => handleHoverBlock(e, null)}
+        >
+            <div className="p-2 flex items-center gap-2">
+              <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab flex-shrink-0" />
+
+              {isContainerBlock ? (
+                <Button variant="ghost" size="iconSm" onClick={handleToggleExpand} className="flex-shrink-0">
+                  {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                </Button>
+              ) : (
+                  <div className="w-7 h-7 flex-shrink-0" />
               )}
-              onClick={(e) => handleSelectBlock(e, block.id)}
-              onMouseEnter={(e) => handleHoverBlock(e, block.id)}
-              onMouseLeave={(e) => handleHoverBlock(e, null)}
-            >
-              <CardContent className="p-2">
-                <div className="flex items-center gap-2">
-                  <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab flex-shrink-0" />
 
-                  {isContainerBlock ? (
-                    <Button variant="ghost" size="iconSm" onClick={handleToggleExpand} className="flex-shrink-0">
-                      {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                    </Button>
-                  ) : (
-                      <div className="w-7 h-7 flex-shrink-0" />
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <span className={cn(
+                    "text-primary p-1 bg-primary/10 rounded-sm flex items-center justify-center h-7 w-7 flex-shrink-0",
+                    selectedId === block.id && "ring-1 ring-primary",
+                    isEmptyContainer && "opacity-50"
+                  )}>
+                  {block.type === BlockType.CHARACTER_CLASS && hasChildren ? <Combine size={18} /> : 
+                   block.type === BlockType.ALTERNATION ? <GitFork size={18} className="transform -rotate-90" /> :
+                   (typeof config.icon === 'string' ? <span className="font-mono text-xs">{config.icon}</span> : config.icon)}
+                </span>
+                <div className="flex flex-col min-w-0">
+                  <span className={cn(
+                      "font-medium text-sm whitespace-nowrap", 
+                      selectedId === block.id && "text-primary font-semibold",
+                      isEmptyContainer && "text-muted-foreground italic"
+                  )}>
+                      {descriptiveTitle}
+                  </span>
+                  {descriptiveDetails && descriptiveTitle !== descriptiveDetails && (
+                      <span className="text-xs text-muted-foreground font-mono truncate hidden md:inline">
+                          {descriptiveDetails}
+                      </span>
                   )}
-
-                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                    <span className={cn(
-                        "text-primary p-1 bg-primary/10 rounded-sm flex items-center justify-center h-7 w-7 flex-shrink-0",
-                        selectedId === block.id && "ring-1 ring-primary",
-                        isEmptyContainer && "opacity-50"
-                      )}>
-                      {block.type === BlockType.CHARACTER_CLASS && hasChildren ? <Combine size={18} /> : (typeof config.icon === 'string' ? <span className="font-mono text-xs">{config.icon}</span> : config.icon)}
-                    </span>
-                    <span className={cn(
-                        "font-medium text-sm whitespace-nowrap", 
-                        selectedId === block.id && "text-primary font-semibold",
-                        isEmptyContainer && "text-muted-foreground italic"
-                    )}>
-                        {descriptiveTitle}
-                    </span>
-                    {descriptiveDetails && descriptiveTitle !== descriptiveDetails && (
-                        <span className="text-xs text-muted-foreground font-mono truncate hidden md:inline">
-                            {descriptiveDetails}
-                        </span>
-                    )}
-                  </div>
-
-                  <div className={cn("flex items-center gap-0.5 transition-opacity flex-shrink-0", (isInternallyHovered && selectedId !== quantifierToRender?.id) || selectedId === block.id ? "opacity-100" : "opacity-0 focus-within:opacity-100 group-hover/blocknode:opacity-100")}>
-                    {canAddNewChildren && (
-                        <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onAddChild(block.id);}} title="Добавить дочерний элемент">
-                            <PlusCircle size={14} className="text-green-600"/>
-                        </Button>
-                    )}
-                    <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onWrapBlock(block.id); }} title="Обернуть в группу">
-                      <PackagePlus size={14} className="text-indigo-600"/>
-                    </Button>
-                    {canBeUngrouped && (
-                      <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onUngroup(block.id);}} title="Разгруппировать">
-                        <Ungroup size={14} className="text-purple-600"/>
-                      </Button>
-                    )}
-                    <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onDuplicate(block.id); }} title="Копировать">
-                      <Copy size={14} className="text-blue-600"/>
-                    </Button>
-                    <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onDelete(block.id, true); }} title="Удалить">
-                      <Trash2 size={14} className="text-destructive"/>
-                    </Button>
-                  </div>
                 </div>
-              </CardContent>
-            </Card>
-            
-            {quantifierToRender && (
-              <Card 
-                  className={cn(
-                      "ml-8 mt-1 shadow-sm hover:shadow-md border",
-                      selectedId === quantifierToRender.id ? "border-blue-500 ring-2 ring-blue-500" : "border-border"
-                  )}
-                  onClick={(e) => handleSelectBlock(e, quantifierToRender.id)}
-                  onMouseEnter={(e) => handleHoverBlock(e, quantifierToRender.id)}
-                  onMouseLeave={(e) => handleHoverBlock(e, null)}
+              </div>
+
+              <div className={cn("flex items-center gap-0.5 transition-opacity flex-shrink-0", (isInternallyHovered && selectedId !== quantifierToRender?.id) || selectedId === block.id ? "opacity-100" : "opacity-0 focus-within:opacity-100 group-hover/blocknode:opacity-100")}>
+                {canAddNewChildren && (
+                    <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onAddChild(block.id);}} title="Добавить дочерний элемент">
+                        <PlusCircle size={14} className="text-green-600"/>
+                    </Button>
+                )}
+                <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onWrapBlock(block.id); }} title="Обернуть в группу">
+                  <PackagePlus size={14} className="text-indigo-600"/>
+                </Button>
+                {canBeUngrouped && (
+                  <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onUngroup(block.id);}} title="Разгруппировать">
+                    <Ungroup size={14} className="text-purple-600"/>
+                  </Button>
+                )}
+                <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onDuplicate(block.id); }} title="Копировать">
+                  <Copy size={14} className="text-blue-600"/>
+                </Button>
+                <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onDelete(block.id, true); }} title="Удалить">
+                  <Trash2 size={14} className="text-destructive"/>
+                </Button>
+              </div>
+          </div>
+          
+          {quantifierToRender && (
+             <div 
+                className={cn(
+                  "quantifier-badge absolute -bottom-2 -right-2 flex items-center gap-1 bg-background border border-orange-500/50 text-orange-700 dark:text-orange-400 text-xs font-medium px-2 py-0.5 rounded-full shadow-sm cursor-pointer",
+                   selectedId === quantifierToRender.id ? "ring-2 ring-orange-500" : ""
+                )}
+                onClick={(e) => handleSelectBlock(e, quantifierToRender.id)}
+                onMouseEnter={(e) => handleHoverBlock(e, quantifierToRender.id)}
+                onMouseLeave={(e) => handleHoverBlock(e, null)}
+              >
+               <Asterisk size={12}/> {quantifierTitle}
+                <button 
+                  onClick={(e) => { e.stopPropagation(); onDelete(quantifierToRender.id, false); }} 
+                  className="ml-1 opacity-50 hover:opacity-100 text-destructive/70 hover:text-destructive"
+                  title="Удалить квантификатор"
                 >
-                  <CardContent className="p-1.5 pl-2">
-                      <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 flex-shrink-0" />
-                          <span className={cn("text-orange-600 p-0.5 bg-orange-500/10 rounded-sm flex items-center justify-center h-6 w-6 flex-shrink-0", selectedId === quantifierToRender.id && "ring-1 ring-orange-500")}>
-                              {quantifierIcon}
-                          </span>
-                          <span className={cn("font-medium text-xs text-orange-700 dark:text-orange-400 whitespace-nowrap", selectedId === quantifierToRender.id && "font-semibold")}>
-                              {quantifierTitle}
-                          </span>
-                          {quantifierDetails && quantifierTitle !== quantifierDetails && (
-                              <span className="text-xs text-muted-foreground font-mono truncate hidden md:inline">
-                                  {quantifierDetails}
-                              </span>
-                          )}
-                          <div className="flex-grow"></div>
-                          <div className={cn("flex items-center transition-opacity", (isInternallyHovered && selectedId === quantifierToRender.id) || selectedId === quantifierToRender.id ? "opacity-100" : "opacity-0 focus-within:opacity-100 group-hover/blocknode:opacity-100")}>
-                              <Button variant="ghost" size="iconSm" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); onDelete(quantifierToRender.id, false); }} title="Удалить квантификатор">
-                                  <Trash2 size={12} className="text-destructive/70 hover:text-destructive"/>
-                              </Button>
-                          </div>
-                      </div>
-                  </CardContent>
-              </Card>
+                  <X size={12}/>
+                </button>
+            </div>
+          )}
+        </div>
+        
+        {isContainerBlock && isCurrentlyExpanded && (
+          <div className="children-container mt-1 pl-6 relative">
+            <div className="absolute left-[18px] top-0 bottom-2 w-px bg-primary/20"></div>
+            {isEmptyContainer ? (
+               <div className="pt-2 pb-1">
+                 <div className="ml-5 pl-4 pr-2 py-4 border-l-2 border-dashed border-muted-foreground/50 bg-muted/30 rounded-r-md text-center text-muted-foreground text-xs italic">
+                  <p>{block.type === BlockType.ALTERNATION ? 'Добавьте дочерний блок как первую альтернативу' : 'Добавьте или перетащите дочерние блоки сюда'}</p>
+                 </div>
+               </div>
+            ) : hasAlternationChild ? (
+                renderChildNodes(block.children, block.id, depth + 1, groupInfos)
+            ) : (
+                <div className="space-y-1 pt-1">
+                  {renderChildNodes(block.children, block.id, depth + 1, groupInfos)}
+                </div>
             )}
           </div>
         )}
-        
-        {isEmptyContainer && isCurrentlyExpanded && (
-          <div className="mt-1 ml-14 mr-px pl-4 pr-2 py-4 border-l-2 border-dashed border-muted-foreground/50 bg-muted/30 rounded-r-md">
-            <div className="text-center text-muted-foreground text-xs italic">
-              <p>{block.type === BlockType.ALTERNATION ? 'Добавьте дочерний блок как первую альтернативу' : 'Добавьте или перетащите дочерние блоки сюда'}</p>
+
+        {block.type === BlockType.ALTERNATION && (
+          <div className="children-container mt-1 pl-6 relative">
+             <div className="absolute left-[18px] top-0 bottom-2 w-px bg-purple-500/20"></div>
+             <div className="space-y-1 pt-1">
+                {block.children.map((altChild, index) => (
+                  <React.Fragment key={altChild.id}>
+                    {renderChildNodes([altChild], block.id, depth + 1, groupInfos)}
+                    {index < block.children.length - 1 && (
+                      <div className="alternation-separator my-2 flex items-center justify-center ml-5" aria-hidden="true">
+                        <hr className="flex-grow border-t-0 border-b border-dashed border-purple-500/40" />
+                        <span className="mx-2 px-1.5 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 rounded-full">
+                          ИЛИ
+                        </span>
+                        <hr className="flex-grow border-t-0 border-b border-dashed border-purple-500/40" />
+                      </div>
+                    )}
+                  </React.Fragment>
+                ))}
             </div>
           </div>
         )}
-        
-        {isContainerBlock && !hasAlternationChild && isCurrentlyExpanded && hasChildren && (
-          <div className={cn("mt-1 pt-1 pr-2 rounded-r-md ml-14 mr-px pl-3", {
-            "border-l-2 border-primary/60 bg-primary/10": block.type === BlockType.GROUP || block.type === BlockType.LOOKAROUND,
-            "border-l-2 border-purple-500/60 bg-purple-500/10": block.type === BlockType.CHARACTER_CLASS,
-          })}>
-            <div className="space-y-1">
-              {renderChildNodes(block.children, block.id, depth + 1, groupInfos)}
-            </div>
-          </div>
-        )}
-
-         {isContainerBlock && hasAlternationChild && isCurrentlyExpanded && hasChildren && (
-          <div className="mt-1 pt-1 rounded-r-md ml-14 mr-px pl-3 border-l-2 border-primary/60 bg-primary/10">
-            {renderChildNodes(block.children, block.id, depth + 1, groupInfos)}
-          </div>
-         )}
-
-         {block.type === BlockType.ALTERNATION && hasChildren && (
-            <div className="alternation-container relative">
-              {block.children.map((altChild, index) => (
-                <React.Fragment key={altChild.id}>
-                  {renderChildNodes([altChild], block.id, depth + 1, groupInfos)}
-                  {index < block.children.length - 1 && (
-                    <div className="alternation-separator my-1 flex items-center justify-center" aria-hidden="true">
-                      <hr className="flex-grow border-t-0 border-b border-dashed border-primary/40" />
-                      <span className="mx-2 px-1.5 py-0.5 text-xs font-semibold text-primary/80 bg-primary/10 border border-primary/20 rounded-full">
-                        ИЛИ
-                      </span>
-                      <hr className="flex-grow border-t-0 border-b border-dashed border-primary/40" />
-                    </div>
-                  )}
-                </React.Fragment>
-              ))}
-            </div>
-         )}
       </div>
     </div>
   );
