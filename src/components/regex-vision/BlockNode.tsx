@@ -1,6 +1,6 @@
 
 "use client";
-import React, from 'react';
+import React, { useState } from 'react';
 import type { Block, BlockConfig, LiteralSettings, CharacterClassSettings, QuantifierSettings, GroupSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, ConditionalSettings, GroupInfo } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
@@ -186,9 +186,9 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   renderChildNodes,
   groupInfos,
 }) => {
-  const [isInternallyHovered, setIsInternallyHovered] = React.useState(false);
-  const [isDraggingOver, setIsDraggingOver] = React.useState(false);
-  const [showAsParentDropTarget, setShowAsParentDropTarget] = React.useState(false);
+  const [isInternallyHovered, setIsInternallyHovered] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [showAsParentDropTarget, setShowAsParentDropTarget] = useState(false);
 
   const config: BlockConfig | undefined = BLOCK_CONFIGS[block.type];
 
@@ -324,7 +324,6 @@ const BlockNode: React.FC<BlockNodeProps> = ({
       onDrop={handleDrop}
       className={cn(
         "transition-all relative group/blocknode",
-        isSelected && "outline-primary outline-2 outline-dashed outline-offset-2 rounded-md",
         isDraggingOver && !showAsParentDropTarget && "bg-accent/20",
         showAsParentDropTarget && "bg-green-100 dark:bg-green-800/30 ring-2 ring-green-500 rounded-md",
       )}
@@ -333,111 +332,113 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     >
       {/* Do not render a Card for the ALTERNATION block itself */}
       {block.type !== BlockType.ALTERNATION && (
-        <Card 
-          className={cn(
-              "shadow-sm hover:shadow-md", 
-              selectedId === block.id && "border-primary ring-2 ring-primary bg-primary/5",
-              isEmptyContainer && "border-dashed bg-muted/30"
-          )}
-          onClick={(e) => handleSelectBlock(e, block.id)}
-          onMouseEnter={(e) => handleHoverBlock(e, block.id)}
-          onMouseLeave={(e) => handleHoverBlock(e, null)}
-        >
-          <CardContent className="p-2">
-            <div className="flex items-center gap-2">
-              <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab flex-shrink-0" />
-
-              {isContainerBlock ? (
-                <Button variant="ghost" size="iconSm" onClick={handleToggleExpand} className="flex-shrink-0">
-                  {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                </Button>
-              ) : (
-                  <div className="w-7 h-7 flex-shrink-0" />
-              )}
-
-              <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                <span className={cn(
-                    "text-primary p-1 bg-primary/10 rounded-sm flex items-center justify-center h-7 w-7 flex-shrink-0",
-                    selectedId === block.id && "ring-1 ring-primary",
-                    isEmptyContainer && "opacity-50"
-                  )}>
-                  {block.type === BlockType.CHARACTER_CLASS && hasChildren ? <Combine size={18} /> : (typeof config.icon === 'string' ? <span className="font-mono text-xs">{config.icon}</span> : config.icon)}
-                </span>
-                <span className={cn(
-                    "font-medium text-sm whitespace-nowrap", 
-                    selectedId === block.id && "text-primary font-semibold",
-                    isEmptyContainer && "text-muted-foreground italic"
-                )}>
-                    {descriptiveTitle}
-                </span>
-                {descriptiveDetails && descriptiveTitle !== descriptiveDetails && (
-                    <span className="text-xs text-muted-foreground font-mono truncate hidden md:inline">
-                        {descriptiveDetails}
-                    </span>
-                )}
-              </div>
-
-              <div className={cn("flex items-center gap-0.5 transition-opacity flex-shrink-0", (isInternallyHovered && selectedId !== quantifierToRender?.id) || selectedId === block.id ? "opacity-100" : "opacity-0 focus-within:opacity-100 group-hover/blocknode:opacity-100")}>
-                {canAddNewChildren && (
-                     <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onAddChild(block.id);}} title="Добавить дочерний элемент">
-                        <PlusCircle size={14} className="text-green-600"/>
-                     </Button>
-                )}
-                <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onWrapBlock(block.id); }} title="Обернуть в группу">
-                  <PackagePlus size={14} className="text-indigo-600"/>
-                </Button>
-                {canBeUngrouped && (
-                  <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onUngroup(block.id);}} title="Разгруппировать">
-                    <Ungroup size={14} className="text-purple-600"/>
-                  </Button>
-                )}
-                <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onDuplicate(block.id); }} title="Копировать">
-                  <Copy size={14} className="text-blue-600"/>
-                </Button>
-                <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onDelete(block.id, true); }} title="Удалить">
-                  <Trash2 size={14} className="text-destructive"/>
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-      
-      {quantifierToRender && (
-         <Card 
+        <div className={cn(isSelected && "outline-primary outline-2 outline-dashed outline-offset-2 rounded-lg")}>
+          <Card 
             className={cn(
-                "ml-8 my-0.5 shadow-sm hover:shadow-md border-l-4 border-orange-400 dark:border-orange-600",
-                selectedId === quantifierToRender.id && "border-primary ring-2 ring-primary bg-primary/5"
+                "shadow-sm hover:shadow-md", 
+                selectedId === block.id && "border-primary ring-2 ring-primary bg-primary/5",
+                isEmptyContainer && "border-dashed bg-muted/30"
             )}
-            onClick={(e) => handleSelectBlock(e, quantifierToRender.id)}
-            onMouseEnter={(e) => handleHoverBlock(e, quantifierToRender.id)}
+            onClick={(e) => handleSelectBlock(e, block.id)}
+            onMouseEnter={(e) => handleHoverBlock(e, block.id)}
             onMouseLeave={(e) => handleHoverBlock(e, null)}
           >
-            <CardContent className="p-1.5 pl-2">
-                 <div className="flex items-center gap-2">
-                    <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab flex-shrink-0 opacity-50" />
-                    <span className={cn("text-orange-600 p-0.5 bg-orange-500/10 rounded-sm flex items-center justify-center h-6 w-6 flex-shrink-0", selectedId === quantifierToRender.id && "ring-1 ring-orange-500")}>
-                        {quantifierIcon}
-                    </span>
-                    <span className={cn("font-medium text-xs text-orange-700 dark:text-orange-400 whitespace-nowrap", selectedId === quantifierToRender.id && "font-semibold")}>
-                        {quantifierTitle}
-                    </span>
-                    {quantifierDetails && quantifierTitle !== quantifierDetails && (
-                        <span className="text-xs text-muted-foreground font-mono truncate hidden md:inline">
-                            {quantifierDetails}
-                        </span>
-                    )}
-                    <div className="flex-grow"></div>
-                    <div className={cn("flex items-center transition-opacity", (isInternallyHovered && selectedId === quantifierToRender.id) || selectedId === quantifierToRender.id ? "opacity-100" : "opacity-0 focus-within:opacity-100 group-hover/blocknode:opacity-100")}>
-                        <Button variant="ghost" size="iconSm" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); onDelete(quantifierToRender.id, false); }} title="Удалить квантификатор">
-                            <Trash2 size={12} className="text-destructive/70 hover:text-destructive"/>
-                        </Button>
-                    </div>
-                 </div>
-            </CardContent>
-         </Card>
-      )}
+            <CardContent className="p-2">
+              <div className="flex items-center gap-2">
+                <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab flex-shrink-0" />
 
+                {isContainerBlock ? (
+                  <Button variant="ghost" size="iconSm" onClick={handleToggleExpand} className="flex-shrink-0">
+                    {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  </Button>
+                ) : (
+                    <div className="w-7 h-7 flex-shrink-0" />
+                )}
+
+                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                  <span className={cn(
+                      "text-primary p-1 bg-primary/10 rounded-sm flex items-center justify-center h-7 w-7 flex-shrink-0",
+                      selectedId === block.id && "ring-1 ring-primary",
+                      isEmptyContainer && "opacity-50"
+                    )}>
+                    {block.type === BlockType.CHARACTER_CLASS && hasChildren ? <Combine size={18} /> : (typeof config.icon === 'string' ? <span className="font-mono text-xs">{config.icon}</span> : config.icon)}
+                  </span>
+                  <span className={cn(
+                      "font-medium text-sm whitespace-nowrap", 
+                      selectedId === block.id && "text-primary font-semibold",
+                      isEmptyContainer && "text-muted-foreground italic"
+                  )}>
+                      {descriptiveTitle}
+                  </span>
+                  {descriptiveDetails && descriptiveTitle !== descriptiveDetails && (
+                      <span className="text-xs text-muted-foreground font-mono truncate hidden md:inline">
+                          {descriptiveDetails}
+                      </span>
+                  )}
+                </div>
+
+                <div className={cn("flex items-center gap-0.5 transition-opacity flex-shrink-0", (isInternallyHovered && selectedId !== quantifierToRender?.id) || selectedId === block.id ? "opacity-100" : "opacity-0 focus-within:opacity-100 group-hover/blocknode:opacity-100")}>
+                  {canAddNewChildren && (
+                      <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onAddChild(block.id);}} title="Добавить дочерний элемент">
+                          <PlusCircle size={14} className="text-green-600"/>
+                      </Button>
+                  )}
+                  <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onWrapBlock(block.id); }} title="Обернуть в группу">
+                    <PackagePlus size={14} className="text-indigo-600"/>
+                  </Button>
+                  {canBeUngrouped && (
+                    <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onUngroup(block.id);}} title="Разгруппировать">
+                      <Ungroup size={14} className="text-purple-600"/>
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onDuplicate(block.id); }} title="Копировать">
+                    <Copy size={14} className="text-blue-600"/>
+                  </Button>
+                  <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onDelete(block.id, true); }} title="Удалить">
+                    <Trash2 size={14} className="text-destructive"/>
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          {quantifierToRender && (
+            <Card 
+                className={cn(
+                    "ml-8 mt-0.5 shadow-sm hover:shadow-md border-l-4 border-orange-400 dark:border-orange-600",
+                    selectedId === quantifierToRender.id && "border-primary ring-2 ring-primary bg-primary/5"
+                )}
+                onClick={(e) => handleSelectBlock(e, quantifierToRender.id)}
+                onMouseEnter={(e) => handleHoverBlock(e, quantifierToRender.id)}
+                onMouseLeave={(e) => handleHoverBlock(e, null)}
+              >
+                <CardContent className="p-1.5 pl-2">
+                    <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 flex-shrink-0" />
+                        <span className={cn("text-orange-600 p-0.5 bg-orange-500/10 rounded-sm flex items-center justify-center h-6 w-6 flex-shrink-0", selectedId === quantifierToRender.id && "ring-1 ring-orange-500")}>
+                            {quantifierIcon}
+                        </span>
+                        <span className={cn("font-medium text-xs text-orange-700 dark:text-orange-400 whitespace-nowrap", selectedId === quantifierToRender.id && "font-semibold")}>
+                            {quantifierTitle}
+                        </span>
+                        {quantifierDetails && quantifierTitle !== quantifierDetails && (
+                            <span className="text-xs text-muted-foreground font-mono truncate hidden md:inline">
+                                {quantifierDetails}
+                            </span>
+                        )}
+                        <div className="flex-grow"></div>
+                        <div className={cn("flex items-center transition-opacity", (isInternallyHovered && selectedId === quantifierToRender.id) || selectedId === quantifierToRender.id ? "opacity-100" : "opacity-0 focus-within:opacity-100 group-hover/blocknode:opacity-100")}>
+                            <Button variant="ghost" size="iconSm" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); onDelete(quantifierToRender.id, false); }} title="Удалить квантификатор">
+                                <Trash2 size={12} className="text-destructive/70 hover:text-destructive"/>
+                            </Button>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+      
       {isEmptyContainer && isCurrentlyExpanded && (
         <div className="mt-1 ml-14 mr-px pl-4 pr-2 py-4 border-l-2 border-dashed border-muted-foreground/50 bg-muted/30 rounded-r-md">
           <div className="text-center text-muted-foreground text-xs italic">
