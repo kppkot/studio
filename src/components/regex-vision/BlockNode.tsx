@@ -329,11 +329,10 @@ const BlockNode: React.FC<BlockNodeProps> = ({
       >
         <div 
           className={cn(
-            "block-main-content bg-card border rounded-md relative transition-all",
-            "hover:border-primary/50 hover:shadow-md",
-            isSelected && "border-primary ring-2 ring-primary/80 shadow-lg",
-            isEmptyContainer && "border-dashed border-muted-foreground/50 bg-muted/20",
-            block.type === BlockType.ALTERNATION && "border-purple-500/50 bg-purple-500/5 border-dashed"
+            "block-main-content border rounded-md relative transition-all",
+            "bg-green-200 border-green-500", // Force green for test
+            "hover:border-green-600 hover:shadow-md",
+            isSelected && "ring-2 ring-green-700 shadow-lg"
           )}
           onMouseEnter={(e) => handleHoverBlock(e, block.id)}
           onMouseLeave={(e) => handleHoverBlock(e, null)}
@@ -402,7 +401,8 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           {quantifierToRender && (
              <div 
                 className={cn(
-                  "quantifier-badge absolute -bottom-2 -right-2 flex items-center gap-1 bg-background border border-orange-500/50 text-orange-700 dark:text-orange-400 text-xs font-medium px-2 py-0.5 rounded-full shadow-sm cursor-pointer",
+                  "quantifier-badge absolute -bottom-2 -right-2 flex items-center gap-1 border border-orange-500/50 text-orange-700 dark:text-orange-400 text-xs font-medium px-2 py-0.5 rounded-full shadow-sm cursor-pointer",
+                   "bg-green-200", // Force green for test
                    selectedId === quantifierToRender.id ? "ring-2 ring-orange-500" : ""
                 )}
                 onClick={(e) => handleSelectBlock(e, quantifierToRender.id)}
@@ -460,5 +460,3 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 };
 
 export default BlockNode;
-
-    
