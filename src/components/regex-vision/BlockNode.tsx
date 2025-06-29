@@ -307,10 +307,6 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     document.body.removeAttribute('data-drag-target-role');
   };
   
-  const isAlternationGroup = block.type === BlockType.GROUP && 
-                           block.children?.length === 1 && 
-                           block.children[0].type === BlockType.ALTERNATION;
-
   return (
     <div className="relative">
       <div
@@ -334,7 +330,6 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             "hover:border-primary/50 hover:shadow-md",
             isSelected && "border-primary ring-2 ring-primary/80 shadow-lg",
             isEmptyContainer && "border-dashed border-muted-foreground/50 bg-muted/20",
-            // Special styling for standalone alternation block
             block.type === BlockType.ALTERNATION && "border-purple-500/50 bg-purple-500/5 border-dashed"
           )}
           onMouseEnter={(e) => handleHoverBlock(e, block.id)}
@@ -432,9 +427,9 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                   <p>{block.type === BlockType.ALTERNATION ? 'Добавьте дочерний блок как первую альтернативу' : 'Добавьте или перетащите дочерние блоки сюда'}</p>
                  </div>
                </div>
-            ) : isAlternationGroup ? (
+            ) : block.type === BlockType.ALTERNATION ? (
                  <div className="space-y-1 pt-1">
-                    {(block.children[0]?.children || []).map((altChild, index, arr) => (
+                    {(block.children || []).map((altChild, index, arr) => (
                       <React.Fragment key={altChild.id}>
                         {renderChildNodes([altChild], block.id, depth + 1, groupInfos)}
                         {index < arr.length - 1 && (
