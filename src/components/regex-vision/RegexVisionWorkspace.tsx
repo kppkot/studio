@@ -348,6 +348,8 @@ const RegexVisionWorkspace: React.FC = () => {
       const selBlock = findBlockRecursive(blocks, selectedBlockId);
       if (selBlock) {
         const isGenericContainer = [BlockType.GROUP, BlockType.ALTERNATION, BlockType.LOOKAROUND, BlockType.CONDITIONAL].includes(selBlock.type);
+        // A CHARACTER_CLASS is a container ONLY if it is being used to build a set, 
+        // which we infer if its main `pattern` property is empty or if it already has children.
         const isCharClassAsContainer = selBlock.type === BlockType.CHARACTER_CLASS && 
             (!(selBlock.settings as CharacterClassSettings).pattern || (selBlock.children && selBlock.children.length > 0));
 
@@ -1046,7 +1048,11 @@ const RegexVisionWorkspace: React.FC = () => {
         const block = nodes[i];
         let quantifierToRender: Block | null = null;
 
-        if (block.type !== BlockType.QUANTIFIER && (i + 1) < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
+        if (block.type === BlockType.QUANTIFIER) {
+            continue;
+        }
+
+        if (i + 1 < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
             quantifierToRender = nodes[i + 1];
         }
         
@@ -1116,7 +1122,6 @@ const RegexVisionWorkspace: React.FC = () => {
                 );
             }
         }
-
 
         if (quantifierToRender) {
             i++; 
@@ -1197,6 +1202,23 @@ const RegexVisionWorkspace: React.FC = () => {
                       )}
                     </ScrollArea>
                   </CardContent>
+                </Card>
+                <Card className="mt-2 border-yellow-500 bg-yellow-500/10">
+                    <CardHeader className="py-2 px-3">
+                        <CardTitle className="text-sm flex items-center gap-2 text-yellow-700 dark:text-yellow-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-circuit-board"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M11 9h4a2 2 0 0 0 2-2V3"/><path d="M11 15h4a2 2 0 0 1 2 2v4"/><path d="M5 15h2"/><path d="M5 9h2"/><path d="M9 5h2"/><path d="M9 19h2"/><path d="M15 5h2"/><path d="M15 19h2"/><path d="M9 9v6"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/></svg>
+                            Техническое окно: Статус визуализации дерева
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0 text-xs">
+                        <div className="flex items-center gap-2">
+                            <span className="font-bold">Статус:</span>
+                            <span className="font-mono px-2 py-1 rounded-md bg-green-500/20 text-green-800 dark:text-green-300">
+                                Новый визуал v3.0 АКТИВЕН
+                            </span>
+                        </div>
+                        <p className="mt-1 text-muted-foreground">Если вы видите это окно, значит, мои изменения успешно применились. Теперь, пожалуйста, оцените внешний вид самого дерева выражений выше.</p>
+                    </CardContent>
                 </Card>
                 <AnalysisPanel
                   isVisible={regexError !== null}

@@ -330,7 +330,6 @@ const BlockNode: React.FC<BlockNodeProps> = ({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Do not render a Card for the ALTERNATION block itself */}
       {block.type !== BlockType.ALTERNATION && (
         <div className={cn(isSelected && "outline-primary outline-2 outline-dashed outline-offset-2 rounded-lg")}>
           <Card 
@@ -447,7 +446,6 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         </div>
       )}
       
-      {/* RENDER LOGIC FOR CONTAINER CHILDREN */}
       {isContainerBlock && !hasAlternationChild && isCurrentlyExpanded && hasChildren && (
         <div className={cn("mt-1 pt-1 pr-2 rounded-r-md ml-14 mr-px pl-3", {
           "border-l-2 border-primary/60 bg-primary/10": block.type === BlockType.GROUP || block.type === BlockType.LOOKAROUND,
@@ -457,14 +455,12 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         </div>
       )}
 
-       {/* RENDER LOGIC for GROUPs that contain an ALTERNATION */}
        {isContainerBlock && hasAlternationChild && isCurrentlyExpanded && hasChildren && (
         <div className="mt-1 pt-1 rounded-r-md ml-14 mr-px">
           {renderChildNodes(block.children, block.id, depth + 1, groupInfos)}
         </div>
        )}
 
-       {/* RENDER LOGIC for ALTERNATION specifically */}
        {block.type === BlockType.ALTERNATION && hasChildren && (
           <div className="alternation-container relative">
             {block.children.map((altChild, index) => (
@@ -490,5 +486,3 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 };
 
 export default BlockNode;
-
-    
