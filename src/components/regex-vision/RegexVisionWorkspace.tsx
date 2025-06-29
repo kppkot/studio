@@ -348,8 +348,6 @@ const RegexVisionWorkspace: React.FC = () => {
       const selBlock = findBlockRecursive(blocks, selectedBlockId);
       if (selBlock) {
         const isGenericContainer = [BlockType.GROUP, BlockType.ALTERNATION, BlockType.LOOKAROUND, BlockType.CONDITIONAL].includes(selBlock.type);
-        // A CHARACTER_CLASS is a container ONLY if it is being used to build a set, 
-        // which we infer if its main `pattern` property is empty or if it already has children.
         const isCharClassAsContainer = selBlock.type === BlockType.CHARACTER_CLASS && 
             (!(selBlock.settings as CharacterClassSettings).pattern || (selBlock.children && selBlock.children.length > 0));
 
@@ -440,7 +438,6 @@ const RegexVisionWorkspace: React.FC = () => {
 
 
   const handleUpdateBlock = useCallback((id: string, updatedBlockData: Partial<Block>) => {
-      // Special handling for Character Class pattern changes
       if (updatedBlockData.settings && 'pattern' in updatedBlockData.settings) {
           const blockToUpdate = findBlockRecursive(blocks, id);
           if (blockToUpdate && blockToUpdate.type === BlockType.CHARACTER_CLASS) {
@@ -457,7 +454,6 @@ const RegexVisionWorkspace: React.FC = () => {
           }
       }
 
-      // Default update logic
       setBlocks(prev => updateBlockRecursive(prev, id, updatedBlockData));
   }, [blocks]);
 
@@ -725,7 +721,6 @@ const RegexVisionWorkspace: React.FC = () => {
         if (adjustedDropIndex !== -1) {
             targetContainer.splice(adjustedDropIndex + 1, 0, ...blocksToAdd);
         } else {
-            // Fallback: add to the end of the root if something goes wrong
             blocksWithoutDragged.push(...blocksToAdd);
         }
 
@@ -1077,52 +1072,7 @@ const RegexVisionWorkspace: React.FC = () => {
             groupInfos={groupInfos}
           />
         );
-
-        const isPotentiallyEmptyAlt = block.type === BlockType.ALTERNATION && (!block.children || block.children.length === 0);
-        if (isPotentiallyEmptyAlt) {
-            const blocksToCombine: Block[] = [];
-            let j = i + 1;
-            while (j < nodes.length && isCombinableBlock(nodes[j].type)) {
-                blocksToCombine.push(nodes[j]);
-                j++;
-            }
-
-            if (blocksToCombine.length > 0) {
-                nodeList.push(
-                    <Card key={`${block.id}-suggestion`} className="my-2 p-3 border-amber-500/50 bg-amber-500/10">
-                        <div className="flex flex-col gap-2">
-                             <div className="flex items-center gap-3">
-                                <Lightbulb className="h-6 w-6 text-amber-600 shrink-0" />
-                                <div className="flex-1">
-                                    <h4 className="font-semibold text-sm">Обнаружен паттерн для "ИЛИ"</h4>
-                                    <p className="text-xs text-muted-foreground">Следующие блоки выглядят как варианты для чередования:</p>
-                                </div>
-                                <Button size="sm" variant="outline" className="bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30" onClick={() => handleAutoGroupAlternation(block.id)}>
-                                    <Combine size={16} className="mr-2"/>
-                                    Объединить
-                                </Button>
-                            </div>
-                            <div className="pl-9 flex flex-wrap gap-2">
-                                {blocksToCombine.map(b => {
-                                    const config = BLOCK_CONFIGS[b.type];
-                                    let previewText = "";
-                                    if(b.type === BlockType.LITERAL) previewText = `"${(b.settings as any).text}"`;
-                                    if(b.type === BlockType.CHARACTER_CLASS) previewText = `[${reconstructPatternFromChildren(b.children) || (b.settings as any).pattern}]`;
-
-                                    return (
-                                    <span key={b.id} className="flex items-center gap-1.5 text-xs px-2 py-1 bg-background rounded-md border shadow-sm">
-                                        {typeof config.icon === 'string' ? <span>{config.icon}</span> : React.cloneElement(config.icon as React.ReactElement, { size: 14, className: "text-muted-foreground"})}
-                                        <span className="font-mono">{previewText}</span>
-                                    </span>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    </Card>
-                );
-            }
-        }
-
+        
         if (quantifierToRender) {
             i++; 
         }
@@ -1196,28 +1146,26 @@ const RegexVisionWorkspace: React.FC = () => {
                           <p className="text-sm">Нажмите "Добавить блок" или используйте "AI Помощник".</p>
                         </div>
                       ) : (
-                        <div className="space-y-0.5"> 
+                        <div className="space-y-1"> 
                           {renderBlockNodes(blocks, null, 0, regexOutput.groupInfos)}
                         </div>
                       )}
                     </ScrollArea>
                   </CardContent>
                 </Card>
-                <Card className="mt-2 border-yellow-500 bg-yellow-500/10">
+                <Card className="mt-2 border-yellow-500/80 bg-yellow-500/10 shadow-sm">
                     <CardHeader className="py-2 px-3">
-                        <CardTitle className="text-sm flex items-center gap-2 text-yellow-700 dark:text-yellow-400">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-circuit-board"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M11 9h4a2 2 0 0 0 2-2V3"/><path d="M11 15h4a2 2 0 0 1 2 2v4"/><path d="M5 15h2"/><path d="M5 9h2"/><path d="M9 5h2"/><path d="M9 19h2"/><path d="M15 5h2"/><path d="M15 19h2"/><path d="M9 9v6"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/></svg>
-                            Техническое окно: Статус визуализации дерева
+                        <CardTitle className="text-base flex items-center gap-2 text-yellow-800 dark:text-yellow-300">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-rss"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+                            Диспетчерская панель визуализации
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="p-3 pt-0 text-xs">
-                        <div className="flex items-center gap-2">
-                            <span className="font-bold">Статус:</span>
-                            <span className="font-mono px-2 py-1 rounded-md bg-green-500/20 text-green-800 dark:text-green-300">
-                                Новый визуал v3.0 АКТИВЕН
-                            </span>
+                    <CardContent className="p-3 pt-0 text-xs text-muted-foreground">
+                        <div className="font-mono text-yellow-900 dark:text-yellow-200 bg-yellow-500/20 px-2 py-1 rounded">
+                           [СИГНАЛ] Активен движок рендеринга v4.1 (Paired Quantifier Engine).
+                           Квантификаторы теперь передаются как 'спутники' (prop: quantifierToRender).
                         </div>
-                        <p className="mt-1 text-muted-foreground">Если вы видите это окно, значит, мои изменения успешно применились. Теперь, пожалуйста, оцените внешний вид самого дерева выражений выше.</p>
+                         <p className="mt-1.5">Если вы видите эту панель, значит, новая логика отрисовки дерева активна. Оцените, пожалуйста, новый внешний вид дерева выше, особенно отображение блоков "Повтор".</p>
                     </CardContent>
                 </Card>
                 <AnalysisPanel
@@ -1341,3 +1289,5 @@ const RegexVisionWorkspace: React.FC = () => {
 };
 
 export default RegexVisionWorkspace;
+
+    
