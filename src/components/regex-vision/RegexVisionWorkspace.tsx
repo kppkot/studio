@@ -35,7 +35,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Sparkles, Gauge, Library, Lightbulb, Combine, Menu, Puzzle, Share2, DownloadCloud, UploadCloud, Loader2 } from 'lucide-react'; 
+import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Sparkles, Gauge, Library, Lightbulb, Combine, Menu, Puzzle, Share2, DownloadCloud, UploadCloud, Loader2, Terminal } from 'lucide-react'; 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
 interface GuidedModeState {
@@ -43,6 +43,11 @@ interface GuidedModeState {
     exampleTestText: string;
     steps: GuidedRegexStep[];
     isLoading: boolean;
+}
+
+interface DebugLog {
+    timestamp: string;
+    message: string;
 }
 
 const RegexVisionWorkspace: React.FC = () => {
@@ -61,13 +66,25 @@ const RegexVisionWorkspace: React.FC = () => {
   const [lastWizardQuery, setLastWizardQuery] = useState('');
   
   const [guidedModeState, setGuidedModeState] = useState<GuidedModeState | null>(null);
+  const [debugLogs, setDebugLogs] = useState<DebugLog[]>([]);
 
 
   const { toast } = useToast();
 
+  const addDebugLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 });
+    setDebugLogs(prev => [{ timestamp, message }, ...prev.slice(0, 49)]); // Keep last 50 logs
+  }
+
+  useEffect(() => {
+    addDebugLog("Инициализация рабочей области...");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const { regexString: newRegex, groupInfos } = generateRegexStringAndGroupInfo(blocks);
     setRegexOutput({ regexString: newRegex, groupInfos });
+    addDebugLog(`Генерация Regex: /${newRegex}/${regexFlags}`);
 
     if (newRegex && testText) {
       try {
@@ -86,11 +103,6 @@ const RegexVisionWorkspace: React.FC = () => {
         setMatches([]);
         if (error instanceof Error) {
             const errorMessage = `Ошибка: ${error.message}. Пожалуйста, исправьте блоки в конструкторе.`;
-            toast({
-                title: "Некорректное регулярное выражение",
-                description: errorMessage,
-                variant: "destructive",
-            });
             setRegexError(error.message);
         }
       }
@@ -98,7 +110,7 @@ const RegexVisionWorkspace: React.FC = () => {
       setMatches([]);
        setRegexError(null);
     }
-  }, [blocks, testText, regexFlags, toast]);
+  }, [blocks, testText, regexFlags]);
 
 
   const findBlockRecursive = (searchBlocks: Block[], id: string): Block | null => {
@@ -1038,17 +1050,21 @@ const RegexVisionWorkspace: React.FC = () => {
   const showRightPanel = selectedBlockId || guidedModeState;
 
   const renderBlockNodes = (nodes: Block[], parentId: string | null, depth: number, groupInfos: GroupInfo[]): React.ReactNode[] => {
+    addDebugLog(`Render Engine: v2.1-instrumented. Rendering ${nodes.length} nodes at depth ${depth}.`);
     const nodeList: React.ReactNode[] = [];
+
     for (let i = 0; i < nodes.length; i++) {
         const block = nodes[i];
         let quantifierToRender: Block | null = null;
 
         if (block.type === BlockType.QUANTIFIER) {
+            addDebugLog(`Skipping Quantifier node ${block.id} as it will be handled by its parent.`);
             continue;
         }
 
         if (i + 1 < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
             quantifierToRender = nodes[i + 1];
+            addDebugLog(`Found Quantifier satellite for Block ${block.id}: ${quantifierToRender.id}`);
         }
         
         nodeList.push(
@@ -1153,6 +1169,25 @@ const RegexVisionWorkspace: React.FC = () => {
                     </ScrollArea>
                   </CardContent>
                 </Card>
+
+                {/* DEBUG PANEL */}
+                <Card className="mt-2 shadow-sm border-blue-500/20 bg-blue-950 text-blue-200">
+                    <CardHeader className="py-1 px-3">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                            <Terminal size={16}/> Панель отладки рендеринга
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        <ScrollArea className="h-24">
+                            <div className="p-2 font-mono text-xs space-y-1">
+                                {debugLogs.map((log, i) => (
+                                    <p key={i}><span className="text-blue-400/70">{log.timestamp}</span> &gt; {log.message}</p>
+                                ))}
+                            </div>
+                        </ScrollArea>
+                    </CardContent>
+                </Card>
+
                 <AnalysisPanel
                   isVisible={regexError !== null}
                   originalQuery={lastWizardQuery}
