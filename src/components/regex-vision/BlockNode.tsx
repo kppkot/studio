@@ -75,7 +75,7 @@ const getDescriptiveBlockTitle = (block: Block, config: BlockConfig, groupInfo?:
       let quantType = qs.type;
       if (quantType === '{n}') quantType = `ровно ${qs.min} раз`;
       else if (quantType === '{n,}') quantType = `от ${qs.min} раз`;
-      else if (quantType === '{n,m}') quantType = `от ${qs.min} до ${qs.max ?? '∞'} раз`;
+      else if (quantType === '{n,m}') quantType = `от ${qs.min ?? '∞'} до ${qs.max ?? '∞'} раз`;
       else if (quantType === '*') quantType = '0 или более раз';
       else if (quantType === '+') quantType = '1 или более раз';
       else if (quantType === '?') quantType = '0 или 1 раз';
@@ -335,9 +335,9 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           <div className={cn(isSelected && "outline-blue-500 outline-2 outline-dashed outline-offset-2 rounded-lg")}>
             <Card 
               className={cn(
-                  "shadow-sm hover:shadow-md bg-green-200 border-green-500 border-2", 
-                  selectedId === block.id && "border-blue-500 ring-2 ring-blue-500",
-                  isEmptyContainer && "border-dashed bg-green-100"
+                  "shadow-sm hover:shadow-md border", 
+                  selectedId === block.id ? "border-blue-500 ring-2 ring-blue-500" : "border-border",
+                  isEmptyContainer && "border-dashed"
               )}
               onClick={(e) => handleSelectBlock(e, block.id)}
               onMouseEnter={(e) => handleHoverBlock(e, block.id)}
@@ -405,8 +405,8 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             {quantifierToRender && (
               <Card 
                   className={cn(
-                      "ml-8 mt-1 shadow-sm hover:shadow-md bg-green-200 border-green-500 border-2",
-                      selectedId === quantifierToRender.id && "border-blue-500 ring-2 ring-blue-500"
+                      "ml-8 mt-1 shadow-sm hover:shadow-md border",
+                      selectedId === quantifierToRender.id ? "border-blue-500 ring-2 ring-blue-500" : "border-border"
                   )}
                   onClick={(e) => handleSelectBlock(e, quantifierToRender.id)}
                   onMouseEnter={(e) => handleHoverBlock(e, quantifierToRender.id)}
