@@ -325,8 +325,8 @@ const BlockNode: React.FC<BlockNodeProps> = ({
       className={cn(
         "transition-all relative group/blocknode",
         isSelected && "outline-primary outline-2 outline-dashed outline-offset-2 rounded-md",
-        isDraggingOver && !showAsParentDropTarget && "bg-accent/20 border-accent",
-        showAsParentDropTarget && "bg-green-100 dark:bg-green-800/30 border-green-500 ring-1 ring-green-500",
+        isDraggingOver && !showAsParentDropTarget && "bg-accent/20",
+        showAsParentDropTarget && "bg-green-100 dark:bg-green-800/30 ring-2 ring-green-500 rounded-md",
       )}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -446,22 +446,26 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         </div>
       )}
       
-      {/* NEW RENDER LOGIC FOR CONTAINER CHILDREN */}
-      {isContainerBlock && isCurrentlyExpanded && hasChildren && (
-        <div className={cn("mt-1 pt-1 pr-2 rounded-r-md ml-14 mr-px", {
-          "border-l-2 border-primary/60 bg-primary/10": !hasAlternationChild && block.type !== BlockType.CHARACTER_CLASS,
-          "border-l-2 border-purple-500/60 bg-purple-500/10": !hasAlternationChild && block.type === BlockType.CHARACTER_CLASS,
-          // If it's a group with an alternation child, don't add its own background, let the alternation handle it
-          "pl-3": !hasAlternationChild,
-          "pl-0": hasAlternationChild,
+      {/* RENDER LOGIC FOR CONTAINER CHILDREN */}
+      {isContainerBlock && !hasAlternationChild && isCurrentlyExpanded && hasChildren && (
+        <div className={cn("mt-1 pt-1 pr-2 rounded-r-md ml-14 mr-px pl-3", {
+          "border-l-2 border-primary/60 bg-primary/10": block.type === BlockType.GROUP || block.type === BlockType.LOOKAROUND,
+          "border-l-2 border-purple-500/60 bg-purple-500/10": block.type === BlockType.CHARACTER_CLASS,
         })}>
           {renderChildNodes(block.children, block.id, depth + 1, groupInfos)}
         </div>
       )}
 
-       {/* NEW RENDER LOGIC for ALTERNATION specifically */}
+       {/* RENDER LOGIC for GROUPs that contain an ALTERNATION */}
+       {isContainerBlock && hasAlternationChild && isCurrentlyExpanded && hasChildren && (
+        <div className="mt-1 pt-1 rounded-r-md ml-14 mr-px">
+          {renderChildNodes(block.children, block.id, depth + 1, groupInfos)}
+        </div>
+       )}
+
+       {/* RENDER LOGIC for ALTERNATION specifically */}
        {block.type === BlockType.ALTERNATION && hasChildren && (
-          <div className="mt-1 pt-1 border-l-2 border-primary/60 bg-primary/10 rounded-r-md ml-14 mr-px pr-2">
+          <div className="alternation-container relative">
             {block.children.map((altChild, index) => (
               <React.Fragment key={altChild.id}>
                 <div className="py-1 pl-3">
@@ -480,7 +484,6 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             ))}
           </div>
        )}
-
     </div>
   );
 };
