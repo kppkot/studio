@@ -1,10 +1,10 @@
 
 "use client";
-import React, { useState } from 'react';
+import React, from 'react';
 import type { Block, BlockConfig, LiteralSettings, CharacterClassSettings, QuantifierSettings, GroupSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, ConditionalSettings, GroupInfo } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { ChevronDown, ChevronRight, PlusCircle, Trash2, GripVertical, Copy, Ungroup, PackagePlus, Asterisk, AlertTriangle, Combine } from 'lucide-react';
+import { ChevronDown, ChevronRight, PlusCircle, Trash2, GripVertical, Copy, Ungroup, PackagePlus, Asterisk, Combine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -186,9 +186,9 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   renderChildNodes,
   groupInfos,
 }) => {
-  const [isInternallyHovered, setIsInternallyHovered] = useState(false);
-  const [isDraggingOver, setIsDraggingOver] = useState(false);
-  const [showAsParentDropTarget, setShowAsParentDropTarget] = useState(false);
+  const [isInternallyHovered, setIsInternallyHovered] = React.useState(false);
+  const [isDraggingOver, setIsDraggingOver] = React.useState(false);
+  const [showAsParentDropTarget, setShowAsParentDropTarget] = React.useState(false);
 
   const config: BlockConfig | undefined = BLOCK_CONFIGS[block.type];
 
@@ -489,3 +489,5 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 };
 
 export default BlockNode;
+
+    
