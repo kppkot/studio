@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import type { Block, BlockConfig, LiteralSettings, CharacterClassSettings, QuantifierSettings, GroupSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, ConditionalSettings, GroupInfo } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { ChevronDown, ChevronRight, PlusCircle, Trash2, GripVertical, Copy, Ungroup, PackagePlus, Asterisk, Combine, GitFork } from 'lucide-react';
+import { ChevronDown, ChevronRight, PlusCircle, Trash2, GripVertical, Copy, Ungroup, PackagePlus, Asterisk, Combine, GitFork, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { reconstructPatternFromChildren } from './utils';
