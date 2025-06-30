@@ -45,6 +45,26 @@ interface GuidedModeState {
     isLoading: boolean;
 }
 
+const RenderDebugPanel = ({ logs }: { logs: string[] }) => {
+  return (
+    <Card className="mt-2 shadow-md border-blue-500/30 bg-blue-500/5">
+      <CardHeader className="py-2 px-3">
+        <CardTitle className="text-base flex items-center gap-2 text-blue-700 dark:text-blue-400">
+          <Terminal size={18} /> Панель отладки рендеринга
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-3 pt-2">
+        <ScrollArea className="h-24 w-full bg-background rounded-md border p-2">
+          <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap">
+            {logs.length > 0 ? logs.join('\n') : "Ожидание рендеринга дерева..."}
+          </pre>
+        </ScrollArea>
+      </CardContent>
+    </Card>
+  );
+};
+
+
 const RegexVisionWorkspace: React.FC = () => {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
@@ -1030,8 +1050,11 @@ const RegexVisionWorkspace: React.FC = () => {
   }, [regexFlags]);
 
   const showRightPanel = selectedBlockId || guidedModeState;
-
+  
+  // This is the new, safe way to handle render logging.
+  const renderLogs: string[] = ["Render Engine v3.0 Active."];
   const renderBlockNodes = (nodes: Block[], parentId: string | null, depth: number, groupInfos: GroupInfo[]): React.ReactNode[] => {
+    renderLogs.push(`[d:${depth}] Rendering ${nodes.length} nodes for parent ${parentId || 'root'}`);
     const nodeList: React.ReactNode[] = [];
 
     for (let i = 0; i < nodes.length; i++) {
@@ -1039,11 +1062,14 @@ const RegexVisionWorkspace: React.FC = () => {
         let quantifierToRender: Block | null = null;
 
         if (block.type === BlockType.QUANTIFIER) {
+            renderLogs.push(`[d:${depth}] Skipping Quantifier block ${block.id}, should be handled by its owner.`);
             continue;
         }
 
+        // Check if the next block is a quantifier
         if (i + 1 < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
             quantifierToRender = nodes[i + 1];
+            renderLogs.push(`[d:${depth}] Found Quantifier (${quantifierToRender.id}) for Block ${block.id}`);
         }
         
         nodeList.push(
@@ -1063,11 +1089,13 @@ const RegexVisionWorkspace: React.FC = () => {
             parentId={parentId}
             depth={depth} 
             onBlockHover={handleBlockHover}
-            renderChildNodes={(childNodes, pId, nextDepth, gInfos) => renderChildNodes(childNodes, pId, nextDepth, gInfos)}
+            renderChildNodes={(childNodes, pId, nextDepth, gInfos) => renderBlockNodes(childNodes, pId, nextDepth, gInfos)}
             groupInfos={groupInfos}
           />
         );
         
+        // If a quantifier was rendered, we must increment the index
+        // to skip it in the next loop iteration.
         if (quantifierToRender) {
             i++; 
         }
@@ -1149,14 +1177,18 @@ const RegexVisionWorkspace: React.FC = () => {
                   </CardContent>
                 </Card>
 
-                <AnalysisPanel
-                  isVisible={regexError !== null}
-                  originalQuery={lastWizardQuery}
-                  generatedRegex={regexOutput.regexString}
-                  testText={testText}
-                  errorContext={regexError ?? undefined}
-                  onFixApplied={handleApplyFix}
-                />
+                {regexError ? (
+                  <AnalysisPanel
+                    isVisible={true}
+                    originalQuery={lastWizardQuery}
+                    generatedRegex={regexOutput.regexString}
+                    testText={testText}
+                    errorContext={regexError ?? undefined}
+                    onFixApplied={handleApplyFix}
+                  />
+                ) : (
+                  <RenderDebugPanel logs={renderLogs} />
+                )}
               </div>
             </ResizablePanel>
             
