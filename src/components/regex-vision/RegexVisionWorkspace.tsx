@@ -45,31 +45,6 @@ interface GuidedModeState {
     isLoading: boolean;
 }
 
-const RenderDebugPanel = ({ logs, isOpen, onToggle }: { logs: string[], isOpen: boolean, onToggle: () => void }) => {
-  return (
-    <Card className="mt-2 shadow-md border-blue-500/30 bg-blue-500/5">
-       <CardHeader className="py-2 px-3 cursor-pointer" onClick={onToggle}>
-        <div className="flex items-center justify-between">
-            <CardTitle className="text-base flex items-center gap-2 text-blue-700 dark:text-blue-400">
-              <Terminal size={18} /> Панель отладки рендеринга
-            </CardTitle>
-             <ChevronRight size={18} className={`transition-transform ${isOpen ? 'rotate-90' : ''}`} />
-        </div>
-      </CardHeader>
-      {isOpen && (
-         <CardContent className="p-3 pt-2">
-            <ScrollArea className="h-24 w-full bg-background rounded-md border p-2">
-            <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap">
-                {logs.length > 0 ? logs.join('\n') : "Ожидание рендеринга дерева..."}
-            </pre>
-            </ScrollArea>
-        </CardContent>
-      )}
-    </Card>
-  );
-};
-
-
 const RegexVisionWorkspace: React.FC = () => {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
@@ -77,7 +52,6 @@ const RegexVisionWorkspace: React.FC = () => {
   const [parentIdForNewBlock, setParentIdForNewBlock] = useState<string | null>(null);
   const [isPaletteVisible, setIsPaletteVisible] = useState(false);
   const [isWizardModalOpen, setIsWizardModalOpen] = useState(false);
-  const [isDebugPanelOpen, setIsDebugPanelOpen] = useState(true);
 
   const [testText, setTestText] = useState<string>('Быстрая коричневая лиса прыгает через ленивую собаку.');
   const [regexFlags, setRegexFlags] = useState<string>('g');
@@ -89,7 +63,6 @@ const RegexVisionWorkspace: React.FC = () => {
   const [guidedModeState, setGuidedModeState] = useState<GuidedModeState | null>(null);
 
   const { toast } = useToast();
-  const renderLogsRef = React.useRef<string[]>([]);
 
   useEffect(() => {
     const { regexString: newRegex, groupInfos } = generateRegexStringAndGroupInfo(blocks);
@@ -1058,8 +1031,6 @@ const RegexVisionWorkspace: React.FC = () => {
   const showRightPanel = selectedBlockId || guidedModeState;
   
   const renderBlockNodes = useCallback((nodes: Block[], parentId: string | null, depth: number, groupInfos: GroupInfo[]): React.ReactNode[] => {
-    renderLogsRef.current.push(`Render Engine v4.0 Instrumented. Signals:`);
-    renderLogsRef.current.push(`[d:${depth}] Rendering ${nodes.length} nodes for parent ${parentId || 'root'}`);
     const nodeList: React.ReactNode[] = [];
 
     for (let i = 0; i < nodes.length; i++) {
@@ -1067,16 +1038,11 @@ const RegexVisionWorkspace: React.FC = () => {
         let quantifierToRender: Block | null = null;
 
         if (block.type === BlockType.QUANTIFIER) {
-            renderLogsRef.current.push(`[d:${depth}] SKIPPING render for Quantifier ${block.id.slice(0,4)} as it should be attached.`);
             continue;
         }
         
         if (i + 1 < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
             quantifierToRender = nodes[i + 1];
-            const qSettings = quantifierToRender.settings as any;
-            renderLogsRef.current.push(`[d:${depth}] Block ${block.id.slice(0,4)}(${block.type}) found Quantifier ${quantifierToRender.id.slice(0,4)}(${qSettings.type})`);
-        } else {
-            renderLogsRef.current.push(`[d:${depth}] Block ${block.id.slice(0,4)}(${block.type}) has no quantifier.`);
         }
         
         nodeList.push(
@@ -1098,7 +1064,6 @@ const RegexVisionWorkspace: React.FC = () => {
             onBlockHover={handleBlockHover}
             renderChildNodes={(childNodes, pId, nextDepth, gInfos) => renderBlockNodes(childNodes, pId, nextDepth, gInfos)}
             groupInfos={groupInfos}
-            renderLogsRef={renderLogsRef}
           />
         );
         
@@ -1107,18 +1072,7 @@ const RegexVisionWorkspace: React.FC = () => {
         }
     }
     return nodeList;
-  }, [selectedBlockId, hoveredBlockId, regexOutput.groupInfos, handleUpdateBlock, handleDeleteBlock, handleOpenPaletteForChild, handleDuplicateBlock, handleUngroupBlock, handleWrapBlock, handleReorderBlock, blocks, renderLogsRef]);
-
-  const [displayedLogs, setDisplayedLogs] = useState<string[]>([]);
-  
-  useEffect(() => {
-    renderLogsRef.current = [];
-  });
-
-  useEffect(() => {
-    setDisplayedLogs(renderLogsRef.current);
-  });
-
+  }, [selectedBlockId, hoveredBlockId, regexOutput.groupInfos, handleUpdateBlock, handleDeleteBlock, handleOpenPaletteForChild, handleDuplicateBlock, handleUngroupBlock, handleWrapBlock, handleReorderBlock]);
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
@@ -1193,7 +1147,7 @@ const RegexVisionWorkspace: React.FC = () => {
                   </CardContent>
                 </Card>
 
-                {regexError ? (
+                {regexError && (
                   <AnalysisPanel
                     isVisible={true}
                     originalQuery={lastWizardQuery}
@@ -1202,8 +1156,6 @@ const RegexVisionWorkspace: React.FC = () => {
                     errorContext={regexError ?? undefined}
                     onFixApplied={handleApplyFix}
                   />
-                ) : (
-                   <RenderDebugPanel logs={displayedLogs} isOpen={isDebugPanelOpen} onToggle={() => setIsDebugPanelOpen(!isDebugPanelOpen)} />
                 )}
               </div>
             </ResizablePanel>
