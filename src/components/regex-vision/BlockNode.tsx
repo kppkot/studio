@@ -27,6 +27,7 @@ interface BlockNodeProps {
   onBlockHover?: (blockId: string | null) => void;
   renderChildNodes: (nodes: Block[], parentId: string, depth: number, groupInfos: GroupInfo[]) => React.ReactNode[];
   groupInfos: GroupInfo[];
+  renderLogsRef: React.MutableRefObject<string[]>;
 }
 
 const getDescriptiveBlockTitle = (block: Block, config: BlockConfig, groupInfo?: GroupInfo): { title: string, details: string } => {
@@ -187,6 +188,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   onBlockHover,
   renderChildNodes,
   groupInfos,
+  renderLogsRef,
 }) => {
   const [isInternallyHovered, setIsInternallyHovered] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -213,6 +215,10 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   const isEmptyContainer = isContainerBlock && !hasChildren;
 
   const isSelected = selectedId === block.id || (quantifierToRender && selectedId === quantifierToRender.id);
+  
+  if (quantifierToRender) {
+     renderLogsRef.current.push(`  > BlockNode ${block.id.slice(0,4)} received quantifier: ${quantifierToRender.id.slice(0,4)}`);
+  }
 
   if (!config) {
     return <div className="text-destructive p-2">Ошибка: Неизвестный тип блока: {block.type}</div>;
@@ -226,6 +232,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     const qConfig = BLOCK_CONFIGS[quantifierToRender.type];
     const qDesc = getDescriptiveBlockTitle(quantifierToRender, qConfig);
     quantifierTitle = qDesc.title;
+    renderLogsRef.current.push(`    - Rendering quantifier badge: "${quantifierTitle}"`);
   }
 
 

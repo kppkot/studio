@@ -35,7 +35,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Sparkles, Gauge, Library, Lightbulb, Combine, Menu, Puzzle, Share2, DownloadCloud, UploadCloud, Loader2, Terminal } from 'lucide-react'; 
+import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Sparkles, Gauge, Library, Lightbulb, Combine, Menu, Puzzle, Share2, DownloadCloud, UploadCloud, Loader2, Terminal, ChevronRight } from 'lucide-react'; 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
 interface GuidedModeState {
@@ -45,21 +45,26 @@ interface GuidedModeState {
     isLoading: boolean;
 }
 
-const RenderDebugPanel = ({ logs }: { logs: string[] }) => {
+const RenderDebugPanel = ({ logs, isOpen, onToggle }: { logs: string[], isOpen: boolean, onToggle: () => void }) => {
   return (
     <Card className="mt-2 shadow-md border-blue-500/30 bg-blue-500/5">
-      <CardHeader className="py-2 px-3">
-        <CardTitle className="text-base flex items-center gap-2 text-blue-700 dark:text-blue-400">
-          <Terminal size={18} /> Панель отладки рендеринга
-        </CardTitle>
+       <CardHeader className="py-2 px-3 cursor-pointer" onClick={onToggle}>
+        <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2 text-blue-700 dark:text-blue-400">
+              <Terminal size={18} /> Панель отладки рендеринга
+            </CardTitle>
+             <ChevronRight size={18} className={`transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+        </div>
       </CardHeader>
-      <CardContent className="p-3 pt-2">
-        <ScrollArea className="h-24 w-full bg-background rounded-md border p-2">
-          <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap">
-            {logs.length > 0 ? logs.join('\n') : "Ожидание рендеринга дерева..."}
-          </pre>
-        </ScrollArea>
-      </CardContent>
+      {isOpen && (
+         <CardContent className="p-3 pt-2">
+            <ScrollArea className="h-24 w-full bg-background rounded-md border p-2">
+            <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap">
+                {logs.length > 0 ? logs.join('\n') : "Ожидание рендеринга дерева..."}
+            </pre>
+            </ScrollArea>
+        </CardContent>
+      )}
     </Card>
   );
 };
@@ -72,6 +77,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const [parentIdForNewBlock, setParentIdForNewBlock] = useState<string | null>(null);
   const [isPaletteVisible, setIsPaletteVisible] = useState(false);
   const [isWizardModalOpen, setIsWizardModalOpen] = useState(false);
+  const [isDebugPanelOpen, setIsDebugPanelOpen] = useState(true);
 
   const [testText, setTestText] = useState<string>('Быстрая коричневая лиса прыгает через ленивую собаку.');
   const [regexFlags, setRegexFlags] = useState<string>('g');
@@ -82,9 +88,8 @@ const RegexVisionWorkspace: React.FC = () => {
   
   const [guidedModeState, setGuidedModeState] = useState<GuidedModeState | null>(null);
 
-  const renderLogsRef = React.useRef<string[]>([]);
-  const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const { toast } = useToast();
+  const renderLogsRef = React.useRef<string[]>([]);
 
   useEffect(() => {
     const { regexString: newRegex, groupInfos } = generateRegexStringAndGroupInfo(blocks);
@@ -115,11 +120,6 @@ const RegexVisionWorkspace: React.FC = () => {
     }
   }, [blocks, testText, regexFlags]);
   
-  useEffect(() => {
-    // This effect ensures that we update the state with the logs *after* the render is complete, preventing loops.
-    setDebugLogs([...renderLogsRef.current]);
-  }, [blocks, selectedBlockId, hoveredBlockId]);
-
 
   const findBlockRecursive = (searchBlocks: Block[], id: string): Block | null => {
     for (const block of searchBlocks) {
@@ -1058,6 +1058,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const showRightPanel = selectedBlockId || guidedModeState;
   
   const renderBlockNodes = useCallback((nodes: Block[], parentId: string | null, depth: number, groupInfos: GroupInfo[]): React.ReactNode[] => {
+    renderLogsRef.current.push(`Render Engine v4.0 Instrumented. Signals:`);
     renderLogsRef.current.push(`[d:${depth}] Rendering ${nodes.length} nodes for parent ${parentId || 'root'}`);
     const nodeList: React.ReactNode[] = [];
 
@@ -1097,6 +1098,7 @@ const RegexVisionWorkspace: React.FC = () => {
             onBlockHover={handleBlockHover}
             renderChildNodes={(childNodes, pId, nextDepth, gInfos) => renderBlockNodes(childNodes, pId, nextDepth, gInfos)}
             groupInfos={groupInfos}
+            renderLogsRef={renderLogsRef}
           />
         );
         
@@ -1105,9 +1107,20 @@ const RegexVisionWorkspace: React.FC = () => {
         }
     }
     return nodeList;
-  }, [blocks, selectedBlockId, hoveredBlockId, regexOutput.groupInfos, handleUpdateBlock, handleDeleteBlock, handleOpenPaletteForChild, handleDuplicateBlock, handleUngroupBlock, handleWrapBlock, handleReorderBlock]);
+  }, [selectedBlockId, hoveredBlockId, regexOutput.groupInfos, handleUpdateBlock, handleDeleteBlock, handleOpenPaletteForChild, handleDuplicateBlock, handleUngroupBlock, handleWrapBlock, handleReorderBlock, blocks, renderLogsRef]);
 
-  renderLogsRef.current = [`Render Engine v4.0 Instrumented. Signals:`];
+  renderLogsRef.current = [];
+
+  // We need to use a state for logs to trigger re-renders of the debug panel, but update it in a useEffect to avoid render loops.
+  const [displayedLogs, setDisplayedLogs] = useState<string[]>([]);
+  useEffect(() => {
+    const nextLogs = [...renderLogsRef.current];
+    // Avoid state update if logs haven't changed to prevent extra renders
+    if (JSON.stringify(nextLogs) !== JSON.stringify(displayedLogs)) {
+       setDisplayedLogs(nextLogs);
+    }
+  }, [blocks, selectedBlockId, hoveredBlockId, displayedLogs]);
+
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
@@ -1192,7 +1205,7 @@ const RegexVisionWorkspace: React.FC = () => {
                     onFixApplied={handleApplyFix}
                   />
                 ) : (
-                  <RenderDebugPanel logs={debugLogs} />
+                   <RenderDebugPanel logs={displayedLogs} isOpen={isDebugPanelOpen} onToggle={() => setIsDebugPanelOpen(!isDebugPanelOpen)} />
                 )}
               </div>
             </ResizablePanel>
