@@ -82,6 +82,8 @@ const RegexVisionWorkspace: React.FC = () => {
   
   const [guidedModeState, setGuidedModeState] = useState<GuidedModeState | null>(null);
 
+  const renderLogsRef = React.useRef<string[]>([]);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -104,7 +106,6 @@ const RegexVisionWorkspace: React.FC = () => {
       } catch (error) {
         setMatches([]);
         if (error instanceof Error) {
-            const errorMessage = `Ошибка: ${error.message}. Пожалуйста, исправьте блоки в конструкторе.`;
             setRegexError(error.message);
         }
       }
@@ -113,6 +114,11 @@ const RegexVisionWorkspace: React.FC = () => {
        setRegexError(null);
     }
   }, [blocks, testText, regexFlags]);
+  
+  useEffect(() => {
+    // This effect ensures that we update the state with the logs *after* the render is complete, preventing loops.
+    setDebugLogs([...renderLogsRef.current]);
+  }, [blocks, selectedBlockId, hoveredBlockId]);
 
 
   const findBlockRecursive = (searchBlocks: Block[], id: string): Block | null => {
@@ -1051,10 +1057,8 @@ const RegexVisionWorkspace: React.FC = () => {
 
   const showRightPanel = selectedBlockId || guidedModeState;
   
-  // This is the new, safe way to handle render logging.
-  const renderLogs: string[] = ["Render Engine v3.0 Active."];
-  const renderBlockNodes = (nodes: Block[], parentId: string | null, depth: number, groupInfos: GroupInfo[]): React.ReactNode[] => {
-    renderLogs.push(`[d:${depth}] Rendering ${nodes.length} nodes for parent ${parentId || 'root'}`);
+  const renderBlockNodes = useCallback((nodes: Block[], parentId: string | null, depth: number, groupInfos: GroupInfo[]): React.ReactNode[] => {
+    renderLogsRef.current.push(`[d:${depth}] Rendering ${nodes.length} nodes for parent ${parentId || 'root'}`);
     const nodeList: React.ReactNode[] = [];
 
     for (let i = 0; i < nodes.length; i++) {
@@ -1062,14 +1066,16 @@ const RegexVisionWorkspace: React.FC = () => {
         let quantifierToRender: Block | null = null;
 
         if (block.type === BlockType.QUANTIFIER) {
-            renderLogs.push(`[d:${depth}] Skipping Quantifier block ${block.id}, should be handled by its owner.`);
+            renderLogsRef.current.push(`[d:${depth}] SKIPPING render for Quantifier ${block.id.slice(0,4)} as it should be attached.`);
             continue;
         }
-
-        // Check if the next block is a quantifier
+        
         if (i + 1 < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
             quantifierToRender = nodes[i + 1];
-            renderLogs.push(`[d:${depth}] Found Quantifier (${quantifierToRender.id}) for Block ${block.id}`);
+            const qSettings = quantifierToRender.settings as any;
+            renderLogsRef.current.push(`[d:${depth}] Block ${block.id.slice(0,4)}(${block.type}) found Quantifier ${quantifierToRender.id.slice(0,4)}(${qSettings.type})`);
+        } else {
+            renderLogsRef.current.push(`[d:${depth}] Block ${block.id.slice(0,4)}(${block.type}) has no quantifier.`);
         }
         
         nodeList.push(
@@ -1094,15 +1100,14 @@ const RegexVisionWorkspace: React.FC = () => {
           />
         );
         
-        // If a quantifier was rendered, we must increment the index
-        // to skip it in the next loop iteration.
         if (quantifierToRender) {
             i++; 
         }
     }
     return nodeList;
-  };
+  }, [blocks, selectedBlockId, hoveredBlockId, regexOutput.groupInfos, handleUpdateBlock, handleDeleteBlock, handleOpenPaletteForChild, handleDuplicateBlock, handleUngroupBlock, handleWrapBlock, handleReorderBlock]);
 
+  renderLogsRef.current = [`Render Engine v4.0 Instrumented. Signals:`];
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
@@ -1187,7 +1192,7 @@ const RegexVisionWorkspace: React.FC = () => {
                     onFixApplied={handleApplyFix}
                   />
                 ) : (
-                  <RenderDebugPanel logs={renderLogs} />
+                  <RenderDebugPanel logs={debugLogs} />
                 )}
               </div>
             </ResizablePanel>

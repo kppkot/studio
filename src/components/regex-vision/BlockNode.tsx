@@ -40,7 +40,7 @@ const getDescriptiveBlockTitle = (block: Block, config: BlockConfig, groupInfo?:
       const ls = settings as LiteralSettings;
       title = `Текст: "${ls.text || '...'}"`;
       if (ls.isRawRegex) {
-        details = ls.text;
+        details = ls.text || '';
       } else {
         details = (ls.text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       }
