@@ -1063,7 +1063,7 @@ const RegexVisionWorkspace: React.FC = () => {
             parentId={parentId}
             depth={depth} 
             onBlockHover={handleBlockHover}
-            renderChildNodes={(childNodes, pId, nextDepth, gInfos) => renderBlockNodes(childNodes, pId, nextDepth, gInfos)}
+            renderChildNodes={(childNodes, pId, nextDepth, gInfos) => renderChildNodes(childNodes, pId, nextDepth, gInfos)}
             groupInfos={groupInfos}
           />
         );
@@ -1270,5 +1270,3 @@ const RegexVisionWorkspace: React.FC = () => {
 };
 
 export default RegexVisionWorkspace;
-
-    
