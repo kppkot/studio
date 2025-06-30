@@ -1109,17 +1109,20 @@ const RegexVisionWorkspace: React.FC = () => {
     return nodeList;
   }, [selectedBlockId, hoveredBlockId, regexOutput.groupInfos, handleUpdateBlock, handleDeleteBlock, handleOpenPaletteForChild, handleDuplicateBlock, handleUngroupBlock, handleWrapBlock, handleReorderBlock, blocks, renderLogsRef]);
 
-  renderLogsRef.current = [];
-
   // We need to use a state for logs to trigger re-renders of the debug panel, but update it in a useEffect to avoid render loops.
   const [displayedLogs, setDisplayedLogs] = useState<string[]>([]);
+  useEffect(() => {
+    // Clear logs at the beginning of each render cycle for this component
+    renderLogsRef.current = []; 
+  }); 
+
   useEffect(() => {
     const nextLogs = [...renderLogsRef.current];
     // Avoid state update if logs haven't changed to prevent extra renders
     if (JSON.stringify(nextLogs) !== JSON.stringify(displayedLogs)) {
        setDisplayedLogs(nextLogs);
     }
-  }, [blocks, selectedBlockId, hoveredBlockId, displayedLogs]);
+  });
 
 
   return (
