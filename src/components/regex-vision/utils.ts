@@ -312,9 +312,8 @@ export const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
             }
             
             if (text.startsWith('\\') && text.length === 2 && !knownCharClasses.includes(text) && !knownAnchors.includes(text)) {
-                 if(text !== '\\.'){
-                    (correctedBlock.settings as LiteralSettings).text = text.charAt(1);
-                 }
+                // Unescape single characters, e.g., AI gives '\-' instead of '-'
+                (correctedBlock.settings as LiteralSettings).text = text.charAt(1);
             }
         }
         

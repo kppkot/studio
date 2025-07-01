@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { Block, RegexMatch, GroupInfo, SavedPattern, CharacterClassSettings } from './types'; 
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks, cloneBlockForState, breakdownPatternIntoChildren, reconstructPatternFromChildren } from './utils'; 
+import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks, cloneBlockForState, breakdownPatternIntoChildren, reconstructPatternFromChildren, correctAndSanitizeAiBlocks } from './utils'; 
 import { useToast } from '@/hooks/use-toast';
 import { generateRegexFromNaturalLanguage, type NaturalLanguageRegexOutput } from '@/ai/flows/natural-language-regex-flow';
 import { generateNextGuidedStep, regenerateGuidedStep } from '@/ai/flows/guided-regex-flow';
@@ -331,14 +331,22 @@ const RegexVisionWorkspace: React.FC = () => {
         toast({ title: "Пошаговый режим запущен!", description: "AI предложил первый шаг." });
     } catch (error) {
         console.error("Failed to start guided mode:", error);
-        toast({ title: "Ошибка AI", description: "Не удалось получить первый шаг от AI.", variant: "destructive" });
+        toast({ title: "Ошибка AI", description: `Не удалось получить первый шаг от AI. ${error instanceof Error ? error.message : ''}`, variant: "destructive" });
         setGuidedModeState(null); // Cancel guided mode on error
     }
   }, [toast]);
 
  const handleAddStepBlock = useCallback((block: Block, parentId: string | null) => {
-    const processedBlock = processAiBlocks([block])[0];
-    if (!processedBlock) return;
+    let aiBlock = processAiBlocks([block])[0];
+    if (!aiBlock) return;
+
+    // Sanitize the AI-generated block to correct common mistakes
+    const processedBlock = correctAndSanitizeAiBlocks([aiBlock])[0];
+
+    if (!processedBlock) {
+        toast({ title: "Ошибка", description: "AI сгенерировал недействительный блок.", variant: "destructive" });
+        return;
+    }
 
     if (processedBlock.type === BlockType.QUANTIFIER) {
       if (!selectedBlockId) {
@@ -440,7 +448,7 @@ const RegexVisionWorkspace: React.FC = () => {
         }
     } catch (error) {
         console.error("Failed to generate next step:", error);
-        toast({ title: "Ошибка AI", description: "Не удалось сгенерировать следующий шаг.", variant: "destructive" });
+        toast({ title: "Ошибка AI", description: `Не удалось сгенерировать следующий шаг. ${error instanceof Error ? error.message : ''}`, variant: "destructive" });
         setGuidedModeState(prev => ({ ...prev!, isLoading: false }));
     }
   };
@@ -468,7 +476,7 @@ const RegexVisionWorkspace: React.FC = () => {
 
     } catch (error) {
         console.error("Failed to regenerate step:", error);
-        toast({ title: "Ошибка AI", description: "Не удалось перегенерировать шаг.", variant: "destructive" });
+        toast({ title: "Ошибка AI", description: `Не удалось перегенерировать шаг. ${error instanceof Error ? error.message : ''}`, variant: "destructive" });
         setGuidedModeState(prev => ({ ...prev!, isLoading: false }));
     }
   };
