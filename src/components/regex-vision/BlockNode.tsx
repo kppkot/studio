@@ -163,8 +163,15 @@ const BlockNode: React.FC<BlockNodeProps> = ({
       case BlockType.LITERAL:
         const litSettings = settings as LiteralSettings;
         title = 'Текст (литерал)';
-        details = `Точное совпадение с "${(litSettings.text || '').substring(0, 20)}"`;
+        if (litSettings.isRawRegex) {
+          details = 'Необработанный фрагмент Regex';
+        } else {
+          details = 'Точное совпадение с текстом ниже';
+        }
         regexFragment = litSettings.isRawRegex ? litSettings.text : escapeForDisplay(litSettings.text || '');
+        if (!regexFragment) {
+            details = 'Пустой литерал. Введите текст в настройках.';
+        }
         break;
 
       case BlockType.CHARACTER_CLASS:
@@ -289,7 +296,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
-          "transition-all relative group/blocknode rounded-md",
+          "transition-all relative group/blocknode rounded-md max-w-lg",
           isDraggingOver && !showAsParentDropTarget && "bg-accent/20",
           showAsParentDropTarget && "bg-green-100 dark:bg-green-800/30 ring-2 ring-green-500",
         )}

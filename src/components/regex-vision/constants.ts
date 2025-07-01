@@ -1,7 +1,8 @@
+
 import * as React from 'react';
 import type { BlockConfigs } from './types';
 import { BlockType } from './types';
-import { Group, Asterisk, CaseSensitive, AnchorIcon, SplitSquareHorizontal, SearchCode, Repeat, HelpCircleIcon } from 'lucide-react';
+import { Group, Asterisk, CaseSensitive, AnchorIcon, SplitSquareHorizontal, SearchCode, Repeat, HelpCircleIcon, Brackets } from 'lucide-react';
 
 export const BLOCK_CONFIGS: BlockConfigs = {
   [BlockType.GROUP]: {
@@ -19,7 +20,7 @@ export const BLOCK_CONFIGS: BlockConfigs = {
   },
   [BlockType.CHARACTER_CLASS]: {
     name: 'Символьный класс',
-    icon: React.createElement('span', { className: "font-mono text-sm" }, '[ ]'),
+    icon: React.createElement(Brackets, { size: 18 }),
     defaultSettings: { pattern: 'a-z', negated: false },
     presets: [
       { value: '\\p{L}', label: 'Любая буква (Unicode)' },
