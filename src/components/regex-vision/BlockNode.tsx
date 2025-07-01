@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import type { Block, GroupInfo, QuantifierSettings, GroupSettings, CharacterClassSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, LiteralSettings } from './types';
 import { BlockType } from './types';
-import { ChevronDown, ChevronRight, GripVertical } from 'lucide-react';
+import { ChevronDown, ChevronRight, GripVertical, Repeat } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { BLOCK_CONFIGS } from './constants';
@@ -27,6 +27,42 @@ interface BlockNodeProps {
   renderChildNodes: (nodes: Block[], parentId: string, depth: number, groupInfos: GroupInfo[]) => React.ReactNode[];
   groupInfos: GroupInfo[];
 }
+
+const QuantifierBadge: React.FC<{
+  block: Block;
+  onSelect: (e: React.MouseEvent, id: string) => void;
+  isSelected: boolean;
+}> = ({ block, onSelect, isSelected }) => {
+  const qSettings = block.settings as QuantifierSettings;
+  let details = '';
+  switch (qSettings.type) {
+    case '*': details = '0+'; break;
+    case '+': details = '1+'; break;
+    case '?': details = '0-1'; break;
+    case '{n}': details = `{${qSettings.min ?? 0}}`; break;
+    case '{n,}': details = `min ${qSettings.min ?? 0}`; break;
+    case '{n,m}': details = `${qSettings.min ?? 0}-${qSettings.max ?? '∞'}`; break;
+  }
+  const modeMap: {[key in QuantifierSettings['mode']]: string} = {'greedy': 'Жадный', 'lazy': 'Ленивый', 'possessive': 'Ревнивый'};
+  
+  return (
+    <div
+      onClick={(e) => onSelect(e, block.id)}
+      className={cn(
+        "absolute top-1/2 -translate-y-1/2 -right-3 z-10 cursor-pointer",
+        "bg-orange-100 text-orange-800 border-orange-300 border",
+        "dark:bg-orange-900/50 dark:text-orange-300 dark:border-orange-700/50",
+        "px-2 py-1 rounded-full text-xs font-semibold shadow-sm hover:shadow-md transition-all flex items-center gap-1.5",
+        isSelected && "ring-2 ring-primary"
+      )}
+      title={`${modeMap[qSettings.mode]} квантификатор`}
+    >
+      <Repeat size={12} />
+      <span>{details}</span>
+    </div>
+  );
+};
+
 
 const BlockNode: React.FC<BlockNodeProps> = ({
   block,
@@ -61,7 +97,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   const isCurrentlyExpanded = block.isExpanded ?? (isContainerBlock ? true : false);
   const isEmptyContainer = isContainerBlock && !hasChildren;
 
-  const isSelected = selectedId === block.id || (quantifierToRender && selectedId === quantifierToRender.id);
+  const isBlockSelected = selectedId === block.id;
   
   const handleToggleExpand = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -160,29 +196,6 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         } else {
           regexFragment = `[${ccSettings.negated ? '^' : ''}${pattern}]`;
         }
-        break;
-
-      case BlockType.QUANTIFIER:
-        const qSettings = settings as QuantifierSettings;
-        title = 'Квантификатор (повтор)';
-        const modeMap = {'greedy': ' (жадный)', 'lazy': ' (ленивый)', 'possessive': ' (ревнивый)'};
-        
-        switch (qSettings.type) {
-          case '*': details = '0 или более раз'; break;
-          case '+': details = '1 или более раз'; break;
-          case '?': details = '0 или 1 раз'; break;
-          case '{n}': details = `Ровно ${qSettings.min ?? 0} раз`; break;
-          case '{n,}': details = `От ${qSettings.min ?? 0} раз`; break;
-          case '{n,m}': details = `От ${qSettings.min ?? 0} до ${qSettings.max ?? '∞'} раз`; break;
-        }
-        details += modeMap[qSettings.mode];
-
-        let qStr = qSettings.type;
-        if (qStr === '{n}') qStr = `{${qSettings.min ?? 0}}`;
-        else if (qStr === '{n,}') qStr = `{${qSettings.min ?? 0},}`;
-        else if (qStr === '{n,m}') qStr = `{${qSettings.min ?? 0},${qSettings.max ?? ''}}`;
-        let modeSuffix = qSettings.mode === 'lazy' ? '?' : qSettings.mode === 'possessive' ? '+' : '';
-        regexFragment = qStr + modeSuffix;
         break;
 
       case BlockType.GROUP:
@@ -286,33 +299,40 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           className={cn(
             "block-main-content border rounded-md relative transition-all",
             "bg-card",
-            isSelected && "ring-2 ring-primary shadow-lg"
+            isBlockSelected && "ring-2 ring-primary shadow-lg"
           )}
         >
-            <div className="p-2 flex items-start gap-3">
-              <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab flex-shrink-0 mt-1" />
+          <div className="p-2 flex items-start gap-3">
+            <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab flex-shrink-0 mt-1" />
 
-              {isContainerBlock ? (
-                <Button variant="ghost" size="iconSm" onClick={handleToggleExpand} className="flex-shrink-0 mt-0.5">
-                  {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                </Button>
-              ) : (
-                  <div className="w-7 h-7 flex-shrink-0" />
-              )}
-              
-               <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-primary h-5 w-5 flex items-center justify-center">{icon}</span>
-                    <h3 className="font-semibold text-sm truncate">{title}</h3>
+            {isContainerBlock ? (
+              <Button variant="ghost" size="iconSm" onClick={handleToggleExpand} className="flex-shrink-0 mt-0.5">
+                {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              </Button>
+            ) : (
+                <div className="w-7 h-7 flex-shrink-0" />
+            )}
+            
+             <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-primary h-5 w-5 flex items-center justify-center">{icon}</span>
+                  <h3 className="font-semibold text-sm truncate">{title}</h3>
+                </div>
+                {details && <p className="text-xs text-muted-foreground mt-0.5">{details}</p>}
+                {regexFragment && (
+                  <div className="mt-1.5 px-2 py-1 bg-muted/70 rounded-md font-mono text-xs text-foreground/80 break-all">
+                    {regexFragment}
                   </div>
-                  {details && <p className="text-xs text-muted-foreground mt-0.5">{details}</p>}
-                  {regexFragment && (
-                    <div className="mt-1.5 px-2 py-1 bg-muted/70 rounded-md font-mono text-xs text-foreground/80 break-all">
-                      {regexFragment}
-                    </div>
-                  )}
-              </div>
+                )}
             </div>
+          </div>
+          {quantifierToRender && (
+              <QuantifierBadge
+                  block={quantifierToRender}
+                  onSelect={handleSelectBlock}
+                  isSelected={selectedId === quantifierToRender.id}
+              />
+          )}
         </div>
         
         {isContainerBlock && isCurrentlyExpanded && (
