@@ -202,6 +202,46 @@ const RegexVisionWorkspace: React.FC = () => {
       isExpanded: canBeExpanded ? true : undefined,
     };
 
+    if (type === BlockType.QUANTIFIER) {
+      if (!selectedBlockId) {
+        toast({ title: "Ошибка", description: "Выберите блок, к которому нужно применить квантификатор.", variant: "destructive" });
+        return;
+      }
+      const insertQuantifier = (nodes: Block[]): Block[] | null => {
+        for (let i = 0; i < nodes.length; i++) {
+          const currentNode = nodes[i];
+          if (currentNode.id === selectedBlockId) {
+            if (currentNode.type === BlockType.QUANTIFIER) return null;
+            if (i + 1 < nodes.length && nodes[i+1].type === BlockType.QUANTIFIER) return null;
+            const newNodes = [...nodes];
+            newNodes.splice(i + 1, 0, newBlock);
+            return newNodes;
+          }
+          if (currentNode.children) {
+            const newChildren = insertQuantifier(currentNode.children);
+            if (newChildren) {
+              const newNodes = [...nodes];
+              newNodes[i] = { ...currentNode, children: newChildren };
+              return newNodes;
+            }
+          }
+        }
+        return null;
+      };
+      setBlocks(prev => {
+        const newTree = insertQuantifier(prev);
+        if (newTree) {
+          setSelectedBlockId(newBlock.id);
+          return newTree;
+        }
+        toast({ title: 'Невозможно добавить квантификатор', description: 'Этот блок уже имеет квантификатор или является квантификатором.', variant: 'destructive' });
+        return prev;
+      });
+      setParentIdForNewBlock(null);
+      setIsPaletteVisible(false);
+      return;
+    }
+
     let targetParentId = parentId;
     if (!targetParentId && selectedBlockId) {
       const selBlock = findBlockRecursive(blocks, selectedBlockId);
