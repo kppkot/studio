@@ -50,6 +50,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null); 
   const [parentIdForNewBlock, setParentIdForNewBlock] = useState<string | null>(null);
+  const [contextualBlockId, setContextualBlockId] = useState<string | null>(null);
   const [isPaletteVisible, setIsPaletteVisible] = useState(false);
   const [isWizardModalOpen, setIsWizardModalOpen] = useState(false);
 
@@ -203,14 +204,15 @@ const RegexVisionWorkspace: React.FC = () => {
     };
 
     if (type === BlockType.QUANTIFIER) {
-      if (!selectedBlockId) {
+      const targetBlockId = contextualBlockId || selectedBlockId;
+      if (!targetBlockId) {
         toast({ title: "Ошибка", description: "Выберите блок, к которому нужно применить квантификатор.", variant: "destructive" });
         return;
       }
-      const insertQuantifier = (nodes: Block[]): Block[] | null => {
+      const insertQuantifier = (nodes: Block[], blockToQuantifyId: string): Block[] | null => {
         for (let i = 0; i < nodes.length; i++) {
           const currentNode = nodes[i];
-          if (currentNode.id === selectedBlockId) {
+          if (currentNode.id === blockToQuantifyId) {
             if (currentNode.type === BlockType.QUANTIFIER) return null;
             if (i + 1 < nodes.length && nodes[i+1].type === BlockType.QUANTIFIER) return null;
             const newNodes = [...nodes];
@@ -218,7 +220,7 @@ const RegexVisionWorkspace: React.FC = () => {
             return newNodes;
           }
           if (currentNode.children) {
-            const newChildren = insertQuantifier(currentNode.children);
+            const newChildren = insertQuantifier(currentNode.children, blockToQuantifyId);
             if (newChildren) {
               const newNodes = [...nodes];
               newNodes[i] = { ...currentNode, children: newChildren };
@@ -229,7 +231,7 @@ const RegexVisionWorkspace: React.FC = () => {
         return null;
       };
       setBlocks(prev => {
-        const newTree = insertQuantifier(prev);
+        const newTree = insertQuantifier(prev, targetBlockId);
         if (newTree) {
           setSelectedBlockId(newBlock.id);
           return newTree;
@@ -238,6 +240,7 @@ const RegexVisionWorkspace: React.FC = () => {
         return prev;
       });
       setParentIdForNewBlock(null);
+      setContextualBlockId(null);
       setIsPaletteVisible(false);
       return;
     }
@@ -257,8 +260,9 @@ const RegexVisionWorkspace: React.FC = () => {
     }
     setSelectedBlockId(newBlock.id);
     setParentIdForNewBlock(null);
+    setContextualBlockId(null);
     setIsPaletteVisible(false);
-  }, [toast, blocks, selectedBlockId]);
+  }, [toast, blocks, selectedBlockId, contextualBlockId]);
 
 
   const handleAddBlocksFromQuickGen = useCallback((query: string, newBlocks: Block[], parentId: string | null, exampleTestText?: string, recommendedFlags?: string) => {
@@ -341,10 +345,10 @@ const RegexVisionWorkspace: React.FC = () => {
         toast({ title: "Ошибка", description: "Выберите блок, к которому нужно применить квантификатор.", variant: "destructive" });
         return;
       }
-      const insertQuantifier = (nodes: Block[]): Block[] | null => {
+      const insertQuantifier = (nodes: Block[], blockToQuantifyId: string): Block[] | null => {
         for (let i = 0; i < nodes.length; i++) {
           const currentNode = nodes[i];
-          if (currentNode.id === selectedBlockId) {
+          if (currentNode.id === blockToQuantifyId) {
             if (currentNode.type === BlockType.QUANTIFIER) return null;
             if (i + 1 < nodes.length && nodes[i+1].type === BlockType.QUANTIFIER) return null;
             const newNodes = [...nodes];
@@ -352,7 +356,7 @@ const RegexVisionWorkspace: React.FC = () => {
             return newNodes;
           }
           if (currentNode.children) {
-            const newChildren = insertQuantifier(currentNode.children);
+            const newChildren = insertQuantifier(currentNode.children, blockToQuantifyId);
             if (newChildren) {
               const newNodes = [...nodes];
               newNodes[i] = { ...currentNode, children: newChildren };
@@ -363,7 +367,7 @@ const RegexVisionWorkspace: React.FC = () => {
         return null;
       };
       setBlocks(prev => {
-        const newTree = insertQuantifier(prev);
+        const newTree = insertQuantifier(prev, selectedBlockId);
         if (newTree) {
           setSelectedBlockId(processedBlock.id);
           return newTree;
@@ -738,8 +742,9 @@ const RegexVisionWorkspace: React.FC = () => {
     });
   }, [toast]);
 
-  const handleOpenPaletteFor = (pId: string | null) => {
+  const handleOpenPaletteFor = (pId: string | null, ctxId: string | null = null) => {
     setParentIdForNewBlock(pId);
+    setContextualBlockId(ctxId);
     setIsPaletteVisible(true);
   };
   
@@ -1046,8 +1051,8 @@ const RegexVisionWorkspace: React.FC = () => {
             quantifierToRender={quantifierToRender}
             onUpdate={handleUpdateBlock}
             onDelete={handleDeleteBlock}
-            onAddChild={(pId) => handleOpenPaletteFor(pId)}
-            onAddSibling={(pId) => handleOpenPaletteFor(pId)}
+            onAddChild={(pId) => handleOpenPaletteFor(pId, block.id)}
+            onAddSibling={(pId, ctxId) => handleOpenPaletteFor(pId, ctxId)}
             onDuplicate={handleDuplicateBlock}
             onUngroup={handleUngroupBlock}
             onWrapBlock={handleWrapBlock}
@@ -1089,10 +1094,10 @@ const RegexVisionWorkspace: React.FC = () => {
                         <Button variant="outline" size="iconSm" onClick={handleCollapseAll} title="Свернуть всё (Ctrl+Shift+Вверх)">
                           <FoldVertical size={14} />
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => { setParentIdForNewBlock(null); setIsWizardModalOpen(true); }}>
+                        <Button size="sm" variant="outline" onClick={() => { setIsWizardModalOpen(true); }}>
                           <Sparkles size={16} className="mr-1 text-amber-500" /> AI Помощник
                         </Button>
-                        <Button size="sm" onClick={() => { setParentIdForNewBlock(null); setIsPaletteVisible(true); }}>
+                        <Button size="sm" onClick={() => handleOpenPaletteFor(null)}>
                           <Plus size={16} className="mr-1" /> Добавить блок
                         </Button>
                         
@@ -1245,7 +1250,11 @@ const RegexVisionWorkspace: React.FC = () => {
       <BlockPalette
         onAddBlock={handleAddBlock}
         isVisible={isPaletteVisible}
-        onToggle={() => setIsPaletteVisible(!isPaletteVisible)}
+        onToggle={() => {
+          setIsPaletteVisible(!isPaletteVisible);
+          setParentIdForNewBlock(null);
+          setContextualBlockId(null);
+        }}
         parentIdForNewBlock={parentIdForNewBlock}
       />
       {isWizardModalOpen && (

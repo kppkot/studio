@@ -14,8 +14,8 @@ interface BlockNodeProps {
   quantifierToRender?: Block | null; 
   onUpdate: (id: string, updatedBlock: Partial<Block>) => void;
   onDelete: (id: string, deleteAttachedQuantifier?: boolean) => void; 
-  onAddChild: (parentId: string | null) => void;
-  onAddSibling: (parentId: string | null) => void;
+  onAddChild: (parentId: string | null, contextId: string) => void;
+  onAddSibling: (parentId: string | null, contextId: string) => void;
   onDuplicate: (id: string) => void;
   onUngroup: (id: string) => void;
   onWrapBlock: (id: string) => void;
@@ -317,7 +317,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                   size="iconSm"
                   onClick={(e) => {
                       e.stopPropagation();
-                      onAddSibling(parentId);
+                      onAddSibling(parentId, block.id);
                   }}
                   className="h-6 w-6 opacity-0 group-hover/blocknode:opacity-100 transition-opacity text-muted-foreground hover:text-primary"
                   title="Добавить блок"
@@ -383,7 +383,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                <div className="pt-2 pb-1">
                  <div 
                   className="ml-5 pl-4 pr-2 py-4 border-l-2 border-dashed border-muted-foreground/50 bg-muted/30 rounded-r-md text-center text-muted-foreground text-xs italic hover:border-primary hover:text-primary cursor-pointer"
-                  onClick={(e) => { e.stopPropagation(); onAddChild(block.id); }}
+                  onClick={(e) => { e.stopPropagation(); onAddChild(block.id, block.id); }}
                 >
                   <p>{block.type === BlockType.ALTERNATION ? 'Добавьте дочерний блок как первую альтернативу' : 'Добавьте или перетащите дочерние блоки сюда'}</p>
                  </div>
