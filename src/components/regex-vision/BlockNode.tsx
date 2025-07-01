@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import type { Block, GroupInfo, QuantifierSettings, GroupSettings, CharacterClassSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, LiteralSettings } from './types';
 import { BlockType } from './types';
-import { ChevronDown, ChevronRight, GripVertical, Repeat } from 'lucide-react';
+import { ChevronDown, ChevronRight, GripVertical, Repeat, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { BLOCK_CONFIGS } from './constants';
@@ -49,7 +49,7 @@ const QuantifierBadge: React.FC<{
     <div
       onClick={(e) => onSelect(e, block.id)}
       className={cn(
-        "absolute top-1/2 -translate-y-1/2 -right-3 z-10 cursor-pointer",
+        "absolute top-1/2 -translate-y-1/2 right-2 z-10 cursor-pointer",
         "bg-orange-100 text-orange-800 border-orange-300 border",
         "dark:bg-orange-900/50 dark:text-orange-300 dark:border-orange-700/50",
         "px-2 py-1 rounded-full text-xs font-semibold shadow-sm hover:shadow-md transition-all flex items-center gap-1.5",
@@ -166,11 +166,11 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         if (litSettings.isRawRegex) {
           details = 'Необработанный фрагмент Regex';
         } else {
-          details = 'Точное совпадение с текстом ниже';
+          details = 'Точное совпадение';
         }
         regexFragment = litSettings.isRawRegex ? litSettings.text : escapeForDisplay(litSettings.text || '');
         if (!regexFragment) {
-            details = 'Пустой литерал. Введите текст в настройках.';
+            details = 'Пустой литерал. Введите текст.';
         }
         break;
 
@@ -181,18 +181,18 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         
         const shorthands: {[key: string]: string} = {
             '\\d': 'Любая цифра (0-9)',
-            '\\D': 'Любой символ, кроме цифры',
-            '\\w': 'Буквенно-цифровой символ или _',
-            '\\W': 'Любой символ, кроме буквенно-цифрового или _',
-            '\\s': 'Любой пробельный символ',
-            '\\S': 'Любой символ, кроме пробельного',
-            '.': 'Любой символ (кроме новой строки)',
+            '\\D': 'Не цифра',
+            '\\w': 'Буква/цифра/_',
+            '\\W': 'Не буква/цифра/_',
+            '\\s': 'Пробельный символ',
+            '\\S': 'Не пробельный символ',
+            '.': 'Любой символ',
         };
 
         if (shorthands[pattern]) {
             details = shorthands[pattern];
         } else if (pattern) {
-            details = `${ccSettings.negated ? 'Кроме' : 'Один из'}: ${pattern.substring(0, 30)}`;
+            details = `${ccSettings.negated ? 'Кроме' : 'Один из'}:`;
         } else {
             details = 'Пустой или составной класс'
         }
@@ -309,6 +309,19 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             isBlockSelected && "ring-2 ring-primary shadow-lg"
           )}
         >
+          <Button
+              variant="ghost"
+              size="iconSm"
+              onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(block.id, true);
+              }}
+              className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover/blocknode:opacity-100 transition-opacity text-muted-foreground hover:text-destructive z-20"
+              title="Удалить блок"
+          >
+              <Trash2 size={14} />
+          </Button>
+
           <div className="p-2 flex items-start gap-3">
             <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab flex-shrink-0 mt-1" />
 
@@ -325,11 +338,16 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                   <span className="text-primary h-5 w-5 flex items-center justify-center">{icon}</span>
                   <h3 className="font-semibold text-sm truncate">{title}</h3>
                 </div>
-                {details && <p className="text-xs text-muted-foreground mt-0.5">{details}</p>}
-                {regexFragment && (
-                  <div className="mt-1.5 px-2 py-1 bg-muted/70 rounded-md font-mono text-xs text-foreground/80 break-all">
-                    {regexFragment}
-                  </div>
+
+                {(details || regexFragment) && (
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        {details && <p className="text-xs text-muted-foreground">{details}</p>}
+                        {regexFragment && (
+                            <div className="px-1.5 py-0.5 bg-muted/70 rounded-md font-mono text-xs text-foreground/80">
+                                {regexFragment}
+                            </div>
+                        )}
+                    </div>
                 )}
             </div>
           </div>
