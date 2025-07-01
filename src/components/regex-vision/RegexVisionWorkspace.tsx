@@ -586,7 +586,6 @@ const RegexVisionWorkspace: React.FC = () => {
     });
   }, [toast]);
 
-
   const findBlockAndParentRecursive = (
     nodes: Block[],
     targetId: string,
@@ -605,144 +604,99 @@ const RegexVisionWorkspace: React.FC = () => {
     return { block: null, parent: null, indexInParent: -1 };
   };
 
-
-  const handleReorderBlock = useCallback((draggedId: string, dropOnBlockId: string, parentOfDropOnBlockIdOrDropTargetId: string | null) => {
+  const handleReorderBlock = useCallback((draggedId: string, dropOnBlockId: string, newParentId: string | null) => {
     setBlocks(prevBlocks => {
-      let draggedBlockInstance: Block | null = null;
-      let draggedQuantifierInstance: Block | null = null;
+      let draggedBlock: Block | null = null;
+      let draggedQuantifier: Block | null = null;
 
-      const removeDraggedRecursive = (nodes: Block[], idToRemove: string): { updatedNodes: Block[], foundBlock: Block | null, foundQuantifier: Block | null } => {
-        let found: Block | null = null;
-        let foundQ: Block | null = null;
-        
-        const newNodes: Block[] = [];
-        for(let i=0; i<nodes.length; i++) {
-            const b = nodes[i];
-            if (b.id === idToRemove) {
-                found = b;
-                if (b.type !== BlockType.QUANTIFIER && (i + 1) < nodes.length && nodes[i+1].type === BlockType.QUANTIFIER) {
-                    foundQ = nodes[i+1];
-                    i++; 
-                }
-            } else {
-                newNodes.push(b);
+      const removeDraggedRecursive = (nodes: Block[], idToRemove: string): Block[] => {
+        const result: Block[] = [];
+        for (let i = 0; i < nodes.length; i++) {
+          const node = nodes[i];
+          if (node.id === idToRemove) {
+            draggedBlock = cloneBlockForState(node);
+            if (i + 1 < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
+              draggedQuantifier = cloneBlockForState(nodes[i + 1]);
+              i++; // Skip quantifier
             }
-        }
-
-        if (found) return { updatedNodes: newNodes, foundBlock: found, foundQuantifier: foundQ };
-
-        for (let i = 0; i < newNodes.length; i++) {
-          if (newNodes[i].children && newNodes[i].children.length > 0) {
-            const childResult = removeDraggedRecursive(newNodes[i].children, idToRemove);
-            if (childResult.foundBlock) {
-              newNodes[i] = { ...newNodes[i], children: childResult.updatedNodes };
-              return { updatedNodes: newNodes, foundBlock: childResult.foundBlock, foundQuantifier: childResult.foundQuantifier };
+          } else {
+            if (node.children) {
+              node.children = removeDraggedRecursive(node.children);
             }
+            result.push(node);
           }
         }
-        return { updatedNodes: nodes, foundBlock: null, foundQuantifier: null };
+        return result;
       };
 
-      const { updatedNodes: blocksWithoutDraggedOriginal, foundBlock, foundQuantifier } = removeDraggedRecursive(prevBlocks, draggedId);
+      const blocksWithoutDragged = removeDraggedRecursive(cloneBlockForState({ id: 'root', type: BlockType.LITERAL, settings:{text:''}, children: prevBlocks }).children!);
+      
+      if (!draggedBlock) return prevBlocks;
 
-      if (!foundBlock) {
-        return prevBlocks;
-      }
-      let blocksWithoutDragged = cloneBlockForState({id: 'root', type: BlockType.LITERAL, settings: {text:''}, children: blocksWithoutDraggedOriginal, isExpanded: true}).children || [];
-
-
-      draggedBlockInstance = cloneBlockForState(foundBlock);
-      if (foundQuantifier) {
-        draggedQuantifierInstance = cloneBlockForState(foundQuantifier);
-      }
-
-      const dropTargetNodeInfo = findBlockAndParentRecursive(blocksWithoutDragged, dropOnBlockId);
-      if (!dropTargetNodeInfo.block) {
-        return prevBlocks;
-      }
-      const dropTargetNode = dropTargetNodeInfo.block;
-
-      const canDropTargetBeParent = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL, BlockType.CHARACTER_CLASS].includes(dropTargetNode.type);
-      let finalBlocks: Block[];
-
-      const isDescendantOrSelf = (checkNodes: Block[], parentId: string, childIdToFind: string): boolean => {
-        for (const node of checkNodes) {
-          if (node.id === parentId) {
-            const findChild = (nodesToSearch: Block[], id: string): boolean => {
-              for (const n of nodesToSearch) {
-                if (n.id === id) return true;
-                if (n.children && findChild(n.children, id)) return true;
-              }
-              return false;
-            };
-            return findChild(node.children || [], childIdToFind);
-          }
-          if (node.children && isDescendantOrSelf(node.children, parentId, childIdToFind)) {
-            return true;
-          }
+      const isDescendant = (nodes: Block[], idToFind: string): boolean => {
+        for (const node of nodes) {
+          if (node.id === idToFind) return true;
+          if (node.children && isDescendant(node.children, idToFind)) return true;
         }
         return false;
       };
 
-      if (draggedId === dropTargetNode.id || isDescendantOrSelf(prevBlocks, draggedId, dropTargetNode.id)) {
-          return prevBlocks;
+      if (draggedBlock.id === dropOnBlockId || (draggedBlock.children && isDescendant(draggedBlock.children, dropOnBlockId))) {
+        toast({ title: "Недопустимое действие", description: "Нельзя переместить блок внутрь самого себя.", variant: "destructive" });
+        return prevBlocks;
       }
 
-      const dragTargetRole = document.body.getAttribute('data-drag-target-role');
-      const blocksToAdd = [draggedBlockInstance];
-      if (draggedQuantifierInstance) blocksToAdd.push(draggedQuantifierInstance);
+      const blocksToAdd = [draggedBlock];
+      if (draggedQuantifier) blocksToAdd.push(draggedQuantifier);
 
-      if (canDropTargetBeParent && dragTargetRole === 'parent') {
-        const addAsChildRecursiveFn = (nodes: Block[], targetParentId: string, childrenToAdd: Block[]): Block[] => {
-          return nodes.map(n => {
-            if (n.id === targetParentId) {
-              const existingChildren = n.children || [];
-              return { ...n, children: [...existingChildren, ...childrenToAdd], isExpanded: true };
+      const insertRecursive = (nodes: Block[]): Block[] => {
+        // Case 1: Drop into a container (newParentId is the container's ID)
+        if (newParentId === dropOnBlockId) {
+          return nodes.map(node => {
+            if (node.id === newParentId) {
+              return { ...node, children: [...(node.children || []), ...blocksToAdd], isExpanded: true };
             }
-            if (n.children) {
-              return { ...n, children: addAsChildRecursiveFn(n.children, targetParentId, childrenToAdd) };
+            if (node.children) {
+              return { ...node, children: insertRecursive(node.children) };
             }
-            return n;
+            return node;
           });
-        };
-        finalBlocks = addAsChildRecursiveFn(blocksWithoutDragged, dropOnBlockId, blocksToAdd);
-      } else {
-        const { parent: dropTargetParent, indexInParent: dropTargetIndex } = dropTargetNodeInfo;
-        const targetContainer = dropTargetParent ? dropTargetParent.children! : blocksWithoutDragged;
-        const adjustedDropIndex = targetContainer.findIndex(b => b.id === dropOnBlockId);
-
-        if (adjustedDropIndex !== -1) {
-            targetContainer.splice(adjustedDropIndex + 1, 0, ...blocksToAdd);
-        } else {
-            blocksWithoutDragged.push(...blocksToAdd);
         }
-
-        const updateParentRecursive = (nodes: Block[], parentToUpdate: Block): Block[] => {
-            return nodes.map(n => {
-                if (n.id === parentToUpdate.id) return parentToUpdate;
-                if (n.children) {
-                    return { ...n, children: updateParentRecursive(n.children, parentToUpdate) };
+        
+        // Case 2: Drop as a sibling
+        const newNodes: Block[] = [];
+        for (const node of nodes) {
+            if (node.id === dropOnBlockId) {
+                const parentInfo = findBlockAndParentRecursive(prevBlocks, dropOnBlockId);
+                if ((parentInfo.parent?.id ?? null) === newParentId) {
+                    newNodes.push(node, ...blocksToAdd);
+                } else {
+                    newNodes.push(node);
                 }
-                return n;
-            });
-        };
-
-        if (dropTargetParent) {
-            finalBlocks = updateParentRecursive(blocksWithoutDragged, dropTargetParent);
-        } else {
-            finalBlocks = blocksWithoutDragged;
+            } else if (node.children) {
+                newNodes.push({ ...node, children: insertRecursive(node.children) });
+            } else {
+                newNodes.push(node);
+            }
         }
-      }
-      
-      const updatedBlocksWithToast = () => {
-        toast({ title: "Блок перемещен", description: "Порядок блоков обновлен." });
-        return finalBlocks;
+        return newNodes;
       };
-      return updatedBlocksWithToast();
+      
+      let finalBlocks: Block[]
+      if (newParentId === null) { // Dropping in root
+          const dropIndex = blocksWithoutDragged.findIndex(b => b.id === dropOnBlockId);
+          if (dropIndex > -1) {
+              blocksWithoutDragged.splice(dropIndex + 1, 0, ...blocksToAdd);
+          }
+          finalBlocks = blocksWithoutDragged;
+      } else {
+          finalBlocks = insertRecursive(blocksWithoutDragged);
+      }
 
+      toast({ title: "Блок перемещен", description: "Порядок блоков обновлен." });
+      return finalBlocks;
     });
   }, [toast]);
-
 
   const handleOpenPaletteForChild = useCallback((pId: string) => {
     setParentIdForNewBlock(pId);
