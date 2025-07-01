@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import type { Block, BlockConfig, LiteralSettings, CharacterClassSettings, QuantifierSettings, GroupSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, ConditionalSettings, GroupInfo } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { ChevronDown, ChevronRight, PlusCircle, Trash2, GripVertical, Copy, Ungroup, PackagePlus, Asterisk, Combine, GitFork, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, PlusCircle, Trash2, GripVertical, Copy, Ungroup, PackagePlus, Asterisk, Combine, GitFork, X, Type, Square, Repeat, Parentheses, Box, TextCursorInput, MinusSquare, LayoutList, Binary, Anchor, Waypoints, Brackets, Link, Code, CircleDotDashed, Question, Slash } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { reconstructPatternFromChildren } from './utils';
@@ -28,6 +28,41 @@ interface BlockNodeProps {
   renderChildNodes: (nodes: Block[], parentId: string, depth: number, groupInfos: GroupInfo[]) => React.ReactNode[];
   groupInfos: GroupInfo[];
 }
+
+const getBlockIcon = (block: Block, config: BlockConfig, hasChildren: boolean) => {
+  const settings = block.settings;
+  switch (block.type) {
+    case BlockType.LITERAL:
+      return <Type size={18} />;
+    case BlockType.CHARACTER_CLASS:
+      const cs = settings as CharacterClassSettings;
+      if (hasChildren) return <Square size={18} />; // Represents the outer brackets
+      if (cs.pattern === '\\d') return <Binary size={18} />;
+      if (cs.pattern === '\\D') return <Slash size={18} />; // Represents not a digit
+      if (cs.pattern === '\\w') return <TextCursorInput size={18} />;
+      if (cs.pattern === '\\W') return <Slash size={18} />; // Represents not a word char
+      if (cs.pattern === '\\s') return <Square size={18} />; // Represents whitespace
+      if (cs.pattern === '\\S') return <Slash size={18} />; // Represents not whitespace
+      if (cs.pattern === '.') return <CircleDotDashed size={18} />; // Represents any character
+      return <Brackets size={18} />; // Default for character class
+    case BlockType.QUANTIFIER:
+      return <Repeat size={18} />;
+    case BlockType.GROUP:
+      return <Parentheses size={18} />; // Represents the outer parentheses
+    case BlockType.ALTERNATION:
+      return <GitFork size={18} className="transform rotate-90" />; // Already quite fitting
+    case BlockType.LOOKAROUND:
+      return <LayoutList size={18} />; // Represents looking ahead/behind without consuming
+    case BlockType.ANCHOR:
+      return <Anchor size={18} />; // Represents position anchors
+    case BlockType.BACKREFERENCE:
+      return <Link size={18} />; // Represents linking to a previous group
+    case BlockType.CONDITIONAL:
+      return <Code size={18} />; // Represents conditional logic in regex
+    default:
+      return config.icon || <Box size={18} />; // Fallback icon
+  }
+};
 
 const getDescriptiveBlockTitle = (block: Block, config: BlockConfig, groupInfo?: GroupInfo): { title: string, details: string } => {
   const settings = block.settings;
