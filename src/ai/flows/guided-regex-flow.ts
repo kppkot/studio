@@ -81,7 +81,7 @@ Based on all the information above, determine the **next single, atomic step**.
     *   Step N+3: Create a \`LITERAL\` block for option "B". **Explanation:** Explain that you are adding the next option.
     *   You are **STRICTLY FORBIDDEN** from creating a single \`LITERAL\` that contains multiple options like \`"A|B|C"\`.
 5.  **SIMPLE BLOCKS ONLY:** Your generated 'block' object MUST be one of the simple, predefined types.
-    *   **LITERAL:** For a single character or short, simple string (e.g., \`@\`, \`.\`, \`cat\`). DO NOT generate the \`|\` character inside a \`LITERAL\` block. Each \`LITERAL\` must contain non-empty text.
+    *   **LITERAL:** For a short, contiguous string of plain text characters (e.g., \`@\`, \`http://\`, \`PO-\`). If the user wants to match a specific word or prefix like "PO", you **MUST** create a single \`LITERAL\` block for the entire string "PO". **DO NOT** break it down into separate atomic blocks for "P" and then "O". That is incorrect and inefficient. Only use multiple blocks for concepts that are logically separate. The \`|\` character is forbidden in a \`LITERAL\` block. Each \`LITERAL\` must contain non-empty text.
     *   **CHARACTER_CLASS:** For a set of characters. The \`pattern\` must be for **ONE ATOMIC ELEMENT**. Valid examples: \`a-z\`, \`A-Z\`, \`0-9\`, \`\\w\`, \`\\s\`, \`\\d\`. **YOU ARE FORBIDDEN** from creating complex patterns like \`[a-zA-Z0-9._%+-]\` in a single step.
     *   **QUANTIFIER:** For repetition (e.g., \`+\`, \`*\`, \`?\`). This block always follows another block.
     *   **ANCHOR:** For positions (e.g., \`^\`, \`$\`, \`\\b\`).
@@ -172,7 +172,7 @@ Based on the goal and the previous steps, provide a **new, alternative, single, 
     *   Step N+2: Create a \`LITERAL\` block for option "A". **Explanation:** Explain that you are adding the first option to the list.
     *   You are **STRICTLY FORBIDDEN** from creating a single \`LITERAL\` that contains multiple options like \`"A|B|C"\`. Each option is its own atomic step.
 5.  **SIMPLE BLOCKS ONLY:** Your generated 'block' object MUST be one of the simple, predefined types.
-    *   **LITERAL:** For a single character or short, simple string (e.g., \`@\`, \`.\`, \`cat\`). DO NOT generate the \`|\` character inside a \`LITERAL\` block. Each \`LITERAL\` must contain non-empty text.
+    *   **LITERAL:** For a short, contiguous string of plain text characters (e.g., \`@\`, \`http://\`, \`PO-\`). If the user wants to match a specific word or prefix like "PO", you **MUST** create a single \`LITERAL\` block for the entire string "PO". **DO NOT** break it down into separate atomic blocks for "P" and then "O". That is incorrect and inefficient. Only use multiple blocks for concepts that are logically separate. The \`|\` character is forbidden in a \`LITERAL\` block. Each \`LITERAL\` must contain non-empty text.
     *   **CHARACTER_CLASS:** For a set of characters. The \`pattern\` must be for **ONE ATOMIC ELEMENT**. Valid examples: \`a-z\`, \`A-Z\`, \`0-9\`, \`\\w\`, \`\\s\`, \`\\d\`. **YOU ARE FORBIDDEN** from creating complex patterns like \`[a-zA-Z0-9._%+-]\` in a single step.
     *   **QUANTIFIER:** For repetition (e.g., \`+\`, \`*\`, \`?\`).
     *   **ANCHOR:** For positions (e.g., \`^\`, \`$\`, \`\\b\`).
