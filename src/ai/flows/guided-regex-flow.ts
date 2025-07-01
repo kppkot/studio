@@ -22,19 +22,24 @@ import { processAiBlocks } from '@/components/regex-vision/utils';
 export type NextGuidedStepInput = z.infer<typeof NextGuidedStepInputSchema>;
 
 export async function generateNextGuidedStep(input: NextGuidedStepInput): Promise<GuidedRegexStep> {
-  const {output} = await nextStepPrompt(input);
-  if (!output || !output.block) {
-      throw new Error("AI failed to generate a valid next step.");
+  try {
+    const {output} = await nextStepPrompt(input);
+    if (!output || !output.block) {
+        throw new Error("AI failed to generate a valid next step.");
+    }
+    // Sanitize the block before returning
+    const sanitizedStep = {
+        ...output,
+        block: processAiBlocks([output.block])[0]
+    };
+    if (!sanitizedStep.block) {
+        throw new Error("AI generated an invalid block structure.");
+    }
+    return sanitizedStep;
+  } catch (error) {
+    console.error("Error in generateNextGuidedStep:", error);
+    throw new Error("Произошла ошибка при генерации следующего шага. AI сервис может быть временно недоступен.");
   }
-  // Sanitize the block before returning
-  const sanitizedStep = {
-      ...output,
-      block: processAiBlocks([output.block])[0]
-  };
-  if (!sanitizedStep.block) {
-       throw new Error("AI generated an invalid block structure.");
-  }
-  return sanitizedStep;
 }
 
 const nextStepPrompt = ai.definePrompt({
@@ -102,6 +107,7 @@ Generate the JSON for the next single step, adhering strictly to the canons.
 export type RegenerateGuidedStepInput = z.infer<typeof RegenerateGuidedStepInputSchema>;
 
 export async function regenerateGuidedStep(input: RegenerateGuidedStepInput): Promise<GuidedRegexStep> {
+  try {
     const {output} = await regenerateStepPrompt(input);
     if (!output || !output.block) {
         throw new Error("AI failed to regenerate a valid step.");
@@ -114,6 +120,10 @@ export async function regenerateGuidedStep(input: RegenerateGuidedStepInput): Pr
         throw new Error("AI regenerated an invalid block structure.");
     }
     return sanitizedStep;
+  } catch (error) {
+    console.error("Error in regenerateGuidedStep:", error);
+    throw new Error("Произошла ошибка при перегенерации шага. AI сервис может быть временно недоступен.");
+  }
 }
 
 const regenerateStepPrompt = ai.definePrompt({
