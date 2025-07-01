@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import type { Block, GroupInfo, QuantifierSettings, GroupSettings, CharacterClassSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, LiteralSettings } from './types';
 import { BlockType } from './types';
-import { ChevronDown, ChevronRight, GripVertical, Repeat, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, GripVertical, Repeat, Trash2, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { BLOCK_CONFIGS } from './constants';
@@ -14,7 +14,8 @@ interface BlockNodeProps {
   quantifierToRender?: Block | null; 
   onUpdate: (id: string, updatedBlock: Partial<Block>) => void;
   onDelete: (id: string, deleteAttachedQuantifier?: boolean) => void; 
-  onAddChild: (parentId: string) => void;
+  onAddChild: (parentId: string | null) => void;
+  onAddSibling: (parentId: string | null) => void;
   onDuplicate: (id: string) => void;
   onUngroup: (id: string) => void;
   onWrapBlock: (id: string) => void;
@@ -49,7 +50,7 @@ const QuantifierBadge: React.FC<{
     <div
       onClick={(e) => onSelect(e, block.id)}
       className={cn(
-        "absolute top-1/2 -translate-y-1/2 right-2 z-10 cursor-pointer",
+        "absolute top-1/2 -translate-y-1/2 right-14 z-10 cursor-pointer",
         "bg-orange-100 text-orange-800 border-orange-300 border",
         "dark:bg-orange-900/50 dark:text-orange-300 dark:border-orange-700/50",
         "px-2 py-1 rounded-full text-xs font-semibold shadow-sm hover:shadow-md transition-all flex items-center gap-1.5",
@@ -70,6 +71,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   onUpdate,
   onDelete,
   onAddChild,
+  onAddSibling,
   onDuplicate,
   onUngroup,
   onWrapBlock,
@@ -296,7 +298,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
-          "transition-all relative group/blocknode rounded-md max-w-lg",
+          "transition-all relative group/blocknode rounded-md",
           isDraggingOver && !showAsParentDropTarget && "bg-accent/20",
           showAsParentDropTarget && "bg-green-100 dark:bg-green-800/30 ring-2 ring-green-500",
         )}
@@ -309,18 +311,32 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             isBlockSelected && "ring-2 ring-primary shadow-lg"
           )}
         >
-          <Button
-              variant="ghost"
-              size="iconSm"
-              onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(block.id, true);
-              }}
-              className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover/blocknode:opacity-100 transition-opacity text-muted-foreground hover:text-destructive z-20"
-              title="Удалить блок"
-          >
-              <Trash2 size={14} />
-          </Button>
+          <div className="absolute top-1 right-1 flex items-center gap-0.5 z-20">
+              <Button
+                  variant="ghost"
+                  size="iconSm"
+                  onClick={(e) => {
+                      e.stopPropagation();
+                      onAddSibling(parentId);
+                  }}
+                  className="h-6 w-6 opacity-0 group-hover/blocknode:opacity-100 transition-opacity text-muted-foreground hover:text-primary"
+                  title="Добавить блок"
+              >
+                  <PlusCircle size={14} />
+              </Button>
+              <Button
+                  variant="ghost"
+                  size="iconSm"
+                  onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(block.id, true);
+                  }}
+                  className="h-6 w-6 opacity-0 group-hover/blocknode:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                  title="Удалить блок"
+              >
+                  <Trash2 size={14} />
+              </Button>
+          </div>
 
           <div className="p-2 flex items-start gap-3">
             <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab flex-shrink-0 mt-1" />
@@ -333,7 +349,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                 <div className="w-7 h-7 flex-shrink-0" />
             )}
             
-             <div className="flex-1 min-w-0">
+             <div className="flex-1 min-w-0 pr-4">
                 <div className="flex items-center gap-2">
                   <span className="text-primary h-5 w-5 flex items-center justify-center">{icon}</span>
                   <h3 className="font-semibold text-sm truncate">{title}</h3>
@@ -365,7 +381,10 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             <div className="absolute left-[18px] top-0 bottom-2 w-px bg-primary/20"></div>
              {isEmptyContainer ? (
                <div className="pt-2 pb-1">
-                 <div className="ml-5 pl-4 pr-2 py-4 border-l-2 border-dashed border-muted-foreground/50 bg-muted/30 rounded-r-md text-center text-muted-foreground text-xs italic">
+                 <div 
+                  className="ml-5 pl-4 pr-2 py-4 border-l-2 border-dashed border-muted-foreground/50 bg-muted/30 rounded-r-md text-center text-muted-foreground text-xs italic hover:border-primary hover:text-primary cursor-pointer"
+                  onClick={(e) => { e.stopPropagation(); onAddChild(block.id); }}
+                >
                   <p>{block.type === BlockType.ALTERNATION ? 'Добавьте дочерний блок как первую альтернативу' : 'Добавьте или перетащите дочерние блоки сюда'}</p>
                  </div>
                </div>

@@ -35,7 +35,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Sparkles, Gauge, Library, Lightbulb, Combine, Menu, Puzzle, Share2, DownloadCloud, UploadCloud, Loader2, Terminal, ChevronRight } from 'lucide-react'; 
+import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Sparkles, Gauge, Library, Lightbulb, Combine, Menu, Puzzle, Share2, DownloadCloud, UploadCloud, Loader2, Terminal, ChevronRight, PlusCircle, Trash2 } from 'lucide-react'; 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
 interface GuidedModeState {
@@ -698,11 +698,11 @@ const RegexVisionWorkspace: React.FC = () => {
     });
   }, [toast]);
 
-  const handleOpenPaletteForChild = useCallback((pId: string) => {
+  const handleOpenPaletteFor = (pId: string | null) => {
     setParentIdForNewBlock(pId);
     setIsPaletteVisible(true);
-  }, []);
-
+  };
+  
   const selectedBlock = selectedBlockId ? findBlockRecursive(blocks, selectedBlockId) : null;
   
   const highlightedGroupIndex = React.useMemo(() => {
@@ -1006,7 +1006,8 @@ const RegexVisionWorkspace: React.FC = () => {
             quantifierToRender={quantifierToRender}
             onUpdate={handleUpdateBlock}
             onDelete={handleDeleteBlock}
-            onAddChild={handleOpenPaletteForChild}
+            onAddChild={(pId) => handleOpenPaletteFor(pId)}
+            onAddSibling={(pId) => handleOpenPaletteFor(pId)}
             onDuplicate={handleDuplicateBlock}
             onUngroup={handleUngroupBlock}
             onWrapBlock={handleWrapBlock}
@@ -1026,7 +1027,7 @@ const RegexVisionWorkspace: React.FC = () => {
         }
     }
     return nodeList;
-  }, [selectedBlockId, hoveredBlockId, regexOutput.groupInfos, handleUpdateBlock, handleDeleteBlock, handleOpenPaletteForChild, handleDuplicateBlock, handleUngroupBlock, handleWrapBlock, handleReorderBlock]);
+  }, [selectedBlockId, hoveredBlockId, regexOutput.groupInfos, handleUpdateBlock, handleDeleteBlock, handleDuplicateBlock, handleUngroupBlock, handleWrapBlock, handleReorderBlock]);
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
