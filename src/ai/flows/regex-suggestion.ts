@@ -66,13 +66,16 @@ const regexSuggestionFlow = ai.defineFlow(
     outputSchema: RegexSuggestionOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
-    if (!output) {
-      // Handle cases where the AI might not return a valid output
-      // or if there was an error during the prompt execution.
+    try {
+      const {output} = await prompt(input);
+      if (!output) {
+        return { suggestions: [] };
+      }
+      return output;
+    } catch (error) {
+      console.error("Error in regexSuggestionFlow:", error);
+      // Silently fail and return empty suggestions, as this is not a critical path
       return { suggestions: [] };
     }
-    return output; // Output should conform to RegexSuggestionOutputSchema or be null/undefined
   }
 );
-

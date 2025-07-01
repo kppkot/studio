@@ -85,63 +85,73 @@ const fixRegexFlow = ai.defineFlow(
     outputSchema: NaturalLanguageRegexOutputSchema,
   },
   async input => {
-    // Step 1: Analyze the problem to get a detailed breakdown of what's wrong.
-    const analysisResult = await analyzeRegex({
-      originalQuery: input.originalQuery,
-      generatedRegex: input.faultyRegex,
-      testText: input.testText,
-      errorContext: input.errorContext || 'Нет контекста ошибки.',
-    });
+    try {
+        // Step 1: Analyze the problem to get a detailed breakdown of what's wrong.
+        const analysisResult = await analyzeRegex({
+          originalQuery: input.originalQuery,
+          generatedRegex: input.faultyRegex,
+          testText: input.testText,
+          errorContext: input.errorContext || 'Нет контекста ошибки.',
+        });
 
-    // Step 2: Call the fixing prompt with the analysis as trusted context.
-    const {output} = await prompt({
-        ...input,
-        analysisContext: analysisResult.analysis,
-    });
+        // Step 2: Call the fixing prompt with the analysis as trusted context.
+        const {output} = await prompt({
+            ...input,
+            analysisContext: analysisResult.analysis,
+        });
 
-    if (!output || !isRegexValid(output.regex)) {
+        if (!output || !isRegexValid(output.regex)) {
+            return {
+                regex: input.faultyRegex, // Return original faulty one on failure
+                explanation: "AI не смог исправить это выражение. Пожалуйста, попробуйте перефразировать первоначальный запрос или построить выражение вручную.",
+                parsedBlocks: [],
+                exampleTestText: input.testText,
+            };
+        }
+
+        if (output.recommendedFlags) {
+          const validFlags = new Set(['g', 'i', 'm', 's', 'u', 'y']);
+          output.recommendedFlags = Array.from(new Set(output.recommendedFlags.split('')))
+              .filter(flag => validFlags.has(flag))
+              .join('');
+        }
+
+        let processedBlocks: Block[] = [];
+        if (output.parsedBlocks && output.parsedBlocks.length > 0) {
+          const sanitizedBlocksWithIds = processAiBlocks(output.parsedBlocks);
+          if (sanitizedBlocksWithIds.length > 0) {
+            const correctedBlocks = correctAndSanitizeAiBlocks(sanitizedBlocksWithIds);
+            processedBlocks = breakdownComplexCharClasses(correctedBlocks);
+          }
+        }
+        
+        if (processedBlocks.length === 0 && output.regex) {
+          processedBlocks = [{
+            id: generateId(),
+            type: BlockType.LITERAL,
+            settings: { text: output.regex, isRawRegex: true } as LiteralSettings,
+            children: [],
+            isExpanded: false
+          }];
+        }
+
+        const { regexString: finalRegex } = generateRegexStringAndGroupInfo(processedBlocks);
+
         return {
-            regex: input.faultyRegex, // Return original faulty one on failure
-            explanation: "AI не смог исправить это выражение. Пожалуйста, попробуйте перефразировать первоначальный запрос или построить выражение вручную.",
+            regex: finalRegex,
+            explanation: output.explanation,
+            parsedBlocks: processedBlocks,
+            exampleTestText: output.exampleTestText || input.testText,
+            recommendedFlags: output.recommendedFlags,
+        };
+    } catch (error) {
+        console.error("Error in fixRegexFlow:", error);
+        return {
+            regex: input.faultyRegex,
+            explanation: "Произошла временная ошибка при обращении к AI сервису для исправления. Пожалуйста, попробуйте еще раз через несколько секунд.",
             parsedBlocks: [],
             exampleTestText: input.testText,
         };
     }
-
-    if (output.recommendedFlags) {
-      const validFlags = new Set(['g', 'i', 'm', 's', 'u', 'y']);
-      output.recommendedFlags = Array.from(new Set(output.recommendedFlags.split('')))
-          .filter(flag => validFlags.has(flag))
-          .join('');
-    }
-
-    let processedBlocks: Block[] = [];
-    if (output.parsedBlocks && output.parsedBlocks.length > 0) {
-      const sanitizedBlocksWithIds = processAiBlocks(output.parsedBlocks);
-      if (sanitizedBlocksWithIds.length > 0) {
-        const correctedBlocks = correctAndSanitizeAiBlocks(sanitizedBlocksWithIds);
-        processedBlocks = breakdownComplexCharClasses(correctedBlocks);
-      }
-    }
-    
-    if (processedBlocks.length === 0 && output.regex) {
-      processedBlocks = [{
-        id: generateId(),
-        type: BlockType.LITERAL,
-        settings: { text: output.regex, isRawRegex: true } as LiteralSettings,
-        children: [],
-        isExpanded: false
-      }];
-    }
-
-    const { regexString: finalRegex } = generateRegexStringAndGroupInfo(processedBlocks);
-
-    return {
-        regex: finalRegex,
-        explanation: output.explanation,
-        parsedBlocks: processedBlocks,
-        exampleTestText: output.exampleTestText || input.testText,
-        recommendedFlags: output.recommendedFlags,
-    };
   }
 );

@@ -154,56 +154,66 @@ const generalPurposeRegexGenerator = ai.defineFlow(
     outputSchema: NaturalLanguageRegexOutputSchema,
   },
   async (input) => {
-    const {output} = await generalPurposeGeneratorPrompt(input);
-    
-    if (!output || !isRegexValid(output.regex)) {
+    try {
+        const {output} = await generalPurposeGeneratorPrompt(input);
+        
+        if (!output || !isRegexValid(output.regex)) {
+            return {
+                regex: ".*",
+                explanation: "AI не смог сгенерировать корректное регулярное выражение для этого запроса. Пожалуйста, попробуйте перефразировать или быть более конкретным.",
+                parsedBlocks: [],
+                exampleTestText: "Введите текст для тестирования."
+            };
+        }
+        
+        if (output.recommendedFlags) {
+          const validFlags = new Set(['g', 'i', 'm', 's', 'u', 'y']);
+          output.recommendedFlags = Array.from(new Set(output.recommendedFlags.split('')))
+              .filter(flag => validFlags.has(flag))
+              .join('');
+        }
+
+        let processedBlocks: Block[] = [];
+        if (output.parsedBlocks && output.parsedBlocks.length > 0) {
+          // processAiBlocks now filters invalid blocks.
+          const sanitizedBlocksWithIds = processAiBlocks(output.parsedBlocks);
+          
+          // Only proceed if we have valid blocks after sanitization.
+          if (sanitizedBlocksWithIds.length > 0) {
+            const correctedBlocks = correctAndSanitizeAiBlocks(sanitizedBlocksWithIds);
+            processedBlocks = breakdownComplexCharClasses(correctedBlocks);
+          }
+        }
+        
+        // Fallback: If block processing failed or was never attempted, but we have a valid regex string.
+        if (processedBlocks.length === 0 && output.regex) {
+          processedBlocks = [{
+            id: generateId(),
+            type: BlockType.LITERAL,
+            settings: { text: output.regex, isRawRegex: true } as LiteralSettings,
+            children: [],
+            isExpanded: false
+          }];
+        }
+
+        const { regexString: finalRegex } = generateRegexStringAndGroupInfo(processedBlocks);
+
+        // Construct the final object from trusted sources to ensure consistency.
+        return {
+            regex: finalRegex,
+            explanation: output.explanation,
+            parsedBlocks: processedBlocks,
+            exampleTestText: output.exampleTestText || "Пример текста не был предоставлен AI.",
+            recommendedFlags: output.recommendedFlags,
+        };
+    } catch (error) {
+        console.error("Error in generalPurposeRegexGenerator flow:", error);
         return {
             regex: ".*",
-            explanation: "AI не смог сгенерировать корректное регулярное выражение для этого запроса. Пожалуйста, попробуйте перефразировать или быть более конкретным.",
+            explanation: "Произошла временная ошибка при обращении к AI сервису (модель может быть перегружена). Пожалуйста, попробуйте еще раз через несколько секунд.",
             parsedBlocks: [],
             exampleTestText: "Введите текст для тестирования."
         };
     }
-    
-    if (output.recommendedFlags) {
-      const validFlags = new Set(['g', 'i', 'm', 's', 'u', 'y']);
-      output.recommendedFlags = Array.from(new Set(output.recommendedFlags.split('')))
-          .filter(flag => validFlags.has(flag))
-          .join('');
-    }
-
-    let processedBlocks: Block[] = [];
-    if (output.parsedBlocks && output.parsedBlocks.length > 0) {
-      // processAiBlocks now filters invalid blocks.
-      const sanitizedBlocksWithIds = processAiBlocks(output.parsedBlocks);
-      
-      // Only proceed if we have valid blocks after sanitization.
-      if (sanitizedBlocksWithIds.length > 0) {
-        const correctedBlocks = correctAndSanitizeAiBlocks(sanitizedBlocksWithIds);
-        processedBlocks = breakdownComplexCharClasses(correctedBlocks);
-      }
-    }
-    
-    // Fallback: If block processing failed or was never attempted, but we have a valid regex string.
-    if (processedBlocks.length === 0 && output.regex) {
-      processedBlocks = [{
-        id: generateId(),
-        type: BlockType.LITERAL,
-        settings: { text: output.regex, isRawRegex: true } as LiteralSettings,
-        children: [],
-        isExpanded: false
-      }];
-    }
-
-    const { regexString: finalRegex } = generateRegexStringAndGroupInfo(processedBlocks);
-
-    // Construct the final object from trusted sources to ensure consistency.
-    return {
-        regex: finalRegex,
-        explanation: output.explanation,
-        parsedBlocks: processedBlocks,
-        exampleTestText: output.exampleTestText || "Пример текста не был предоставлен AI.",
-        recommendedFlags: output.recommendedFlags,
-    };
   }
 );

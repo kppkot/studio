@@ -78,10 +78,15 @@ const analyzeRegexFlow = ai.defineFlow(
     outputSchema: AnalyzeRegexOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
-    if (!output) {
-      return { analysis: "Не удалось проанализировать выражение. Попробуйте еще раз." };
+    try {
+      const {output} = await prompt(input);
+      if (!output) {
+        return { analysis: "Не удалось проанализировать выражение. Попробуйте еще раз." };
+      }
+      return output;
+    } catch (error) {
+        console.error("Error in analyzeRegexFlow:", error);
+        return { analysis: "Произошла временная ошибка при обращении к AI сервису для анализа. Пожалуйста, попробуйте еще раз через несколько секунд." };
     }
-    return output;
   }
 );
