@@ -87,7 +87,12 @@ Based on all the information above, determine the **next single, atomic step**.
     *   **ANCHOR:** For positions (e.g., \`^\`, \`$\`, \`\\b\`).
     *   **GROUP / ALTERNATION**: These are containers and should be generated empty. Their children are added in subsequent steps.
 6.  **EXPLANATION (in Russian):** Provide a very short, clear explanation of what this single block does and why it's the next logical step.
-7.  **FINAL STEP:** If you determine that this new step **completes** the regex and fully satisfies the user's request, you MUST set the \`isFinalStep\` field to \`true\`. Do not mark simple, incomplete patterns as final. For a query like 'find an email address', a pattern of just \`\\w+@\` is NOT a final step. The expression must be reasonably complete. Otherwise, omit it or set it to \`false\`.
+7.  **FINAL STEP:** Your most important task is to correctly determine if the plan is complete. Set \`isFinalStep: true\` ONLY if this new step genuinely completes a regex that can fully solve the user's query.
+    *   **DO NOT** mark the plan as final if the regex is obviously incomplete.
+    *   **Bad example:** For a query like "find a purchase order number like PO nn-nnnnn", generating a single \`LITERAL\` for "PO" is NOT a final step. The full pattern is required.
+    *   **Bad example:** For a query like "find an email address", a pattern of just \`\\w+@\` is NOT a final step.
+    *   When in doubt, it is better to set \`isFinalStep: false\` and continue building. Only mark as final when the regex is robust and complete. Otherwise, omit the field or set it to \`false\`.
+
 
 Generate the JSON for the next single step, adhering strictly to the canons.
 `,
@@ -173,7 +178,10 @@ Based on the goal and the previous steps, provide a **new, alternative, single, 
     *   **ANCHOR:** For positions (e.g., \`^\`, \`$\`, \`\\b\`).
     *   **GROUP / ALTERNATION**: These are containers and should be generated empty.
 6.  **EXPLANATION (in Russian):** Provide a very short, clear explanation for the new step.
-7.  **FINAL STEP:** If this new, alternative step now **completes** the regex and fully satisfies the user's request, you MUST set the \`isFinalStep\` field to \`true\`. An expression is complete when it can reasonably match the user's full intent (e.g., a full email pattern, not just the start of one).
+7.  **FINAL STEP:** Your most important task is to correctly determine if the plan is complete. Set \`isFinalStep: true\` ONLY if this new step genuinely completes a regex that can fully solve the user's query.
+    *   **DO NOT** mark the plan as final if the regex is obviously incomplete.
+    *   **Bad example:** For a query like "find a purchase order number like PO nn-nnnnn", generating a single \`LITERAL\` for "PO" is NOT a final step. The full pattern is required.
+    *   When in doubt, it is better to set \`isFinalStep: false\` and continue building. Only mark as final when the regex is robust and complete.
 
 Generate the JSON for the new alternative single step, adhering strictly to the canons.
 `,
