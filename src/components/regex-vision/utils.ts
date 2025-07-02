@@ -317,6 +317,23 @@ export const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
             }
         }
         
+        if (correctedBlock.type === BlockType.CHARACTER_CLASS) {
+            const settings = correctedBlock.settings as CharacterClassSettings;
+            if (settings.pattern) {
+                let pattern = settings.pattern;
+                // AI sometimes mistakenly wraps the pattern in brackets. Strip them.
+                if (pattern.startsWith('[') && pattern.endsWith(']')) {
+                    pattern = pattern.substring(1, pattern.length - 1);
+                }
+                 // AI sometimes mistakenly adds a quantifier to the pattern string. Strip it.
+                if (pattern.length > 1 && ['?', '*', '+'].includes(pattern.slice(-1))) {
+                    pattern = pattern.slice(0, -1);
+                }
+                
+                (correctedBlock.settings as CharacterClassSettings).pattern = pattern;
+            }
+        }
+
         if (correctedBlock.children && correctedBlock.children.length > 0) {
             correctedBlock.children = correctAndSanitizeAiBlocks(correctedBlock.children);
         }
