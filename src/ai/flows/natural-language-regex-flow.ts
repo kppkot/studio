@@ -114,6 +114,7 @@ Your output must be a single JSON object containing:
 User Query: {{{query}}}
 
 **IMPORTANT INSTRUCTIONS:**
+*   **VERIFY YOUR WORK:** This is critical. Before you output the final JSON, mentally test your generated \`regex\` against the \`exampleTestText\` you created. Does it successfully match all intended parts? Does it correctly ignore parts it's not supposed to match? If not, refine your \`regex\` and \`parsedBlocks\` until it does. Your success is measured by how well the regex performs on the test text.
 *   **Follow the steps:** Do not skip Step 1. The 'exampleTestText' is mandatory.
 *   **Flags:** Do not include inline flags in the regex string (like \`(?i)\`). Instead, use the 'recommendedFlags' field in the output JSON. If the user asks for "case-insensitive", "ignore case", etc., add 'i' to the 'recommendedFlags' string. If they ask for "multiline", add 'm'. If they ask for "dot all" or "single line", add 's'. Combine flags if needed (e.g., "im"). Do NOT include the 'g' (global) flag, as the UI handles it by default.
 *   **Word Boundaries:** If the user asks to find a "word", you MUST wrap the pattern in \`\\b\` anchors. Example: for "find the word cat", generate \`\\bcat\\b\`.
@@ -217,3 +218,5 @@ const generalPurposeRegexGenerator = ai.defineFlow(
     }
   }
 );
+
+    

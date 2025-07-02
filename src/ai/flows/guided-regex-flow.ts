@@ -71,11 +71,11 @@ Your task is to take a user's query, an example text, and the steps already crea
 Based on all the information above, determine the **next single, atomic step**.
 
 **CRITICAL CANONS OF REGEX CONSTRUCTION (YOU MUST OBEY THESE):**
-1.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step. Each step must correspond to **ONE** single, simple block. Do not combine concepts. For example, to match \`[a-z]+\`, you must first generate a \`CHARACTER_CLASS\` block for \`a-z\`, and in the *next* step, generate the \`QUANTIFIER\` block for \`+\`.
-2.  **LEFT-TO-RIGHT CONSTRUCTION:** Your primary strategy should be to build the expression sequentially, matching the user's textual goal from left to right. For "find an email address," start with the username, then '@', then the domain. Do not start in the middle.
+1.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step. Each step must correspond to **ONE** single, simple block. Do not combine concepts.
+2.  **EFFICIENT & LEFT-TO-RIGHT:** Build the expression sequentially from left to right. When the user's query implies repetition (e.g., "two digits," "5 letters," \`nn-nnnnn\`), you MUST represent this efficiently. First, generate the block for the character type (e.g., a \`CHARACTER_CLASS\` for \`\\d\`). Then, in the **immediately following step**, generate the appropriate \`QUANTIFIER\` block (e.g., \`{n,m}\` with min:2, max:2). **Do not** generate multiple identical blocks in a row (like \`\\d\`, then \`\\d\`) if a quantifier is more suitable.
 3.  **CONTEXT IS KING:** Look at the \`existingSteps\`. If the last step created an empty container (like \`GROUP\` or \`ALTERNATION\`), your next step **MUST** be to add the first child for that container. Do not add new top-level blocks when a container is waiting to be filled.
 4.  **ALTERNATION (Logic for "OR"):**
-    *   To match **one of several single characters** (e.g., "a" or "b" or "c"), you should almost always use a single \`CHARACTER_CLASS\` block with the pattern \`abc\`. This is the most efficient method.
+    *   To match **one of several single characters** (e.g., "a" or "b" or "c"), you MUST use a single \`CHARACTER_CLASS\` block with the pattern \`abc\`. This is the most efficient method.
     *   Use \`ALTERNATION\` to match **one of several words or multi-character sequences** (e.g., "cat" or "dog"). To do this, you MUST first create a \`GROUP\` and place an \`ALTERNATION\` block inside it. Then, add the words as separate \`LITERAL\` blocks inside the \`ALTERNATION\`.
 5.  **SIMPLE BLOCKS ONLY:** Your generated 'block' object MUST be one of the simple, predefined types.
     *   **LITERAL:** For a short, contiguous string of plain text characters. Use this ONLY for text that does not contain any special regex meaning. **YOU ARE FORBIDDEN from using \`|\`, \`[\`, \`]\`, \`(\`, \`)\`, \`?\`, \`*\`, \`+\`, \`.\` in a LITERAL block.** If you need one of these, use the appropriate block type (\`ALTERNATION\`, \`CHARACTER_CLASS\`, etc.). Each \`LITERAL\` must contain non-empty text. If the user wants to match a specific word or prefix like "PO", you **MUST** create a single \`LITERAL\` block for the entire string "PO".
@@ -87,11 +87,9 @@ Based on all the information above, determine the **next single, atomic step**.
     *   **ANCHOR:** For positions (e.g., \`^\`, \`$\`, \`\\b\`).
     *   **GROUP / ALTERNATION**: These are containers and should be generated empty. Their children are added in subsequent steps.
 6.  **EXPLANATION (in Russian):** Provide a very short, clear explanation of what this single block does and why it's the next logical step.
-7.  **FINAL STEP:** Your most important task is to correctly determine if the plan is complete. Set \`isFinalStep: true\` ONLY if this new step genuinely completes a regex that can fully solve the user's query.
-    *   **DO NOT** mark the plan as final if the regex is obviously incomplete.
-    *   **Bad example:** For a query like "find a purchase order number like PO nn-nnnnn", generating a single \`LITERAL\` for "PO" is NOT a final step. The full pattern is required.
-    *   **Bad example:** For a query like "find an email address", a pattern of just \`\\w+@\` is NOT a final step.
-    *   When in doubt, it is better to set \`isFinalStep: false\` and continue building. Only mark as final when the regex is robust and complete. Otherwise, omit the field or set it to \`false\`.
+7.  **FINAL STEP VERIFICATION:** Your most important task is to correctly determine if the plan is complete. Set \`isFinalStep: true\` ONLY if this new step genuinely completes a regex that can fully solve the user's entire query. Before you do, mentally construct the full regex from all steps and verify that it matches ALL positive examples in the \`exampleTestText\` and ignores any negative examples.
+    *   **Bad Example:** For a query like "find a purchase order number like PO nn-nnnnn" and test text \`PO 12-34567, PO#45-67890\`, a regex like \`/PO[ -#]?\\s?\\d{2}/\` is INCOMPLETE because it doesn't match the full number. The plan is only final when ALL parts of ALL formats are covered.
+    *   When in doubt, it is always better to set \`isFinalStep: false\` and continue building.
 
 
 Generate the JSON for the next single step, adhering strictly to the canons.
@@ -164,10 +162,10 @@ Based on the goal and the previous steps, provide a **new, alternative, single, 
 
 **CRITICAL CANONS OF REGEX CONSTRUCTION (YOU MUST OBEY THESE):**
 1.  **DIFFERENT & BETTER:** The new step must be a different approach or a more correct version of the rejected one.
-2.  **LEFT-TO-RIGHT CONSTRUCTION:** Your primary strategy should be to build the expression sequentially, matching the user's textual goal from left to right. A regenerated step should still logically follow the sequence built so far.
+2.  **EFFICIENT & LEFT-TO-RIGHT:** Build the expression sequentially from left to right. When the user's query implies repetition (e.g., "two digits," "5 letters," \`nn-nnnnn\`), you MUST represent this efficiently. First, generate the block for the character type (e.g., a \`CHARACTER_CLASS\` for \`\\d\`). Then, in the **immediately following step**, generate the appropriate \`QUANTIFIER\` block (e.g., \`{n,m}\` with min:2, max:2). **Do not** generate multiple identical blocks in a row (like \`\\d\`, then \`\\d\`) if a quantifier is more suitable.
 3.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step. The step must correspond to **ONE** simple block (e.g., \`[a-z]\`, \`+\`, \`\\b\`). Do not combine concepts.
 4.  **ALTERNATION (Logic for "OR"):**
-    *   To match **one of several single characters** (e.g., "a" or "b" or "c"), you should almost always use a single \`CHARACTER_CLASS\` block with the pattern \`abc\`. This is the most efficient method.
+    *   To match **one of several single characters** (e.g., "a" or "b" or "c"), you MUST use a single \`CHARACTER_CLASS\` block with the pattern \`abc\`. This is the most efficient method.
     *   Use \`ALTERNATION\` to match **one of several words or multi-character sequences** (e.g., "cat" or "dog"). To do this, you MUST first create a \`GROUP\` and place an \`ALTERNATION\` block inside it. Then, add the words as separate \`LITERAL\` blocks inside the \`ALTERNATION\`.
 5.  **SIMPLE BLOCKS ONLY:** Your generated 'block' object MUST be one of the simple, predefined types.
     *   **LITERAL:** For a short, contiguous string of plain text characters. Use this ONLY for text that does not contain any special regex meaning. **YOU ARE FORBIDDEN from using \`|\`, \`[\`, \`]\`, \`(\`, \`)\`, \`?\`, \`*\`, \`+\`, \`.\` in a LITERAL block.** If you need one of these, use the appropriate block type (\`ALTERNATION\`, \`CHARACTER_CLASS\`, etc.). Each \`LITERAL\` must contain non-empty text. If the user wants to match a specific word or prefix like "PO", you **MUST** create a single \`LITERAL\` block for the entire string "PO".
@@ -179,10 +177,9 @@ Based on the goal and the previous steps, provide a **new, alternative, single, 
     *   **ANCHOR:** For positions (e.g., \`^\`, \`$\`, \`\\b\`).
     *   **GROUP / ALTERNATION**: These are containers and should be generated empty.
 6.  **EXPLANATION (in Russian):** Provide a very short, clear explanation for the new step.
-7.  **FINAL STEP:** Your most important task is to correctly determine if the plan is complete. Set \`isFinalStep: true\` ONLY if this new step genuinely completes a regex that can fully solve the user's query.
-    *   **DO NOT** mark the plan as final if the regex is obviously incomplete.
-    *   **Bad example:** For a query like "find a purchase order number like PO nn-nnnnn", generating a single \`LITERAL\` for "PO" is NOT a final step. The full pattern is required.
-    *   When in doubt, it is better to set \`isFinalStep: false\` and continue building.
+7.  **FINAL STEP VERIFICATION:** Your most important task is to correctly determine if the plan is complete. Set \`isFinalStep: true\` ONLY if this new step genuinely completes a regex that can fully solve the user's entire query. Before you do, mentally construct the full regex from all steps and verify that it matches ALL positive examples in the \`exampleTestText\` and ignores any negative examples.
+    *   **Bad Example:** For a query like "find a purchase order number like PO nn-nnnnn" and test text \`PO 12-34567, PO#45-67890\`, a regex like \`/PO[ -#]?\\s?\\d{2}/\` is INCOMPLETE because it doesn't match the full number. The plan is only final when ALL parts of ALL formats are covered.
+    *   When in doubt, it is always better to set \`isFinalStep: false\` and continue building.
 
 Generate the JSON for the new alternative single step, adhering strictly to the canons.
 `,
@@ -196,3 +193,6 @@ Generate the JSON for the new alternative single step, adhering strictly to the 
   },
 });
 
+
+
+    
