@@ -194,7 +194,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         if (shorthands[pattern]) {
             details = shorthands[pattern];
         } else if (pattern) {
-            details = `${ccSettings.negated ? 'Кроме' : 'Один из'}:`;
+            details = ccSettings.negated ? 'Кроме символов в классе' : 'Любой символ из класса';
         } else {
             details = 'Пустой или составной класс'
         }
