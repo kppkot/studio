@@ -387,7 +387,6 @@ const RegexVisionWorkspace: React.FC = () => {
     }
 
     let targetParentId: string | null = parentId;
-    let parentBlock: Block | null = null;
     
     if (!targetParentId && selectedBlockId) {
       const selBlock = findBlockRecursive(blocks, selectedBlockId);
@@ -398,21 +397,13 @@ const RegexVisionWorkspace: React.FC = () => {
 
         if (isGenericContainer || isCharClassAsContainer) {
              targetParentId = selectedBlockId;
-             parentBlock = selBlock;
         }
       }
-    } else if (targetParentId) {
-        parentBlock = findBlockRecursive(blocks, targetParentId);
     }
 
     if (targetParentId) {
       setBlocks(prev => addChildRecursive(prev, targetParentId, processedBlock));
-      
-      if (parentBlock && parentBlock.type === BlockType.ALTERNATION) {
-          setSelectedBlockId(targetParentId);
-      } else {
-          setSelectedBlockId(processedBlock.id);
-      }
+      setSelectedBlockId(processedBlock.id);
     } else {
       setBlocks(prev => [...prev, processedBlock]);
       setSelectedBlockId(processedBlock.id);
