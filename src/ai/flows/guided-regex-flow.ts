@@ -74,15 +74,15 @@ Based on all the information above, determine the **next single, atomic step**.
 1.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step. Each step must correspond to **ONE** single, simple block. Do not combine concepts. For example, to match \`[a-z]+\`, you must first generate a \`CHARACTER_CLASS\` block for \`a-z\`, and in the *next* step, generate the \`QUANTIFIER\` block for \`+\`.
 2.  **LEFT-TO-RIGHT CONSTRUCTION:** Your primary strategy should be to build the expression sequentially, matching the user's textual goal from left to right. For "find an email address," start with the username, then '@', then the domain. Do not start in the middle.
 3.  **CONTEXT IS KING:** Look at the \`existingSteps\`. If the last step created an empty container (like \`GROUP\` or \`ALTERNATION\`), your next step **MUST** be to add the first child for that container. Do not add new top-level blocks when a container is waiting to be filled.
-4.  **HOW TO BUILD AND EXPLAIN \`(A or B or C)\`:** To match one of several options, you MUST follow this **exact** sequence over multiple steps. Your explanations must also follow a clear logic:
-    *   Step N: Create the \`GROUP\` block. **Explanation:** Explain this as creating a 'container' for the options. DO NOT mention 'OR' in this step.
-    *   Step N+1: Create the \`ALTERNATION\` block (which will be placed inside the group). **Explanation:** Explain that this block *activates* the 'OR' logic for the items inside the container.
-    *   Step N+2: Create a \`LITERAL\` block for option "A". **Explanation:** Explain that you are adding the first option to the list.
-    *   Step N+3: Create a \`LITERAL\` block for option "B". **Explanation:** Explain that you are adding the next option.
-    *   You are **STRICTLY FORBIDDEN** from creating a single \`LITERAL\` that contains multiple options like \`"A|B|C"\`.
+4.  **ALTERNATION (Logic for "OR"):**
+    *   To match **one of several single characters** (e.g., "a" or "b" or "c"), you should almost always use a single \`CHARACTER_CLASS\` block with the pattern \`abc\`. This is the most efficient method.
+    *   Use \`ALTERNATION\` to match **one of several words or multi-character sequences** (e.g., "cat" or "dog"). To do this, you MUST first create a \`GROUP\` and place an \`ALTERNATION\` block inside it. Then, add the words as separate \`LITERAL\` blocks inside the \`ALTERNATION\`.
 5.  **SIMPLE BLOCKS ONLY:** Your generated 'block' object MUST be one of the simple, predefined types.
-    *   **LITERAL:** For a short, contiguous string of plain text characters (e.g., \`@\`, \`http://\`, \`PO-\`). If the user wants to match a specific word or prefix like "PO", you **MUST** create a single \`LITERAL\` block for the entire string "PO". **DO NOT** break it down into separate atomic blocks for "P" and then "O". That is incorrect and inefficient. Only use multiple blocks for concepts that are logically separate. The \`|\` character is forbidden in a \`LITERAL\` block. Each \`LITERAL\` must contain non-empty text.
-    *   **CHARACTER_CLASS:** For a set of characters. The \`pattern\` must be for **ONE ATOMIC ELEMENT**. Valid examples: \`a-z\`, \`A-Z\`, \`0-9\`, \`\\w\`, \`\\s\`, \`\\d\`. **YOU ARE FORBIDDEN** from creating complex patterns like \`[a-zA-Z0-9._%+-]\` in a single step.
+    *   **LITERAL:** For a short, contiguous string of plain text characters. Use this ONLY for text that does not contain any special regex meaning. **YOU ARE FORBIDDEN from using \`|\`, \`[\`, \`]\`, \`(\`, \`)\`, \`?\`, \`*\`, \`+\`, \`.\` in a LITERAL block.** If you need one of these, use the appropriate block type (\`ALTERNATION\`, \`CHARACTER_CLASS\`, etc.). Each \`LITERAL\` must contain non-empty text. If the user wants to match a specific word or prefix like "PO", you **MUST** create a single \`LITERAL\` block for the entire string "PO".
+    *   **CHARACTER_CLASS:** For matching one character from a set. This is the preferred way to handle single-character alternatives.
+        *   For simple sets, provide the characters directly in the \`pattern\`. Example: to match a "#", "-", or space, create a single \`CHARACTER_CLASS\` with \`pattern: "#- "\`.
+        *   For common categories, use shorthands. Example: \`\\d\` (digits), \`\\w\` (word characters), \`\\s\` (whitespace).
+        *   For ranges, use a hyphen. Example: \`a-z\`.
     *   **QUANTIFIER:** For repetition (e.g., \`+\`, \`*\`, \`?\`). This block always follows another block.
     *   **ANCHOR:** For positions (e.g., \`^\`, \`$\`, \`\\b\`).
     *   **GROUP / ALTERNATION**: These are containers and should be generated empty. Their children are added in subsequent steps.
@@ -166,14 +166,15 @@ Based on the goal and the previous steps, provide a **new, alternative, single, 
 1.  **DIFFERENT & BETTER:** The new step must be a different approach or a more correct version of the rejected one.
 2.  **LEFT-TO-RIGHT CONSTRUCTION:** Your primary strategy should be to build the expression sequentially, matching the user's textual goal from left to right. A regenerated step should still logically follow the sequence built so far.
 3.  **ONE ATOMIC STEP ONLY:** Your entire output must be a JSON object for a single step. The step must correspond to **ONE** simple block (e.g., \`[a-z]\`, \`+\`, \`\\b\`). Do not combine concepts.
-4.  **HOW TO BUILD AND EXPLAIN \`(A or B or C)\`:** To match one of several options, you MUST follow this **exact** sequence over multiple steps. Your explanations must also follow a clear logic:
-    *   Step N: Create the \`GROUP\` block. **Explanation:** Explain this as creating a 'container' for the options. DO NOT mention 'OR' in this step.
-    *   Step N+1: Create the \`ALTERNATION\` block (which will be placed inside the group). **Explanation:** Explain that this block *activates* the 'OR' logic for the items inside the container.
-    *   Step N+2: Create a \`LITERAL\` block for option "A". **Explanation:** Explain that you are adding the first option to the list.
-    *   You are **STRICTLY FORBIDDEN** from creating a single \`LITERAL\` that contains multiple options like \`"A|B|C"\`. Each option is its own atomic step.
+4.  **ALTERNATION (Logic for "OR"):**
+    *   To match **one of several single characters** (e.g., "a" or "b" or "c"), you should almost always use a single \`CHARACTER_CLASS\` block with the pattern \`abc\`. This is the most efficient method.
+    *   Use \`ALTERNATION\` to match **one of several words or multi-character sequences** (e.g., "cat" or "dog"). To do this, you MUST first create a \`GROUP\` and place an \`ALTERNATION\` block inside it. Then, add the words as separate \`LITERAL\` blocks inside the \`ALTERNATION\`.
 5.  **SIMPLE BLOCKS ONLY:** Your generated 'block' object MUST be one of the simple, predefined types.
-    *   **LITERAL:** For a short, contiguous string of plain text characters (e.g., \`@\`, \`http://\`, \`PO-\`). If the user wants to match a specific word or prefix like "PO", you **MUST** create a single \`LITERAL\` block for the entire string "PO". **DO NOT** break it down into separate atomic blocks for "P" and then "O". That is incorrect and inefficient. Only use multiple blocks for concepts that are logically separate. The \`|\` character is forbidden in a \`LITERAL\` block. Each \`LITERAL\` must contain non-empty text.
-    *   **CHARACTER_CLASS:** For a set of characters. The \`pattern\` must be for **ONE ATOMIC ELEMENT**. Valid examples: \`a-z\`, \`A-Z\`, \`0-9\`, \`\\w\`, \`\\s\`, \`\\d\`. **YOU ARE FORBIDDEN** from creating complex patterns like \`[a-zA-Z0-9._%+-]\` in a single step.
+    *   **LITERAL:** For a short, contiguous string of plain text characters. Use this ONLY for text that does not contain any special regex meaning. **YOU ARE FORBIDDEN from using \`|\`, \`[\`, \`]\`, \`(\`, \`)\`, \`?\`, \`*\`, \`+\`, \`.\` in a LITERAL block.** If you need one of these, use the appropriate block type (\`ALTERNATION\`, \`CHARACTER_CLASS\`, etc.). Each \`LITERAL\` must contain non-empty text. If the user wants to match a specific word or prefix like "PO", you **MUST** create a single \`LITERAL\` block for the entire string "PO".
+    *   **CHARACTER_CLASS:** For matching one character from a set. This is the preferred way to handle single-character alternatives.
+        *   For simple sets, provide the characters directly in the \`pattern\`. Example: to match a "#", "-", or space, create a single \`CHARACTER_CLASS\` with \`pattern: "#- "\`.
+        *   For common categories, use shorthands. Example: \`\\d\` (digits), \`\\w\` (word characters), \`\\s\` (whitespace).
+        *   For ranges, use a hyphen. Example: \`a-z\`.
     *   **QUANTIFIER:** For repetition (e.g., \`+\`, \`*\`, \`?\`).
     *   **ANCHOR:** For positions (e.g., \`^\`, \`$\`, \`\\b\`).
     *   **GROUP / ALTERNATION**: These are containers and should be generated empty.
@@ -181,7 +182,7 @@ Based on the goal and the previous steps, provide a **new, alternative, single, 
 7.  **FINAL STEP:** Your most important task is to correctly determine if the plan is complete. Set \`isFinalStep: true\` ONLY if this new step genuinely completes a regex that can fully solve the user's query.
     *   **DO NOT** mark the plan as final if the regex is obviously incomplete.
     *   **Bad example:** For a query like "find a purchase order number like PO nn-nnnnn", generating a single \`LITERAL\` for "PO" is NOT a final step. The full pattern is required.
-    *   When in doubt, it is better to set \`isFinalStep: false\` and continue building. Only mark as final when the regex is robust and complete.
+    *   When in doubt, it is better to set \`isFinalStep: false\` and continue building.
 
 Generate the JSON for the new alternative single step, adhering strictly to the canons.
 `,
@@ -194,3 +195,4 @@ Generate the JSON for the new alternative single step, adhering strictly to the 
     ],
   },
 });
+
