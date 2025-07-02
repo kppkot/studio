@@ -53,27 +53,34 @@ const GuidedStepsPanel: React.FC<GuidedStepsPanelProps> = ({
   const handleAdd = (block: Block, index: number) => {
     let parentId: string | null = null;
     if (selectedBlockId) {
-        const findBlockRecursive = (searchBlocks: Block[], id: string): Block | null => {
-            for (const b of searchBlocks) {
-                if (b.id === id) return b;
+        const findBlockAndParentRecursive = (
+            nodes: Block[],
+            targetId: string,
+            currentParent: Block | null = null
+        ): { block: Block | null; parent: Block | null } => {
+            for (const b of nodes) {
+                if (b.id === targetId) return { block: b, parent: currentParent };
                 if (b.children) {
-                    const found = findBlockRecursive(b.children, id);
-                    if (found) return found;
+                    const found = findBlockAndParentRecursive(b.children, targetId, b);
+                    if (found.block) return found;
                 }
             }
-            return null;
+            return { block: null, parent: null };
         };
-        const selectedBlock = findBlockRecursive(blocks, selectedBlockId);
+
+        const { block: selectedBlock, parent: selectedBlockParent } = findBlockAndParentRecursive(blocks, selectedBlockId);
         
         if (selectedBlock) {
-            const isGenericContainer = [BlockType.GROUP, BlockType.ALTERNATION, BlockType.LOOKAROUND, BlockType.CONDITIONAL].includes(selectedBlock.type);
-            // A CHARACTER_CLASS is a container only if it's being used to build a set, 
-            // which we can infer if its main `pattern` property is empty or if it already has children.
-            const isCharClassAsContainer = selectedBlock.type === BlockType.CHARACTER_CLASS && 
-                (!(selectedBlock.settings as CharacterClassSettings).pattern || (selectedBlock.children && selectedBlock.children.length > 0));
+            const isSelectedBlockAContainer = [BlockType.GROUP, BlockType.ALTERNATION, BlockType.LOOKAROUND, BlockType.CONDITIONAL].includes(selectedBlock.type) ||
+                (selectedBlock.type === BlockType.CHARACTER_CLASS && (!(selectedBlock.settings as CharacterClassSettings).pattern || (selectedBlock.children && selectedBlock.children.length > 0)));
 
-            if (isGenericContainer || isCharClassAsContainer) {
-                 parentId = selectedBlockId;
+            if (isSelectedBlockAContainer) {
+                 // If the selected block is a container, add new blocks inside it.
+                 parentId = selectedBlock.id;
+            } else if (selectedBlockParent) {
+                 // If the selected block is NOT a container, add new blocks as its sibling.
+                 // This means adding the new block to the selected block's parent.
+                 parentId = selectedBlockParent.id;
             }
         }
     }
