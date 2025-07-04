@@ -12,7 +12,7 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import { type NaturalLanguageRegexOutput, NaturalLanguageRegexOutputSchema } from './schemas';
-import { processAiBlocks, isRegexValid, generateRegexStringAndGroupInfo, createLiteral, generateId, correctAndSanitizeAiBlocks, breakdownComplexCharClasses } from '@/components/regex-vision/utils';
+import { processAiBlocks, isRegexValid, generateRegexStringAndGroupInfo, createLiteral, generateId } from '@/components/regex-vision/utils';
 import type { Block, LiteralSettings } from '@/components/regex-vision/types';
 import { BlockType } from '@/components/regex-vision/types';
 import { analyzeRegex } from './analyze-regex-flow';
@@ -118,11 +118,7 @@ const fixRegexFlow = ai.defineFlow(
 
         let processedBlocks: Block[] = [];
         if (output.parsedBlocks && output.parsedBlocks.length > 0) {
-          const sanitizedBlocksWithIds = processAiBlocks(output.parsedBlocks);
-          if (sanitizedBlocksWithIds.length > 0) {
-            const correctedBlocks = correctAndSanitizeAiBlocks(sanitizedBlocksWithIds);
-            processedBlocks = breakdownComplexCharClasses(correctedBlocks);
-          }
+            processedBlocks = processAiBlocks(output.parsedBlocks);
         }
         
         if (processedBlocks.length === 0 && output.regex) {

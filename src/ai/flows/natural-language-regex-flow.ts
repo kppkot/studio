@@ -12,7 +12,7 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import type { Block, LiteralSettings } from '@/components/regex-vision/types';
 import { BlockType } from '@/components/regex-vision/types';
-import { generateRegexStringAndGroupInfo, generateId, processAiBlocks, breakdownComplexCharClasses, correctAndSanitizeAiBlocks, isRegexValid } from '@/components/regex-vision/utils';
+import { generateRegexStringAndGroupInfo, generateId, processAiBlocks, isRegexValid } from '@/components/regex-vision/utils';
 import { NaturalLanguageRegexOutputSchema, type NaturalLanguageRegexOutput } from './schemas';
 
 const NaturalLanguageRegexInputSchema = z.object({
@@ -176,14 +176,7 @@ const generalPurposeRegexGenerator = ai.defineFlow(
 
         let processedBlocks: Block[] = [];
         if (output.parsedBlocks && output.parsedBlocks.length > 0) {
-          // processAiBlocks now filters invalid blocks.
-          const sanitizedBlocksWithIds = processAiBlocks(output.parsedBlocks);
-          
-          // Only proceed if we have valid blocks after sanitization.
-          if (sanitizedBlocksWithIds.length > 0) {
-            const correctedBlocks = correctAndSanitizeAiBlocks(sanitizedBlocksWithIds);
-            processedBlocks = breakdownComplexCharClasses(correctedBlocks);
-          }
+          processedBlocks = processAiBlocks(output.parsedBlocks);
         }
         
         // Fallback: If block processing failed or was never attempted, but we have a valid regex string.

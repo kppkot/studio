@@ -169,23 +169,6 @@ export const breakdownPatternIntoChildren = (pattern: string): Block[] => {
   return components;
 }
 
-/**
- * This function is now a pass-through. The logic for breaking down character classes
- * was too aggressive and has been moved to the AI prompt, which is better at handling it.
- * We leave the function here to maintain the call structure.
- */
-export const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
-  if (!blocks) return [];
-  // Recurse on children, but do not perform any breakdown logic here.
-  return blocks.map(block => {
-    if (block.children && block.children.length > 0) {
-      block.children = breakdownComplexCharClasses(block.children);
-    }
-    return block;
-  });
-};
-
-
 export const processAiBlocks = (aiBlocks: any[]): Block[] => {
   if (!aiBlocks || !Array.isArray(aiBlocks)) {
     return [];
@@ -259,61 +242,4 @@ export const isRegexValid = (regex: string): boolean => {
   } catch (e) {
     return false;
   }
-};
-
-export const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
-    if (!blocks) return [];
-    return blocks.map(block => {
-        let correctedBlock = { ...block };
-
-        if (correctedBlock.type === BlockType.LITERAL) {
-            const settings = correctedBlock.settings as LiteralSettings;
-            if (settings.isRawRegex) { // Do not correct raw regex literals
-                return correctedBlock;
-            }
-            const text = settings.text || '';
-            
-            const knownCharClasses = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S'];
-            if (knownCharClasses.includes(text)) {
-                correctedBlock.type = BlockType.CHARACTER_CLASS;
-                correctedBlock.settings = { pattern: text, negated: false } as CharacterClassSettings;
-                return correctedBlock;
-            }
-            if (text === '.') {
-                correctedBlock.type = BlockType.CHARACTER_CLASS;
-                correctedBlock.settings = { pattern: '.', negated: false } as CharacterClassSettings;
-                return correctedBlock;
-            }
-
-            const knownAnchors = ['^', '$', '\\b', '\\B'];
-            if (knownAnchors.includes(text)) {
-                correctedBlock.type = BlockType.ANCHOR;
-                correctedBlock.settings = { type: text } as AnchorSettings;
-                return correctedBlock;
-            }
-        }
-        
-        if (correctedBlock.type === BlockType.CHARACTER_CLASS) {
-            const settings = correctedBlock.settings as CharacterClassSettings;
-            if (settings.pattern) {
-                let pattern = settings.pattern;
-                // AI sometimes mistakenly wraps the pattern in brackets. Strip them.
-                if (pattern.startsWith('[') && pattern.endsWith(']')) {
-                    pattern = pattern.substring(1, pattern.length - 1);
-                }
-                 // AI sometimes mistakenly adds a quantifier to the pattern string. Strip it.
-                if (pattern.length > 1 && ['?', '*', '+'].includes(pattern.slice(-1))) {
-                    pattern = pattern.slice(0, -1);
-                }
-                
-                (correctedBlock.settings as CharacterClassSettings).pattern = pattern;
-            }
-        }
-
-        if (correctedBlock.children && correctedBlock.children.length > 0) {
-            correctedBlock.children = correctAndSanitizeAiBlocks(correctedBlock.children);
-        }
-
-        return correctedBlock;
-    });
 };
