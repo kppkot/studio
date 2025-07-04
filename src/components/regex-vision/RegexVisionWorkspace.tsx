@@ -4,9 +4,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { Block, RegexMatch, GroupInfo, SavedPattern, CharacterClassSettings } from './types'; 
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks, cloneBlockForState, breakdownPatternIntoChildren, reconstructPatternFromChildren } from './utils'; 
+import { generateId, generateRegexStringAndGroupInfo, cloneBlockForState, breakdownPatternIntoChildren, reconstructPatternFromChildren } from './utils'; 
 import { useToast } from '@/hooks/use-toast';
-import { generateRegexFromNaturalLanguage, type NaturalLanguageRegexOutput } from '@/ai/flows/natural-language-regex-flow';
+import { parseRegexWithLibrary } from './regex-parser';
 
 import BlockNode from './BlockNode';
 import SettingsPanel from './SettingsPanel';
@@ -689,7 +689,7 @@ const RegexVisionWorkspace: React.FC = () => {
     };
   }, [selectedBlockId, blocks, handleDeleteBlock, handleExpandAll, handleCollapseAll, handleUpdateBlock]);
 
-  const handleApplySavedPattern = async (pattern: SavedPattern) => {
+  const handleApplySavedPattern = (pattern: SavedPattern) => {
     setRegexFlags(pattern.flags);
     setTestText(pattern.testString || '');
     setSelectedBlockId(null); 
@@ -697,33 +697,26 @@ const RegexVisionWorkspace: React.FC = () => {
     handleParseRegexString(pattern.regexString);
   };
 
-  const handleParseRegexString = useCallback(async (regexString: string) => {
-      if (!regexString) {
-          setBlocks([]);
-          return;
-      }
-
-      setIsParsing(true);
-      try {
-          const result = await generateRegexFromNaturalLanguage({ query: regexString });
-          
-          if (result.parsedBlocks && result.parsedBlocks.length > 0) {
-              setBlocks(result.parsedBlocks);
-              toast({ title: "Выражение разобрано", description: result.explanation });
-          } else {
-              // This is the controlled failure case from the flow
-              toast({ title: "Ошибка разбора", description: result.explanation, variant: "destructive" });
-          }
-
-          if(result.recommendedFlags) {
-              setRegexFlags(result.recommendedFlags);
-          }
-      } catch (error) {
-          console.error("Critical AI Parsing Error:", error);
-          toast({ title: "Критическая ошибка", description: "Не удалось связаться с сервисом. Проверьте ваше соединение.", variant: "destructive" });
-      } finally {
-          setIsParsing(false);
-      }
+  const handleParseRegexString = useCallback((regexString: string) => {
+    if (!regexString) {
+      setBlocks([]);
+      return;
+    }
+    setIsParsing(true);
+    try {
+      const parsedBlocks = parseRegexWithLibrary(regexString);
+      setBlocks(parsedBlocks);
+      toast({ title: "Выражение разобрано", description: "Структура блоков построена успешно." });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Неизвестная ошибка парсера.";
+      toast({
+        title: "Ошибка разбора",
+        description: `Не удалось разобрать выражение: ${message}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsParsing(false);
+    }
   }, [toast]);
 
 
