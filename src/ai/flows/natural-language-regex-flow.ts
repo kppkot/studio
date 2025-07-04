@@ -31,30 +31,31 @@ const generalPurposeGeneratorPrompt = ai.definePrompt({
   name: 'naturalLanguageRegexPrompt',
   input: {schema: NaturalLanguageRegexInputSchema},
   output: {schema: NaturalLanguageRegexOutputSchema},
-  prompt: `You are a programmatic Regular Expression to JSON AST converter. Your SOLE TASK is to convert a user's regex string into a structured JSON array of 'parsedBlocks' without any modification, simplification, or explanation beyond what's required.
+  prompt: `You are a REGEX to JSON AST parser.
+YOUR ONLY TASK is to convert the user's regex string into a structured JSON array of 'parsedBlocks'.
+DO NOT MODIFY, SIMPLIFY, OR EXPLAIN ANYTHING.
+BE EXTREMELY LITERAL.
 
-Follow this two-step process meticulously:
-Step 1: Tokenize the input regex. Mentally break it down into its fundamental components (e.g., \`\\b\`, \`[\`, \`A-Za-z0-9._%+- \`, \`]\`, \`+\`, \`@\`, \`(?:\`, \`yahoo\`, \`|\`, \`hotmail\`, \`|\`, \`gmail\`, \`)\`, \`\\.\`, \`com\`, \`\\b\`).
-Step 2: Convert the token stream into a nested JSON structure of 'parsedBlocks'. Be extremely literal.
+PROCESS:
+1.  TOKENIZE: Mentally break the input regex into its smallest fundamental components.
+    - Example Input: \`\\b[A-Za-z0-9._%+-]+@(?:yahoo|hotmail)\\.com\\b\`
+    - Example Tokens: \`\\b\`, \`[A-Za-z0-9._%+-]\`, \`+\`, \`@\`, \`(?:\`, \`yahoo\`, \`|\`, \`hotmail\`, \`)\`, \`\\.\`, \`com\`, \`\\b\`
+2.  CONVERT TO JSON: Convert the token stream into the nested JSON 'parsedBlocks' structure.
+    - A sequence like \`(?:yahoo|hotmail)\` MUST be a \`GROUP\` (non-capturing) containing an \`ALTERNATION\`, which itself contains two \`LITERAL\` blocks for "yahoo" and "hotmail". DO NOT COLLAPSE THIS.
+    - A class like \`[A-Za-z0-9._%+-]\` is ONE \`CHARACTER_CLASS\` block. Its 'pattern' setting MUST be the string \`A-Za-z0-9._%+- \`. DO NOT DECOMPOSE IT.
 
-**CRITICAL RULES:**
-1.  **ABSOLUTE FIDELITY:** The generated block structure MUST be able to reconstruct the original regex string PERFECTLY. No changes, no simplifications.
-2.  **STRUCTURE IS SACRED:** A sequence like \`(?:yahoo|hotmail|gmail)\` MUST be a \`GROUP\` (non-capturing) containing an \`ALTERNATION\` which itself contains three \`LITERAL\` blocks for "yahoo", "hotmail", and "gmail". Do not collapse this.
-3.  **CHARACTER CLASSES ARE LITERAL:** A class like \`[A-Za-z0-9._%+-]\` is ONE \`CHARACTER_CLASS\` block. Its 'pattern' setting MUST be the string \`A-Za-z0-9._%+- \`. DO NOT break it down into smaller parts.
-4.  **OUTPUT FORMAT:** Your response must be ONLY the JSON object with fields: "regex", "parsedBlocks", "explanation", "exampleTestText", "recommendedFlags".
-    *   \`regex\`: An EXACT copy of the user's input string.
-    *   \`parsedBlocks\`: The JSON structure you built.
-    *   \`explanation\`: "Регулярное выражение успешно разобрано."
-    *   \`exampleTestText\`: An empty string.
-    *   \`recommendedFlags\`: An empty string.
-
-**Example:**
-*   Input: \`\\b[A-Za-z0-9._%+-]+@(?:yahoo|hotmail|gmail)\\.com\\b\`
-*   Your output \`parsedBlocks\` must represent this exact structure.
+OUTPUT FORMAT:
+Your response MUST be ONLY the JSON object with fields: "regex", "parsedBlocks", "explanation", "exampleTestText", "recommendedFlags".
+- \`regex\`: An EXACT copy of the user's input string.
+- \`parsedBlocks\`: The JSON structure you built.
+- \`explanation\`: "Регулярное выражение успешно разобрано."
+- \`exampleTestText\`: An empty string.
+- \`recommendedFlags\`: An empty string.
 
 Now, parse the following regex: \`{{{query}}}\`
 `,
   config: {
+    model: 'googleai/gemini-1.5-pro-latest', // Using a more powerful model for this complex parsing task.
     safetySettings: [
       { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
       { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
