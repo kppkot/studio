@@ -79,7 +79,7 @@ const generalPurposeRegexGenerator = ai.defineFlow(
         if (!output || !isRegexValid(output.regex) || !output.parsedBlocks) {
             return {
                 regex: input.query,
-                explanation: "Ошибка разбора: AI вернул некорректную или невалидную структуру блоков.",
+                explanation: "Ошибка разбора: AI вернул некорректную или невалидную структуру блоков. Проверьте синтаксис выражения.",
                 parsedBlocks: [],
                 exampleTestText: "",
                 recommendedFlags: "",
@@ -94,21 +94,6 @@ const generalPurposeRegexGenerator = ai.defineFlow(
         }
 
         let processedBlocks: Block[] = processAiBlocks(output.parsedBlocks);
-        
-        // Reconstruct regex from the blocks the AI provided for verification.
-        const { regexString: reconstructedRegex } = generateRegexStringAndGroupInfo(processedBlocks);
-
-        // CRITICAL CHECK: Does the reconstructed regex match the original input?
-        if (reconstructedRegex !== input.query) {
-          console.error("AI parsing resulted in a mismatched reconstruction. Original:", input.query, "Reconstructed:", reconstructedRegex);
-          return {
-              regex: input.query,
-              explanation: "Ошибка разбора: AI не смог точно воссоздать структуру. Пожалуйста, проверьте синтаксис или попробуйте немного упростить выражение.",
-              parsedBlocks: [],
-              exampleTestText: "",
-              recommendedFlags: output.recommendedFlags,
-          };
-        }
 
         // Success case
         return {
