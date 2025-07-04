@@ -24,32 +24,19 @@ export const NaturalLanguageRegexOutputSchema = z.object({
 
 export type NaturalLanguageRegexOutput = z.infer<typeof NaturalLanguageRegexOutputSchema>;
 
-// Schemas for Guided Regex Flow
-export const GuidedRegexInputSchema = z.object({
-  query: z.string().describe('The natural language query describing the desired regex.'),
-  exampleTestText: z.string().optional().describe('A pre-generated example text to provide context for the plan.'),
-});
-export type GuidedRegexInput = z.infer<typeof GuidedRegexInputSchema>;
 
+// Schemas for Guided Regex Flow
 export const GuidedRegexStepSchema = z.object({
     explanation: z.string().describe('A very short, clear explanation in Russian of what this block does and why it is the next logical step in building the regex.'),
     block: BlockSchema.describe('A single, atomic regex block for this step.'),
-    isFinalStep: z.boolean().optional().describe('Set to true if this is the final step needed to complete the regex. Otherwise, omit or set to false.'),
 });
 export type GuidedRegexStep = z.infer<typeof GuidedRegexStepSchema>;
 
-export const NextGuidedStepInputSchema = z.object({
-  query: z.string().describe('The original natural language query from the user.'),
-  exampleTestText: z.string().describe('The text the user is trying to match against.'),
-  existingSteps: z.array(GuidedRegexStepSchema).describe('An array of the steps that have already been generated.'),
+export const GuidedRegexInputSchema = z.object({
+  query: z.string().describe('The natural language query describing the desired regex.'),
+  exampleTestText: z.string().optional().describe('An example text to provide context for the plan.'),
 });
-
-export const RegenerateGuidedStepInputSchema = z.object({
-  query: z.string().describe('The original natural language query from the user.'),
-  exampleTestText: z.string().describe('The text the user is trying to match against.'),
-  stepsSoFar: z.array(GuidedRegexStepSchema).describe('The sequence of steps leading up to the one being regenerated.'),
-  stepToRegenerate: GuidedRegexStepSchema.describe('The step that the user was unhappy with and wants to replace.'),
-});
+export type GuidedRegexInput = z.infer<typeof GuidedRegexInputSchema>;
 
 export const GuidedRegexOutputSchema = z.object({
   steps: z.array(GuidedRegexStepSchema).describe('An array of guided steps to build the regex.'),

@@ -8,11 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { PlusCircle, CheckCircle, RefreshCw, Bot, Loader2, Wand2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 
 interface GuidedStepsPanelProps {
   query: string;
-  exampleTestText: string;
   steps: GuidedRegexStep[];
   isLoading: boolean;
   onAddStep: (block: Block, parentId: string | null) => void;
@@ -20,13 +18,11 @@ interface GuidedStepsPanelProps {
   onResetAndFinish: () => void;
   selectedBlockId: string | null;
   blocks: Block[];
-  onNextStep: () => Promise<void>;
-  onRegenerate: (index: number) => Promise<void>;
+  onRegeneratePlan: () => Promise<void>;
 }
 
 const GuidedStepsPanel: React.FC<GuidedStepsPanelProps> = ({
   query,
-  exampleTestText,
   steps,
   isLoading,
   onAddStep,
@@ -34,17 +30,11 @@ const GuidedStepsPanel: React.FC<GuidedStepsPanelProps> = ({
   onResetAndFinish,
   selectedBlockId,
   blocks,
-  onNextStep,
-  onRegenerate,
+  onRegeneratePlan,
 }) => {
   const [addedIndices, setAddedIndices] = useState<Set<number>>(new Set());
-  const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   
-  const isPlanComplete = useMemo(() => {
-    const lastStep = steps[steps.length - 1];
-    return lastStep?.isFinalStep;
-  }, [steps]);
-
   // Reset added steps when the underlying steps array changes from the parent
   useEffect(() => {
     setAddedIndices(new Set());
@@ -89,15 +79,10 @@ const GuidedStepsPanel: React.FC<GuidedStepsPanelProps> = ({
     setAddedIndices(prev => new Set(prev).add(index));
   };
   
-  const handleRegenerateClick = async (index: number) => {
-    setRegeneratingIndex(index);
-    await onRegenerate(index);
-    setAddedIndices(prev => {
-        const newAdded = new Set(prev);
-        newAdded.delete(index);
-        return newAdded;
-    });
-    setRegeneratingIndex(null);
+  const handleRegenerateClick = async () => {
+    setIsRegenerating(true);
+    await onRegeneratePlan();
+    setIsRegenerating(false);
   };
 
   return (
@@ -109,7 +94,7 @@ const GuidedStepsPanel: React.FC<GuidedStepsPanelProps> = ({
         <ScrollArea className="h-full pr-3">
           <div className="space-y-3">
             {steps.map((step, index) => (
-              <Card key={`${step.block.id}-${index}`} className="p-2.5 flex flex-col gap-2">
+              <Card key={`${step.block.type}-${index}`} className="p-2.5 flex flex-col gap-2">
                 <div className="flex items-start gap-3">
                     <div className="flex-shrink-0 font-bold text-primary text-lg mt-0.5">{index + 1}.</div>
                     <div className="flex-1">
@@ -117,13 +102,6 @@ const GuidedStepsPanel: React.FC<GuidedStepsPanelProps> = ({
                     </div>
                 </div>
                 <div className="flex items-center justify-end gap-2">
-                   <Button size="sm" variant="ghost" onClick={() => handleRegenerateClick(index)} disabled={isLoading || regeneratingIndex !== null}>
-                       {regeneratingIndex === index ? (
-                           <><Loader2 size={16} className="mr-2 animate-spin"/> Перегенерация...</>
-                       ) : (
-                           <><RefreshCw size={16} className="mr-2"/> Перегенерировать шаг</>
-                       )}
-                   </Button>
                    <Button size="sm" variant="outline" onClick={() => handleAdd(step.block, index)} disabled={addedIndices.has(index)}>
                       {addedIndices.has(index) ? <CheckCircle size={16} className="mr-2 text-green-600"/> : <PlusCircle size={16} className="mr-2"/>}
                       {addedIndices.has(index) ? "Добавлено" : "Добавить"}
@@ -131,32 +109,38 @@ const GuidedStepsPanel: React.FC<GuidedStepsPanelProps> = ({
                 </div>
               </Card>
             ))}
-             {isLoading && !regeneratingIndex && (
+             {isLoading && (
                 <div className="flex items-center justify-center p-4 text-muted-foreground">
                     <Loader2 size={20} className="mr-2 animate-spin" />
-                    <span>AI генерирует следующий шаг...</span>
+                    <span>AI генерирует план...</span>
+                </div>
+             )}
+             {!isLoading && steps.length === 0 && (
+                <div className="flex items-center justify-center p-4 text-muted-foreground">
+                    <span>План не сгенерирован. Попробуйте перестроить его.</span>
                 </div>
              )}
           </div>
         </ScrollArea>
       </CardContent>
       <CardFooter className="pt-4 border-t flex flex-col gap-3">
-        {isPlanComplete ? (
+        {steps.length > 0 && !isLoading && (
             <div className="text-center p-3 text-sm text-green-700 dark:text-green-400 bg-green-500/10 rounded-md border border-green-500/20 w-full">
                 <div className="flex items-center justify-center font-semibold">
                     <CheckCircle size={16} className="mr-2" />
-                    <span>План завершен!</span>
+                    <span>План сгенерирован!</span>
                 </div>
-                <p className="text-xs mt-1">AI считает, что выражение готово. Вы можете перегенерировать шаги или завершить работу.</p>
+                <p className="text-xs mt-1">Добавляйте шаги в конструктор. Если план не нравится, вы можете перестроить его.</p>
             </div>
-        ) : (
-            <Button onClick={onNextStep} disabled={isLoading || regeneratingIndex !== null} className="w-full">
-                {isLoading ? <><Loader2 size={16} className="mr-2 animate-spin" /> Загрузка...</> : <><Wand2 size={16} className="mr-2"/> Сгенерировать следующий шаг</>}
-            </Button>
         )}
+        
+        <Button onClick={handleRegenerateClick} disabled={isLoading || isRegenerating} className="w-full">
+            {(isLoading || isRegenerating) ? <><Loader2 size={16} className="mr-2 animate-spin" /> Перестройка плана...</> : <><RefreshCw size={16} className="mr-2"/> Перестроить план</>}
+        </Button>
+        
         <div className="w-full flex justify-between gap-2">
             <Button variant="secondary" size="sm" onClick={onResetAndFinish}>Очистить и завершить</Button>
-            <Button variant="outline" size="sm" onClick={onFinish}>Завершить план</Button>
+            <Button variant="outline" size="sm" onClick={onFinish}>Завершить</Button>
         </div>
       </CardFooter>
     </Card>

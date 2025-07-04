@@ -7,8 +7,8 @@ import { BLOCK_CONFIGS } from './constants';
 import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks, cloneBlockForState, breakdownPatternIntoChildren, reconstructPatternFromChildren, correctAndSanitizeAiBlocks } from './utils'; 
 import { useToast } from '@/hooks/use-toast';
 import { generateRegexFromNaturalLanguage, type NaturalLanguageRegexOutput } from '@/ai/flows/natural-language-regex-flow';
-import { generateNextGuidedStep, regenerateGuidedStep } from '@/ai/flows/guided-regex-flow';
-import type { GuidedRegexStep, NextGuidedStepInput, RegenerateGuidedStepInput } from '@/ai/flows/schemas';
+import { generateGuidedPlan } from '@/ai/flows/guided-regex-flow';
+import type { GuidedRegexStep } from '@/ai/flows/schemas';
 
 import BlockNode from './BlockNode';
 import SettingsPanel from './SettingsPanel';
@@ -40,7 +40,6 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 
 interface GuidedModeState {
     query: string;
-    exampleTestText: string;
     steps: GuidedRegexStep[];
     isLoading: boolean;
 }
@@ -322,16 +321,15 @@ const RegexVisionWorkspace: React.FC = () => {
     setTestText(exampleTestText);
     setBlocks([]); // Clear existing blocks for a fresh start
     setSelectedBlockId(null);
-    setGuidedModeState({ query, exampleTestText, steps: [], isLoading: true });
+    setGuidedModeState({ query, steps: [], isLoading: true });
 
     try {
-        const input: NextGuidedStepInput = { query, exampleTestText, existingSteps: [] };
-        const firstStep = await generateNextGuidedStep(input);
-        setGuidedModeState({ query, exampleTestText, steps: [firstStep], isLoading: false });
-        toast({ title: "Пошаговый режим запущен!", description: "AI предложил первый шаг." });
+        const result = await generateGuidedPlan({ query, exampleTestText });
+        setGuidedModeState({ query, steps: result.steps, isLoading: false });
+        toast({ title: "Пошаговый план сгенерирован!", description: "AI предложил полный план действий." });
     } catch (error) {
         console.error("Failed to start guided mode:", error);
-        toast({ title: "Ошибка AI", description: `Не удалось получить первый шаг от AI. ${error instanceof Error ? error.message : ''}`, variant: "destructive" });
+        toast({ title: "Ошибка AI", description: `Не удалось сгенерировать план. ${error instanceof Error ? error.message : ''}`, variant: "destructive" });
         setGuidedModeState(null); // Cancel guided mode on error
     }
   }, [toast]);
@@ -419,59 +417,21 @@ const RegexVisionWorkspace: React.FC = () => {
     setGuidedModeState(null);
   }, []);
 
-  const handleGenerateNextGuidedStep = async () => {
+  const handleRegeneratePlan = useCallback(async () => {
     if (!guidedModeState) return;
 
-    setGuidedModeState(prev => ({ ...prev!, isLoading: true }));
+    const { query } = guidedModeState;
+    setGuidedModeState(prev => ({ ...prev!, isLoading: true, steps: [] }));
     try {
-        const newStep = await generateNextGuidedStep({
-            query: guidedModeState.query,
-            exampleTestText: guidedModeState.exampleTestText,
-            existingSteps: guidedModeState.steps,
-        });
-        setGuidedModeState(prev => ({
-            ...prev!,
-            steps: [...prev!.steps, newStep],
-            isLoading: false
-        }));
-        if (newStep.isFinalStep) {
-            toast({ title: "План завершен!", description: "AI считает, что это был последний необходимый шаг." });
-        }
+      const result = await generateGuidedPlan({ query, exampleTestText: testText });
+      setGuidedModeState({ query, steps: result.steps, isLoading: false });
+      toast({ title: "План перестроен!", description: "AI сгенерировал новый пошаговый план." });
     } catch (error) {
-        console.error("Failed to generate next step:", error);
-        toast({ title: "Ошибка AI", description: `Не удалось сгенерировать следующий шаг. ${error instanceof Error ? error.message : ''}`, variant: "destructive" });
-        setGuidedModeState(prev => ({ ...prev!, isLoading: false }));
+      console.error("Failed to regenerate plan:", error);
+      toast({ title: "Ошибка AI", description: `Не удалось перестроить план. ${error instanceof Error ? error.message : ''}`, variant: "destructive" });
+      setGuidedModeState(prev => ({ ...prev!, isLoading: false }));
     }
-  };
-
-  const handleRegenerateGuidedStep = async (indexToRegen: number) => {
-    if (!guidedModeState) return;
-
-    setGuidedModeState(prev => ({ ...prev!, isLoading: true }));
-    try {
-        const stepToRegenerate = guidedModeState.steps[indexToRegen];
-        const stepsSoFar = guidedModeState.steps.slice(0, indexToRegen);
-
-        const newStep = await regenerateGuidedStep({
-            query: guidedModeState.query,
-            exampleTestText: guidedModeState.exampleTestText,
-            stepsSoFar,
-            stepToRegenerate
-        });
-        
-        setGuidedModeState(prev => {
-            const newSteps = [...prev!.steps];
-            newSteps[indexToRegen] = newStep;
-            return { ...prev!, steps: newSteps, isLoading: false };
-        });
-
-    } catch (error) {
-        console.error("Failed to regenerate step:", error);
-        toast({ title: "Ошибка AI", description: `Не удалось перегенерировать шаг. ${error instanceof Error ? error.message : ''}`, variant: "destructive" });
-        setGuidedModeState(prev => ({ ...prev!, isLoading: false }));
-    }
-  };
-
+  }, [guidedModeState, testText, toast]);
 
   const handleUpdateBlock = useCallback((id: string, updatedBlockData: Partial<Block>) => {
       if (updatedBlockData.settings && 'pattern' in updatedBlockData.settings) {
@@ -1167,7 +1127,6 @@ const RegexVisionWorkspace: React.FC = () => {
                       {guidedModeState ? (
                           <GuidedStepsPanel
                                 query={guidedModeState.query}
-                                exampleTestText={guidedModeState.exampleTestText}
                                 steps={guidedModeState.steps}
                                 isLoading={guidedModeState.isLoading}
                                 onAddStep={handleAddStepBlock}
@@ -1175,8 +1134,7 @@ const RegexVisionWorkspace: React.FC = () => {
                                 onResetAndFinish={handleResetAndClearGuidedMode}
                                 selectedBlockId={selectedBlockId}
                                 blocks={blocks}
-                                onNextStep={handleGenerateNextGuidedStep}
-                                onRegenerate={handleRegenerateGuidedStep}
+                                onRegeneratePlan={handleRegeneratePlan}
                             />
                       ) : selectedBlockId ? (
                         <SettingsPanel
