@@ -35,7 +35,7 @@ const generalPurposeGeneratorPrompt = ai.definePrompt({
   prompt: `You are a programmatic Regular Expression to JSON AST converter. Your SOLE TASK is to convert a user's regex string into a structured JSON array of 'parsedBlocks' without any modification, simplification, or explanation beyond what's required.
 
 Follow this two-step process meticulously:
-Step 1: Tokenize the input regex. Mentally break it down into its fundamental components (e.g., \`\\b\`, \`[\`, \`A-Z\`, \`a-z\`, \`0-9\`, \`._%+- \`, \`]\`, \`+\`, \`@\`, \`(\`, \`?:\`, \`yahoo\`, \`|\`, \`hotmail\`, \`|\`, \`gmail\`, \`)\`, \`\\.\`, \`com\`, \`\\b\`).
+Step 1: Tokenize the input regex. Mentally break it down into its fundamental components (e.g., \`\\b\`, \`[\`, \`A-Za-z0-9._%+- \`, \`]\`, \`+\`, \`@\`, \`(?:\`, \`yahoo\`, \`|\`, \`hotmail\`, \`|\`, \`gmail\`, \`)\`, \`\\.\`, \`com\`, \`\\b\`).
 Step 2: Convert the token stream into a nested JSON structure of 'parsedBlocks'. Be extremely literal.
 
 **CRITICAL RULES:**
@@ -108,7 +108,19 @@ const generalPurposeRegexGenerator = ai.defineFlow(
         };
     } catch (error) {
         console.error("Error in generalPurposeRegexGenerator flow:", error);
-        throw new Error("Произошла ошибка при разборе выражения. AI сервис мог вернуть некорректный ответ.");
+        
+        const errorMessage = error instanceof Error ? error.message : "AI сервис вернул неожиданный ответ.";
+        
+        let friendlyMessage = "Произошла ошибка при разборе выражения. ";
+        if (errorMessage.includes("mismatched reconstruction")) {
+            friendlyMessage += "AI не смог точно воссоздать структуру. Пожалуйста, попробуйте немного упростить выражение или проверьте его синтаксис.";
+        } else if (errorMessage.includes("parsable block structure")) {
+            friendlyMessage += "AI вернул некорректную структуру блоков. Пожалуйста, проверьте синтаксис выражения.";
+        } else {
+            friendlyMessage += "AI сервис мог вернуть некорректный ответ или быть временно недоступен.";
+        }
+        
+        throw new Error(friendlyMessage);
     }
   }
 );
