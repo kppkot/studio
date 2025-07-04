@@ -10,9 +10,8 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import type { Block, LiteralSettings } from '@/components/regex-vision/types';
-import { BlockType } from '@/components/regex-vision/types';
-import { generateRegexStringAndGroupInfo, generateId, processAiBlocks, isRegexValid } from '@/components/regex-vision/utils';
+import type { Block } from '@/components/regex-vision/types';
+import { generateRegexStringAndGroupInfo, processAiBlocks, isRegexValid } from '@/components/regex-vision/utils';
 import { NaturalLanguageRegexOutputSchema, type NaturalLanguageRegexOutput } from './schemas';
 
 const NaturalLanguageRegexInputSchema = z.object({
@@ -33,26 +32,28 @@ const generalPurposeGeneratorPrompt = ai.definePrompt({
   name: 'naturalLanguageRegexPrompt',
   input: {schema: NaturalLanguageRegexInputSchema},
   output: {schema: NaturalLanguageRegexOutputSchema},
-  prompt: `You are an expert Regex parser. Your one and only task is to take a user's regular expression string and convert it into a structured JSON array of 'parsedBlocks'.
+  prompt: `You are a programmatic Regular Expression to JSON AST converter. Your SOLE TASK is to convert a user's regex string into a structured JSON array of 'parsedBlocks' without any modification, simplification, or explanation beyond what's required.
 
-User's Regex to Parse: \`{{{query}}}\`
+Follow this two-step process meticulously:
+Step 1: Tokenize the input regex. Mentally break it down into its fundamental components (e.g., \`\\b\`, \`[\`, \`A-Z\`, \`a-z\`, \`0-9\`, \`._%+- \`, \`]\`, \`+\`, \`@\`, \`(\`, \`?:\`, \`yahoo\`, \`|\`, \`hotmail\`, \`|\`, \`gmail\`, \`)\`, \`\\.\`, \`com\`, \`\\b\`).
+Step 2: Convert the token stream into a nested JSON structure of 'parsedBlocks'. Be extremely literal.
 
-**CRITICAL INSTRUCTIONS:**
-1.  **PARSE, DO NOT CHANGE:** Your only goal is to represent the *exact* input regex as blocks. Do NOT simplify it, modify it, or "fix" it. Your output must perfectly reconstruct the user's input.
-2.  **PRESERVE STRUCTURE:** For complex parts like \`(?:yahoo|hotmail|gmail)\`, you must create a non-capturing group containing an alternation block, which in turn contains three literal blocks for "yahoo", "hotmail", and "gmail". Do not lose this structure.
-3.  **HANDLE CHARACTER CLASSES CORRECTLY:** A character class like \`[A-Za-z0-9._%+-]\` should be a SINGLE \`CHARACTER_CLASS\` block with its 'pattern' setting as \`A-Za-z0-9._%+-]\`. Do not break it apart.
-4.  **OUTPUT JSON ONLY:** Your entire output must be a single JSON object with the following fields:
-    *   \`regex\`: This MUST be an EXACT, UNMODIFIED copy of the user's input regex from the query.
-    *   \`parsedBlocks\`: The array of block objects representing the regex.
-    *   \`explanation\`: A simple confirmation, in Russian, like "Регулярное выражение разобрано в визуальное дерево."
+**CRITICAL RULES:**
+1.  **ABSOLUTE FIDELITY:** The generated block structure MUST be able to reconstruct the original regex string PERFECTLY. No changes, no simplifications.
+2.  **STRUCTURE IS SACRED:** A sequence like \`(?:yahoo|hotmail|gmail)\` MUST be a \`GROUP\` (non-capturing) containing an \`ALTERNATION\` which itself contains three \`LITERAL\` blocks for "yahoo", "hotmail", and "gmail". Do not collapse this.
+3.  **CHARACTER CLASSES ARE LITERAL:** A class like \`[A-Za-z0-9._%+-]\` is ONE \`CHARACTER_CLASS\` block. Its 'pattern' setting MUST be the string \`A-Za-z0-9._%+- \`. DO NOT break it down into smaller parts.
+4.  **OUTPUT FORMAT:** Your response must be ONLY the JSON object with fields: "regex", "parsedBlocks", "explanation", "exampleTestText", "recommendedFlags".
+    *   \`regex\`: An EXACT copy of the user's input string.
+    *   \`parsedBlocks\`: The JSON structure you built.
+    *   \`explanation\`: "Регулярное выражение успешно разобрано."
     *   \`exampleTestText\`: An empty string.
-    *   \`recommendedFlags\`: An empty string unless the user's query included flags like \`(?i)\`. If so, extract 'i' into this field.
+    *   \`recommendedFlags\`: An empty string.
 
-**Example for your reference:**
-*   **User's Regex:** \`\\b[A-Za-z0-9._%+-]+@(?:yahoo|hotmail|gmail)\\.com\\b\`
-*   **Your \`parsedBlocks\` output should represent this structure perfectly, not a simplified or broken version.**
+**Example:**
+*   Input: \`\\b[A-Za-z0-9._%+-]+@(?:yahoo|hotmail|gmail)\\.com\\b\`
+*   Your output \`parsedBlocks\` must represent this exact structure.
 
-Generate the JSON output now.
+Now, parse the following regex: \`{{{query}}}\`
 `,
   config: {
     safetySettings: [
@@ -75,19 +76,8 @@ const generalPurposeRegexGenerator = ai.defineFlow(
     try {
         const {output} = await generalPurposeGeneratorPrompt(input);
         
-        if (!output || !isRegexValid(output.regex)) {
-             return {
-                regex: input.query,
-                explanation: "AI не смог обработать этот запрос. Выражение загружено как единый блок.",
-                parsedBlocks: [{
-                    id: generateId(),
-                    type: BlockType.LITERAL,
-                    settings: { text: input.query, isRawRegex: true } as LiteralSettings,
-                    children: [],
-                    isExpanded: false
-                }],
-                exampleTestText: "Введите текст для тестирования."
-            };
+        if (!output || !isRegexValid(output.regex) || !output.parsedBlocks) {
+            throw new Error("AI failed to generate a valid or parsable block structure.");
         }
         
         if (output.recommendedFlags) {
@@ -97,52 +87,28 @@ const generalPurposeRegexGenerator = ai.defineFlow(
               .join('');
         }
 
-        let processedBlocks: Block[] = [];
-        if (output.parsedBlocks && output.parsedBlocks.length > 0) {
-          processedBlocks = processAiBlocks(output.parsedBlocks);
-        }
+        let processedBlocks: Block[] = processAiBlocks(output.parsedBlocks);
         
-        // Reconstruct regex from the blocks the AI provided.
+        // Reconstruct regex from the blocks the AI provided for verification.
         const { regexString: reconstructedRegex } = generateRegexStringAndGroupInfo(processedBlocks);
-        let finalExplanation = output.explanation;
 
         // CRITICAL CHECK: Does the reconstructed regex match the original input?
-        // If not, the AI's parsing was flawed. Discard its blocks.
+        // If not, the AI's parsing was flawed. Abort.
         if (reconstructedRegex !== input.query) {
-          // AI failed to parse correctly. Create a single fallback block.
-          processedBlocks = [{
-            id: generateId(),
-            type: BlockType.LITERAL,
-            settings: { text: input.query, isRawRegex: true } as LiteralSettings,
-            children: [],
-            isExpanded: false
-          }];
-          finalExplanation = "AI не смог полностью разобрать это выражение на части. Оно было загружено как единый блок, чтобы сохранить вашу работу. Вы можете редактировать его вручную.";
+          throw new Error("AI parsing resulted in a mismatched reconstruction. Aborting to prevent corruption.");
         }
 
         // Construct the final object. The regex string is now ALWAYS the original input.
         return {
             regex: input.query,
-            explanation: finalExplanation,
+            explanation: output.explanation || "Регулярное выражение успешно разобрано.",
             parsedBlocks: processedBlocks,
-            exampleTestText: output.exampleTestText || "Пример текста не был предоставлен AI.",
+            exampleTestText: output.exampleTestText || "",
             recommendedFlags: output.recommendedFlags,
         };
     } catch (error) {
         console.error("Error in generalPurposeRegexGenerator flow:", error);
-        // On any other error, also fall back to a safe state that preserves the user's input.
-        return {
-            regex: input.query,
-            explanation: "Произошла временная ошибка при обращении к AI сервису. Ваше выражение загружено как единый блок.",
-            parsedBlocks: [{
-                id: generateId(),
-                type: BlockType.LITERAL,
-                settings: { text: input.query, isRawRegex: true } as LiteralSettings,
-                children: [],
-                isExpanded: false
-            }],
-            exampleTestText: "Введите текст для тестирования."
-        };
+        throw new Error("Произошла ошибка при разборе выражения. AI сервис мог вернуть некорректный ответ.");
     }
   }
 );

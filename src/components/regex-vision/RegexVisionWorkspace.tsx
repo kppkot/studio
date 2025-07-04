@@ -715,9 +715,8 @@ const RegexVisionWorkspace: React.FC = () => {
           }
       } catch (error) {
           console.error("AI Parsing Error:", error);
-          const fallbackBlock = createLiteral(regexString, true);
-          setBlocks([fallbackBlock]);
-          toast({ title: "Ошибка разбора", description: "Произошла ошибка при разборе выражения, оно загружено как единый блок.", variant: "destructive" });
+          setBlocks([]);
+          toast({ title: "Ошибка разбора", description: "Не удалось разобрать выражение. Пожалуйста, проверьте синтаксис.", variant: "destructive" });
       } finally {
           setIsParsing(false);
       }
