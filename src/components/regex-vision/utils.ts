@@ -170,35 +170,16 @@ export const breakdownPatternIntoChildren = (pattern: string): Block[] => {
 }
 
 /**
- * Recursively traverses blocks and breaks down complex character classes into child blocks.
- * e.g., a CHARACTER_CLASS with pattern `[a-z0-9]` becomes a CHARACTER_CLASS
- * with children: a CHARACTER_CLASS for `a-z` and a CHARACTER_CLASS for `0-9`.
+ * This function is now a pass-through. The logic for breaking down character classes
+ * was too aggressive and has been moved to the AI prompt, which is better at handling it.
+ * We leave the function here to maintain the call structure.
  */
 export const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
   if (!blocks) return [];
+  // Recurse on children, but do not perform any breakdown logic here.
   return blocks.map(block => {
-    // Recurse first to handle nested blocks
     if (block.children && block.children.length > 0) {
       block.children = breakdownComplexCharClasses(block.children);
-    }
-
-    if (block.type === BlockType.CHARACTER_CLASS && (!block.children || block.children.length === 0)) {
-      const settings = block.settings as CharacterClassSettings;
-      const pattern = settings.pattern;
-      
-      const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];
-      if (pattern && !specialShorthands.includes(pattern)) {
-        const newChildren = breakdownPatternIntoChildren(pattern);
-        
-        if (newChildren.length > 1) { 
-          return {
-            ...block,
-            settings: { ...settings, pattern: '' }, // The pattern is now represented by children
-            children: newChildren,
-            isExpanded: true,
-          };
-        }
-      }
     }
     return block;
   });
@@ -309,11 +290,6 @@ export const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
                 correctedBlock.type = BlockType.ANCHOR;
                 correctedBlock.settings = { type: text } as AnchorSettings;
                 return correctedBlock;
-            }
-            
-            if (text.startsWith('\\') && text.length === 2 && !knownCharClasses.includes(text) && !knownAnchors.includes(text)) {
-                // Unescape single characters, e.g., AI gives '\-' instead of '-'
-                (correctedBlock.settings as LiteralSettings).text = text.charAt(1);
             }
         }
         
