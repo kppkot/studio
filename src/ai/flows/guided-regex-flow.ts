@@ -69,7 +69,7 @@ Your task is to take a user's query, an example text, and the steps already crea
 - (Step {{@index}}) {{this.explanation}} (Resulting Block: {{this.block.type}})
   {{/each}}
 {{else}}
-  This is the very first step. Start from the beginning.
+  This is the very first step. **You MUST start from the beginning of the text examples.** Your first step should be to find the longest common prefix that exists in all positive examples. For instance, if all examples start with "PO " or "PO-", the common prefix is "PO". Your first step MUST be to create a \`LITERAL\` block for this common prefix.
 {{/if}}
 
 Based on all the information above, determine the **next single, atomic step**.
@@ -177,7 +177,7 @@ A user is building a regex and was not satisfied with the last step you provided
 - (Step {{@index}}) {{this.explanation}} (Block: {{this.block.type}})
   {{/each}}
 {{else}}
-  This was the very first step.
+  This was the very first step. **You MUST start from the beginning of the text examples.** Your new first step should be to find the longest common prefix that exists in all positive examples. For instance, if all examples start with "PO " or "PO-", the common prefix is "PO". Your step MUST be to create a \`LITERAL\` block for this common prefix.
 {{/if}}
 
 **The user REJECTED this step:**
