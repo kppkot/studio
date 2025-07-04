@@ -707,16 +707,20 @@ const RegexVisionWorkspace: React.FC = () => {
       try {
           const result = await generateRegexFromNaturalLanguage({ query: regexString });
           
-          setBlocks(result.parsedBlocks || []);
-          toast({ title: "Обработка завершена", description: result.explanation });
+          if (result.parsedBlocks && result.parsedBlocks.length > 0) {
+              setBlocks(result.parsedBlocks);
+              toast({ title: "Выражение разобрано", description: result.explanation });
+          } else {
+              // This is the controlled failure case from the flow
+              toast({ title: "Ошибка разбора", description: result.explanation, variant: "destructive" });
+          }
 
           if(result.recommendedFlags) {
               setRegexFlags(result.recommendedFlags);
           }
       } catch (error) {
-          console.error("AI Parsing Error:", error);
-          setBlocks([]);
-          toast({ title: "Ошибка разбора", description: "Не удалось разобрать выражение. Пожалуйста, проверьте синтаксис.", variant: "destructive" });
+          console.error("Critical AI Parsing Error:", error);
+          toast({ title: "Критическая ошибка", description: "Не удалось связаться с сервисом. Проверьте ваше соединение.", variant: "destructive" });
       } finally {
           setIsParsing(false);
       }

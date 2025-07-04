@@ -21,7 +21,6 @@ export type NaturalLanguageRegexInput = z.infer<typeof NaturalLanguageRegexInput
 
 
 // The main flow that orchestrates everything.
-// The smart dispatch logic has been disabled as per request. Codeword: ОПТИМИЗАЦИЯ
 export async function generateRegexFromNaturalLanguage(input: NaturalLanguageRegexInput): Promise<NaturalLanguageRegexOutput> {
   // Always use the general-purpose generator directly.
   return generalPurposeRegexGenerator(input);
@@ -77,7 +76,13 @@ const generalPurposeRegexGenerator = ai.defineFlow(
         const {output} = await generalPurposeGeneratorPrompt(input);
         
         if (!output || !isRegexValid(output.regex) || !output.parsedBlocks) {
-            throw new Error("AI failed to generate a valid or parsable block structure.");
+            return {
+                regex: input.query,
+                explanation: "Ошибка разбора: AI вернул некорректную или невалидную структуру блоков.",
+                parsedBlocks: [],
+                exampleTestText: "",
+                recommendedFlags: "",
+            };
         }
         
         if (output.recommendedFlags) {
@@ -93,12 +98,18 @@ const generalPurposeRegexGenerator = ai.defineFlow(
         const { regexString: reconstructedRegex } = generateRegexStringAndGroupInfo(processedBlocks);
 
         // CRITICAL CHECK: Does the reconstructed regex match the original input?
-        // If not, the AI's parsing was flawed. Abort.
         if (reconstructedRegex !== input.query) {
-          throw new Error("AI parsing resulted in a mismatched reconstruction. Aborting to prevent corruption.");
+          console.error("AI parsing resulted in a mismatched reconstruction. Original:", input.query, "Reconstructed:", reconstructedRegex);
+          return {
+              regex: input.query,
+              explanation: "Ошибка разбора: AI не смог точно воссоздать структуру. Пожалуйста, проверьте синтаксис или попробуйте немного упростить выражение.",
+              parsedBlocks: [],
+              exampleTestText: "",
+              recommendedFlags: output.recommendedFlags,
+          };
         }
 
-        // Construct the final object. The regex string is now ALWAYS the original input.
+        // Success case
         return {
             regex: input.query,
             explanation: output.explanation || "Регулярное выражение успешно разобрано.",
@@ -107,20 +118,14 @@ const generalPurposeRegexGenerator = ai.defineFlow(
             recommendedFlags: output.recommendedFlags,
         };
     } catch (error) {
-        console.error("Error in generalPurposeRegexGenerator flow:", error);
-        
-        const errorMessage = error instanceof Error ? error.message : "AI сервис вернул неожиданный ответ.";
-        
-        let friendlyMessage = "Произошла ошибка при разборе выражения. ";
-        if (errorMessage.includes("mismatched reconstruction")) {
-            friendlyMessage += "AI не смог точно воссоздать структуру. Пожалуйста, попробуйте немного упростить выражение или проверьте его синтаксис.";
-        } else if (errorMessage.includes("parsable block structure")) {
-            friendlyMessage += "AI вернул некорректную структуру блоков. Пожалуйста, проверьте синтаксис выражения.";
-        } else {
-            friendlyMessage += "AI сервис мог вернуть некорректный ответ или быть временно недоступен.";
-        }
-        
-        throw new Error(friendlyMessage);
+        console.error("Critical error in generalPurposeRegexGenerator flow:", error);
+        return {
+            regex: input.query,
+            explanation: "Критическая ошибка: не удалось связаться с сервисом AI для разбора выражения. Пожалуйста, попробуйте еще раз позже.",
+            parsedBlocks: [],
+            exampleTestText: "",
+            recommendedFlags: "",
+        };
     }
   }
 );
