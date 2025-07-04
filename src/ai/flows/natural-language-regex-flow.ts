@@ -76,10 +76,16 @@ const generalPurposeRegexGenerator = ai.defineFlow(
         const {output} = await generalPurposeGeneratorPrompt(input);
         
         if (!output || !isRegexValid(output.regex)) {
-            return {
-                regex: ".*",
-                explanation: "AI не смог сгенерировать корректное регулярное выражение для этого запроса. Пожалуйста, попробуйте перефразировать или быть более конкретным.",
-                parsedBlocks: [],
+             return {
+                regex: input.query,
+                explanation: "AI не смог обработать этот запрос. Выражение загружено как единый блок.",
+                parsedBlocks: [{
+                    id: generateId(),
+                    type: BlockType.LITERAL,
+                    settings: { text: input.query, isRawRegex: true } as LiteralSettings,
+                    children: [],
+                    isExpanded: false
+                }],
                 exampleTestText: "Введите текст для тестирования."
             };
         }
@@ -96,37 +102,47 @@ const generalPurposeRegexGenerator = ai.defineFlow(
           processedBlocks = processAiBlocks(output.parsedBlocks);
         }
         
-        // Fallback: If block processing failed or was never attempted, but we have a valid regex string.
-        if (processedBlocks.length === 0 && output.regex) {
+        // Reconstruct regex from the blocks the AI provided.
+        const { regexString: reconstructedRegex } = generateRegexStringAndGroupInfo(processedBlocks);
+        let finalExplanation = output.explanation;
+
+        // CRITICAL CHECK: Does the reconstructed regex match the original input?
+        // If not, the AI's parsing was flawed. Discard its blocks.
+        if (reconstructedRegex !== input.query) {
+          // AI failed to parse correctly. Create a single fallback block.
           processedBlocks = [{
             id: generateId(),
             type: BlockType.LITERAL,
-            settings: { text: output.regex, isRawRegex: true } as LiteralSettings,
+            settings: { text: input.query, isRawRegex: true } as LiteralSettings,
             children: [],
             isExpanded: false
           }];
+          finalExplanation = "AI не смог полностью разобрать это выражение на части. Оно было загружено как единый блок, чтобы сохранить вашу работу. Вы можете редактировать его вручную.";
         }
 
-        const { regexString: finalRegex } = generateRegexStringAndGroupInfo(processedBlocks);
-
-        // Construct the final object from trusted sources to ensure consistency.
+        // Construct the final object. The regex string is now ALWAYS the original input.
         return {
-            regex: finalRegex,
-            explanation: output.explanation,
+            regex: input.query,
+            explanation: finalExplanation,
             parsedBlocks: processedBlocks,
             exampleTestText: output.exampleTestText || "Пример текста не был предоставлен AI.",
             recommendedFlags: output.recommendedFlags,
         };
     } catch (error) {
         console.error("Error in generalPurposeRegexGenerator flow:", error);
+        // On any other error, also fall back to a safe state that preserves the user's input.
         return {
-            regex: ".*",
-            explanation: "Произошла временная ошибка при обращении к AI сервису (модель может быть перегружена). Пожалуйста, попробуйте еще раз через несколько секунд.",
-            parsedBlocks: [],
+            regex: input.query,
+            explanation: "Произошла временная ошибка при обращении к AI сервису. Ваше выражение загружено как единый блок.",
+            parsedBlocks: [{
+                id: generateId(),
+                type: BlockType.LITERAL,
+                settings: { text: input.query, isRawRegex: true } as LiteralSettings,
+                children: [],
+                isExpanded: false
+            }],
             exampleTestText: "Введите текст для тестирования."
         };
     }
   }
 );
-
-    

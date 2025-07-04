@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { Block, RegexMatch, GroupInfo, SavedPattern, CharacterClassSettings } from './types'; 
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks, cloneBlockForState, breakdownPatternIntoChildren, reconstructPatternFromChildren, correctAndSanitizeAiBlocks } from './utils'; 
+import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks, cloneBlockForState, breakdownPatternIntoChildren, reconstructPatternFromChildren } from './utils'; 
 import { useToast } from '@/hooks/use-toast';
 import { generateRegexFromNaturalLanguage, type NaturalLanguageRegexOutput } from '@/ai/flows/natural-language-regex-flow';
 
@@ -702,21 +702,14 @@ const RegexVisionWorkspace: React.FC = () => {
           setBlocks([]);
           return;
       }
-      if (regexString === regexOutput.regexString) {
-          return; // No change
-      }
+
       setIsParsing(true);
       try {
           const result = await generateRegexFromNaturalLanguage({ query: regexString });
-          if (result.parsedBlocks && result.parsedBlocks.length > 0) {
-              const newBlocks = processAiBlocks(result.parsedBlocks);
-              setBlocks(newBlocks);
-              toast({ title: "Выражение разобрано", description: "Ваше регулярное выражение было преобразовано в визуальные блоки." });
-          } else {
-              const fallbackBlock = createLiteral(regexString, true);
-              setBlocks([fallbackBlock]);
-              toast({ title: "Выражение загружено", description: "AI не смог разобрать выражение, оно загружено как единый блок." });
-          }
+          
+          setBlocks(result.parsedBlocks || []);
+          toast({ title: "Обработка завершена", description: result.explanation });
+
           if(result.recommendedFlags) {
               setRegexFlags(result.recommendedFlags);
           }
@@ -728,7 +721,7 @@ const RegexVisionWorkspace: React.FC = () => {
       } finally {
           setIsParsing(false);
       }
-  }, [regexOutput.regexString, toast]);
+  }, [toast]);
 
 
   const handleBlockHover = (blockId: string | null) => {
