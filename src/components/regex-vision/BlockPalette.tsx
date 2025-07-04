@@ -1,16 +1,14 @@
 
 "use client";
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import type { BlockConfig } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { getRegexSuggestion } from '@/ai/flows/regex-suggestion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, X, Search, Bot, ChevronRight, Sparkles, AlignLeft, Milestone, Combine, GitFork, Repeat, Eye } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { Plus, X, Search, AlignLeft, Milestone, Combine } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
@@ -72,43 +70,8 @@ const WIZARD_CATEGORIES: WizardCategory[] = [
 
 const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onToggle, parentIdForNewBlock }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
-  const [isLoadingAi, setIsLoadingAi] = useState(false);
-  const { toast } = useToast();
-
-  const fetchAiSuggestions = useCallback(async (query: string) => {
-    if (!query.trim()) {
-      setAiSuggestions([]);
-      return;
-    }
-    setIsLoadingAi(true);
-    try {
-      const result = await getRegexSuggestion({ query });
-      setAiSuggestions(result.suggestions || []);
-    } catch (error) {
-      console.error("Ошибка при получении AI подсказок:", error);
-      toast({
-        title: "Ошибка AI подсказок",
-        description: "Не удалось получить подсказки от AI.",
-        variant: "destructive",
-      });
-      setAiSuggestions([]);
-    } finally {
-      setIsLoadingAi(false);
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    if (searchTerm.startsWith('/') && searchTerm.length > 1) {
-      const query = searchTerm.substring(1);
-      fetchAiSuggestions(query);
-    } else {
-      setAiSuggestions([]);
-    }
-  }, [searchTerm, fetchAiSuggestions]);
 
   const handleAddBlockFromWizard = (type: BlockType, settings?: any) => {
-    // For Quantifier and Lookaround from wizard, use their default settings from BLOCK_CONFIGS
     let blockSettings = settings;
     if (!settings && (type === BlockType.QUANTIFIER || type === BlockType.LOOKAROUND)) {
         blockSettings = BLOCK_CONFIGS[type]?.defaultSettings;
@@ -120,15 +83,6 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
 
   const handleAddPredefinedBlock = (type: BlockType) => {
     onAddBlock(type, undefined, parentIdForNewBlock);
-    // Не закрываем палитру и не сбрасываем поиск, если пользователь ищет
-  };
-
-  const handleAddAiSuggestion = (suggestion: string) => {
-    // AI suggestions are typically raw regex strings, so parse them as literals or specific types if possible.
-    // For simplicity, adding as a literal for now. Could be enhanced.
-    onAddBlock(BlockType.LITERAL, { text: suggestion }, parentIdForNewBlock);
-    onToggle();
-    setSearchTerm('');
   };
 
   const filteredRawBlocks = Object.entries(BLOCK_CONFIGS)
@@ -137,9 +91,8 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
       key.toLowerCase().includes(searchTerm.toLowerCase())
     ) as [BlockType, BlockConfig][];
 
-  const showWizard = !searchTerm || searchTerm === '/';
-  const showAiSuggestions = searchTerm.startsWith('/') && searchTerm.length > 1 && aiSuggestions.length > 0;
-  const showFilteredBlocks = searchTerm && !searchTerm.startsWith('/');
+  const showWizard = !searchTerm;
+  const showFilteredBlocks = !!searchTerm;
 
   if (!isVisible) {
     return (
@@ -168,7 +121,7 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Поиск или / для AI..."
+              placeholder="Поиск..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-8"
@@ -180,26 +133,7 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
         <div className="overflow-y-auto">
           <ScrollArea className="h-full">
             <div className="p-3 space-y-2">
-              {isLoadingAi && <p className="text-sm text-muted-foreground p-2 text-center">Загрузка AI подсказок...</p>}
-              
-              {showAiSuggestions && (
-                <div className="mb-3">
-                  <h4 className="text-xs font-semibold text-muted-foreground mb-1 uppercase flex items-center gap-1.5"><Bot size={14} /> AI Подсказки</h4>
-                  {aiSuggestions.map((suggestion, index) => (
-                    <Button
-                      key={`ai-${index}`}
-                      variant="ghost"
-                      onClick={() => handleAddAiSuggestion(suggestion)}
-                      className="w-full justify-start h-auto py-2 px-3 text-left mb-1"
-                    >
-                      <span className="font-mono text-xs bg-accent/20 text-accent-foreground p-1 rounded-sm mr-2 break-all">{suggestion}</span>
-                    </Button>
-                  ))}
-                  <hr className="my-2"/>
-                </div>
-              )}
-
-              {showWizard && !showAiSuggestions && (
+              {showWizard && (
                 <Accordion type="multiple" className="w-full" defaultValue={WIZARD_CATEGORIES.map(cat => cat.name)}>
                   {WIZARD_CATEGORIES.map((category, index) => (
                     <AccordionItem value={category.name} key={category.name}>
@@ -218,10 +152,9 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
                             className="w-full justify-start h-auto py-2.5 px-2 text-left mb-1 flex flex-col items-start"
                           >
                             <div className="flex items-center w-full">
-                              <ChevronRight size={14} className="mr-1.5 text-muted-foreground" />
                               <span className="font-medium text-sm">{action.label}</span>
                             </div>
-                            {action.description && <p className="text-xs text-muted-foreground ml-[22px] mt-0.5 text-left">{action.description}</p>}
+                            {action.description && <p className="text-xs text-muted-foreground mt-0.5 text-left">{action.description}</p>}
                           </Button>
                         ))}
                       </AccordionContent>
@@ -230,7 +163,7 @@ const BlockPalette: React.FC<BlockPaletteProps> = ({ onAddBlock, isVisible, onTo
                 </Accordion>
               )}
 
-              {showFilteredBlocks && filteredRawBlocks.length === 0 && !isLoadingAi && (
+              {showFilteredBlocks && filteredRawBlocks.length === 0 && (
                 <p className="text-sm text-muted-foreground p-2 text-center">Блоки не найдены.</p>
               )}
 

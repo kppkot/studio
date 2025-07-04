@@ -7,8 +7,6 @@ import { BLOCK_CONFIGS } from './constants';
 import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks, cloneBlockForState, breakdownPatternIntoChildren, reconstructPatternFromChildren, correctAndSanitizeAiBlocks } from './utils'; 
 import { useToast } from '@/hooks/use-toast';
 import { generateRegexFromNaturalLanguage, type NaturalLanguageRegexOutput } from '@/ai/flows/natural-language-regex-flow';
-import { generateGuidedPlan } from '@/ai/flows/guided-regex-flow';
-import type { GuidedRegexStep } from '@/ai/flows/schemas';
 
 import BlockNode from './BlockNode';
 import SettingsPanel from './SettingsPanel';
@@ -19,9 +17,6 @@ import CodeGenerationPanel from './CodeGenerationPanel';
 import DebugView from './DebugView';
 import PerformanceAnalyzerView from './PerformanceAnalyzerView';
 import PatternLibraryView from './PatternLibraryView';
-import RegexWizardModal from './RegexWizardModal';
-import AnalysisPanel from './AnalysisPanel';
-import GuidedStepsPanel from './GuidedStepsPanel';
 import { Button } from '@/components/ui/button';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -35,14 +30,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Sparkles, Gauge, Library, Lightbulb, Combine, Menu, Puzzle, Share2, DownloadCloud, UploadCloud, Loader2, Terminal, ChevronRight, PlusCircle, Trash2 } from 'lucide-react'; 
+import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Gauge, Library, Menu, Puzzle, Share2, DownloadCloud, UploadCloud } from 'lucide-react'; 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
-
-interface GuidedModeState {
-    query: string;
-    steps: GuidedRegexStep[];
-    isLoading: boolean;
-}
 
 const RegexVisionWorkspace: React.FC = () => {
   const [blocks, setBlocks] = useState<Block[]>([]);
@@ -51,17 +40,14 @@ const RegexVisionWorkspace: React.FC = () => {
   const [parentIdForNewBlock, setParentIdForNewBlock] = useState<string | null>(null);
   const [contextualBlockId, setContextualBlockId] = useState<string | null>(null);
   const [isPaletteVisible, setIsPaletteVisible] = useState(false);
-  const [isWizardModalOpen, setIsWizardModalOpen] = useState(false);
+  const [isParsing, setIsParsing] = useState(false);
 
   const [testText, setTestText] = useState<string>('Быстрая коричневая лиса прыгает через ленивую собаку.');
   const [regexFlags, setRegexFlags] = useState<string>('g');
   const [matches, setMatches] = useState<RegexMatch[]>([]);
   const [regexOutput, setRegexOutput] = useState<{ regexString: string; groupInfos: GroupInfo[] }>({ regexString: '', groupInfos: [] });
   const [regexError, setRegexError] = useState<string | null>(null);
-  const [lastWizardQuery, setLastWizardQuery] = useState('');
   
-  const [guidedModeState, setGuidedModeState] = useState<GuidedModeState | null>(null);
-
   const { toast } = useToast();
 
   useEffect(() => {
@@ -262,176 +248,6 @@ const RegexVisionWorkspace: React.FC = () => {
     setContextualBlockId(null);
     setIsPaletteVisible(false);
   }, [toast, blocks, selectedBlockId, contextualBlockId]);
-
-
-  const handleAddBlocksFromQuickGen = useCallback((query: string, newBlocks: Block[], parentId: string | null, exampleTestText?: string, recommendedFlags?: string) => {
-    if (newBlocks.length === 0) return;
-    
-    setLastWizardQuery(query);
-    setGuidedModeState(null); // Exit guided mode if active
-
-    let targetParentId = parentId;
-
-    if (!targetParentId && selectedBlockId) {
-      const selBlock = findBlockRecursive(blocks, selectedBlockId);
-      if (selBlock && [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(selBlock.type)) {
-        targetParentId = selectedBlockId;
-      }
-    }
-
-    if (targetParentId) {
-      setBlocks(prev => {
-        const addRec = (currentNodes: Block[], pId: string, blocksToAdd: Block[]): Block[] => {
-          return currentNodes.map(node => {
-            if (node.id === pId) {
-              const parentCanBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(node.type);
-              return { ...node, children: [...(node.children || []), ...blocksToAdd], isExpanded: parentCanBeExpanded ? true : node.isExpanded };
-            }
-            if (node.children) {
-              return { ...node, children: addRec(node.children, pId, blocksToAdd) };
-            }
-            return node;
-          });
-        };
-        return addRec(prev, targetParentId, newBlocks);
-      });
-    } else {
-      setBlocks(prev => [...prev, ...newBlocks]);
-    }
-
-    if (exampleTestText) {
-      setTestText(exampleTestText);
-    }
-    
-    if (recommendedFlags) {
-      // Combine with existing 'g' flag if it's there, avoiding duplicates.
-      const currentGlobalFlag = regexFlags.includes('g') ? 'g' : '';
-      const otherFlags = recommendedFlags.replace(/g/g, '');
-      const finalFlags = Array.from(new Set(currentGlobalFlag + otherFlags)).join('');
-      setRegexFlags(finalFlags);
-    }
-
-    setSelectedBlockId(newBlocks[newBlocks.length - 1].id);
-    setIsWizardModalOpen(false);
-    toast({ title: "Блоки добавлены", description: "Блоки из Помощника успешно добавлены." });
-  }, [toast, blocks, selectedBlockId, regexFlags]);
-
-  const handleStartGuidedMode = useCallback(async (query: string, exampleTestText: string) => {
-    setLastWizardQuery(query);
-    setTestText(exampleTestText);
-    setBlocks([]); // Clear existing blocks for a fresh start
-    setSelectedBlockId(null);
-    setGuidedModeState({ query, steps: [], isLoading: true });
-
-    try {
-        const result = await generateGuidedPlan({ query, exampleTestText });
-        setGuidedModeState({ query, steps: result.steps, isLoading: false });
-        toast({ title: "Пошаговый план сгенерирован!", description: "AI предложил полный план действий." });
-    } catch (error) {
-        console.error("Failed to start guided mode:", error);
-        toast({ title: "Ошибка AI", description: `Не удалось сгенерировать план. ${error instanceof Error ? error.message : ''}`, variant: "destructive" });
-        setGuidedModeState(null); // Cancel guided mode on error
-    }
-  }, [toast]);
-
- const handleAddStepBlock = useCallback((block: Block, parentId: string | null) => {
-    let aiBlock = processAiBlocks([block])[0];
-    if (!aiBlock) return;
-
-    // Sanitize the AI-generated block to correct common mistakes
-    const processedBlock = correctAndSanitizeAiBlocks([aiBlock])[0];
-
-    if (!processedBlock) {
-        toast({ title: "Ошибка", description: "AI сгенерировал недействительный блок.", variant: "destructive" });
-        return;
-    }
-
-    if (processedBlock.type === BlockType.QUANTIFIER) {
-      if (!selectedBlockId) {
-        toast({ title: "Ошибка", description: "Выберите блок, к которому нужно применить квантификатор.", variant: "destructive" });
-        return;
-      }
-      const insertQuantifier = (nodes: Block[], blockToQuantifyId: string): Block[] | null => {
-        for (let i = 0; i < nodes.length; i++) {
-          const currentNode = nodes[i];
-          if (currentNode.id === blockToQuantifyId) {
-            if (currentNode.type === BlockType.QUANTIFIER) return null;
-            if (i + 1 < nodes.length && nodes[i+1].type === BlockType.QUANTIFIER) return null;
-            const newNodes = [...nodes];
-            newNodes.splice(i + 1, 0, processedBlock);
-            return newNodes;
-          }
-          if (currentNode.children) {
-            const newChildren = insertQuantifier(currentNode.children, blockToQuantifyId);
-            if (newChildren) {
-              const newNodes = [...nodes];
-              newNodes[i] = { ...currentNode, children: newChildren };
-              return newNodes;
-            }
-          }
-        }
-        return null;
-      };
-      setBlocks(prev => {
-        const newTree = insertQuantifier(prev, selectedBlockId);
-        if (newTree) {
-          setSelectedBlockId(processedBlock.id);
-          return newTree;
-        }
-        toast({ title: 'Невозможно добавить квантификатор', description: 'Этот блок уже имеет квантификатор или является квантификатором.', variant: 'destructive' });
-        return prev;
-      });
-      return;
-    }
-
-    let targetParentId: string | null = parentId;
-    
-    if (!targetParentId && selectedBlockId) {
-      const selBlock = findBlockRecursive(blocks, selectedBlockId);
-      if (selBlock) {
-        const isGenericContainer = [BlockType.GROUP, BlockType.ALTERNATION, BlockType.LOOKAROUND, BlockType.CONDITIONAL].includes(selBlock.type);
-        const isCharClassAsContainer = selBlock.type === BlockType.CHARACTER_CLASS && 
-            (!(selBlock.settings as CharacterClassSettings).pattern || (selBlock.children && selBlock.children.length > 0));
-
-        if (isGenericContainer || isCharClassAsContainer) {
-             targetParentId = selectedBlockId;
-        }
-      }
-    }
-
-    if (targetParentId) {
-      setBlocks(prev => addChildRecursive(prev, targetParentId, processedBlock));
-      setSelectedBlockId(processedBlock.id);
-    } else {
-      setBlocks(prev => [...prev, processedBlock]);
-      setSelectedBlockId(processedBlock.id);
-    }
-  }, [toast, blocks, selectedBlockId]);
-
-  const handleClearGuidedMode = useCallback(() => {
-    setGuidedModeState(null);
-  }, []);
-
-  const handleResetAndClearGuidedMode = useCallback(() => {
-    setBlocks([]);
-    setGuidedModeState(null);
-  }, []);
-
-  const handleRegeneratePlan = useCallback(async () => {
-    if (!guidedModeState) return;
-
-    const { query } = guidedModeState;
-    setGuidedModeState(prev => ({ ...prev!, isLoading: true, steps: [] }));
-    try {
-      const result = await generateGuidedPlan({ query, exampleTestText: testText });
-      setGuidedModeState({ query, steps: result.steps, isLoading: false });
-      toast({ title: "План перестроен!", description: "AI сгенерировал новый пошаговый план." });
-    } catch (error) {
-      console.error("Failed to regenerate plan:", error);
-      toast({ title: "Ошибка AI", description: `Не удалось перестроить план. ${error instanceof Error ? error.message : ''}`, variant: "destructive" });
-      setGuidedModeState(prev => ({ ...prev!, isLoading: false }));
-    }
-  }, [guidedModeState, testText, toast]);
 
   const handleUpdateBlock = useCallback((id: string, updatedBlockData: Partial<Block>) => {
       if (updatedBlockData.settings && 'pattern' in updatedBlockData.settings) {
@@ -764,7 +580,6 @@ const RegexVisionWorkspace: React.FC = () => {
               setRegexFlags(imported.regexFlags);
               setTestText(imported.testText);
               setSelectedBlockId(null);
-              setGuidedModeState(null);
               toast({ title: "Импортировано!", description: "Конфигурация загружена." });
             } else {
               throw new Error("Неверный формат файла");
@@ -879,114 +694,46 @@ const RegexVisionWorkspace: React.FC = () => {
     setTestText(pattern.testString || '');
     setSelectedBlockId(null); 
     setHoveredBlockId(null);
-    setLastWizardQuery(pattern.name); 
-    handleClearGuidedMode();
-
-    try {
-      const aiResult: NaturalLanguageRegexOutput = await generateRegexFromNaturalLanguage({ query: pattern.regexString });
-      if (aiResult.parsedBlocks && aiResult.parsedBlocks.length > 0) {
-        const parsedBlocksFromAI = processAiBlocks(aiResult.parsedBlocks);
-        setBlocks(parsedBlocksFromAI);
-        toast({ title: "Паттерн применен и разобран!", description: `"${pattern.name}" загружен и преобразован в блоки.` });
-      } else {
-        const fallbackBlock = createLiteral(pattern.regexString, true); 
-        setBlocks([fallbackBlock]);
-        toast({ title: "Паттерн применен (как литерал)", description: `"${pattern.name}" загружен. AI не смог разобрать его на блоки.` });
-      }
-      if (aiResult.exampleTestText) { 
-          setTestText(aiResult.exampleTestText);
-      }
-    } catch (error) {
-      console.error("Error parsing pattern with AI:", error);
-      const fallbackBlock = createLiteral(pattern.regexString, true);
-      setBlocks([fallbackBlock]);
-      toast({ title: "Паттерн применен (ошибка AI)", description: `"${pattern.name}" загружен. Произошла ошибка при попытке разбора AI.`, variant: "destructive" });
-    }
+    handleParseRegexString(pattern.regexString);
   };
+
+  const handleParseRegexString = useCallback(async (regexString: string) => {
+      if (!regexString) {
+          setBlocks([]);
+          return;
+      }
+      if (regexString === regexOutput.regexString) {
+          return; // No change
+      }
+      setIsParsing(true);
+      try {
+          const result = await generateRegexFromNaturalLanguage({ query: regexString });
+          if (result.parsedBlocks && result.parsedBlocks.length > 0) {
+              const newBlocks = processAiBlocks(result.parsedBlocks);
+              setBlocks(newBlocks);
+              toast({ title: "Выражение разобрано", description: "Ваше регулярное выражение было преобразовано в визуальные блоки." });
+          } else {
+              const fallbackBlock = createLiteral(regexString, true);
+              setBlocks([fallbackBlock]);
+              toast({ title: "Выражение загружено", description: "AI не смог разобрать выражение, оно загружено как единый блок." });
+          }
+          if(result.recommendedFlags) {
+              setRegexFlags(result.recommendedFlags);
+          }
+      } catch (error) {
+          console.error("AI Parsing Error:", error);
+          const fallbackBlock = createLiteral(regexString, true);
+          setBlocks([fallbackBlock]);
+          toast({ title: "Ошибка разбора", description: "Произошла ошибка при разборе выражения, оно загружено как единый блок.", variant: "destructive" });
+      } finally {
+          setIsParsing(false);
+      }
+  }, [regexOutput.regexString, toast]);
+
 
   const handleBlockHover = (blockId: string | null) => {
     setHoveredBlockId(blockId);
   };
-
-  const handleHoverBlockInOutput = (blockId: string | null) => {
-    setHoveredBlockId(blockId);
-  };
-
-  const handleSelectBlockInOutput = (blockId: string) => {
-    setSelectedBlockId(blockId);
-  };
-
-  const isCombinableBlock = (type: BlockType): boolean => {
-    return type === BlockType.LITERAL || type === BlockType.CHARACTER_CLASS;
-  };
-
-  const handleAutoGroupAlternation = useCallback((alternationId: string) => {
-    let movedCountResult = 0;
-    const processNodesRecursive = (nodes: Block[]): Block[] => {
-      for (let i = 0; i < nodes.length; i++) {
-        if (nodes[i].id === alternationId) {
-          const alternationBlock = nodes[i];
-          const blocksToMove: Block[] = [];
-          let currentIndex = i + 1;
-          
-          while (currentIndex < nodes.length && isCombinableBlock(nodes[currentIndex].type)) {
-            blocksToMove.push(nodes[currentIndex]);
-            currentIndex++;
-          }
-
-          if (blocksToMove.length > 0) {
-            movedCountResult = blocksToMove.length;
-            const updatedAlternation = {
-              ...alternationBlock,
-              children: [...(alternationBlock.children || []), ...blocksToMove.map(cloneBlockForState)],
-              isExpanded: true,
-            };
-            const newNodes = [...nodes];
-            newNodes.splice(i, 1 + blocksToMove.length, updatedAlternation);
-            return newNodes;
-          }
-          return nodes;
-        }
-        
-        if (nodes[i].children) {
-          const updatedChildren = processNodesRecursive(nodes[i].children!);
-          if (updatedChildren !== nodes[i].children) {
-            const newNodes = [...nodes];
-            newNodes[i] = { ...nodes[i], children: updatedChildren };
-            return newNodes;
-          }
-        }
-      }
-      return nodes;
-    };
-
-    const updatedBlocks = processNodesRecursive(blocks);
-    
-    if (movedCountResult > 0) {
-      setBlocks(updatedBlocks);
-      toast({ title: "Блоки объединены!", description: `Добавлено ${movedCountResult} вариант(а).` });
-    }
-  }, [blocks, toast]);
-
-  const handleApplyFix = useCallback((fixResult: NaturalLanguageRegexOutput) => {
-    if (fixResult.parsedBlocks && fixResult.parsedBlocks.length > 0) {
-      setBlocks(fixResult.parsedBlocks);
-    }
-    if (fixResult.recommendedFlags) {
-       const currentGlobalFlag = regexFlags.includes('g') ? 'g' : '';
-      const otherFlags = fixResult.recommendedFlags.replace(/g/g, '');
-      const finalFlags = Array.from(new Set(currentGlobalFlag + otherFlags)).join('');
-      setRegexFlags(finalFlags);
-    }
-    if(fixResult.exampleTestText) {
-        setTestText(fixResult.exampleTestText);
-    }
-    setRegexError(null); 
-    setSelectedBlockId(null);
-    setGuidedModeState(null);
-  }, [regexFlags]);
-
-  const showRightPanel = selectedBlockId || guidedModeState;
   
   const renderBlockNodes = useCallback((nodes: Block[], parentId: string | null, depth: number, groupInfos: GroupInfo[]): React.ReactNode[] => {
     const nodeList: React.ReactNode[] = [];
@@ -1038,7 +785,7 @@ const RegexVisionWorkspace: React.FC = () => {
       <ResizablePanelGroup direction="vertical" className="flex-1 overflow-hidden">
         <ResizablePanel defaultSize={65} minSize={30}>
           <ResizablePanelGroup direction="horizontal" className="h-full">
-            <ResizablePanel defaultSize={showRightPanel ? 60 : 100} minSize={30} className="flex flex-col overflow-hidden">
+            <ResizablePanel defaultSize={selectedBlockId ? 60 : 100} minSize={30} className="flex flex-col overflow-hidden">
               <div className="flex-1 flex flex-col m-2 overflow-hidden">
                 <Card className="flex-1 flex flex-col shadow-md border-primary/20 overflow-hidden">
                   <CardHeader className="py-2 px-3 border-b">
@@ -1052,9 +799,6 @@ const RegexVisionWorkspace: React.FC = () => {
                         </Button>
                         <Button variant="outline" size="iconSm" onClick={handleCollapseAll} title="Свернуть всё (Ctrl+Shift+Вверх)">
                           <FoldVertical size={14} />
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => { setIsWizardModalOpen(true); }}>
-                          <Sparkles size={16} className="mr-1 text-amber-500" /> AI Помощник
                         </Button>
                         <Button size="sm" onClick={() => handleOpenPaletteFor(null)}>
                           <Plus size={16} className="mr-1" /> Добавить блок
@@ -1094,8 +838,8 @@ const RegexVisionWorkspace: React.FC = () => {
                       {blocks.length === 0 ? (
                         <div className="text-center text-muted-foreground py-10 flex flex-col items-center justify-center h-full">
                           <Layers size={48} className="mb-3 opacity-50" />
-                          <p className="font-medium">Начните строить свой regex!</p>
-                          <p className="text-sm">Нажмите "Добавить блок" или используйте "AI Помощник".</p>
+                          <p className="font-medium">Начните строить!</p>
+                          <p className="text-sm">Вставьте Regex в поле выше или добавьте блоки вручную.</p>
                         </div>
                       ) : (
                         <div className="space-y-1"> 
@@ -1105,44 +849,19 @@ const RegexVisionWorkspace: React.FC = () => {
                     </ScrollArea>
                   </CardContent>
                 </Card>
-
-                {regexError && (
-                  <AnalysisPanel
-                    isVisible={true}
-                    originalQuery={lastWizardQuery}
-                    generatedRegex={regexOutput.regexString}
-                    testText={testText}
-                    errorContext={regexError ?? undefined}
-                    onFixApplied={handleApplyFix}
-                  />
-                )}
               </div>
             </ResizablePanel>
             
-            {showRightPanel && (
+            {selectedBlockId && (
               <>
                 <ResizableHandle withHandle />
                  <ResizablePanel defaultSize={40} minSize={25} maxSize={50} className="overflow-hidden">
                    <div className="h-full m-2 ml-0 shadow-md border-primary/20 rounded-lg overflow-hidden bg-card">
-                      {guidedModeState ? (
-                          <GuidedStepsPanel
-                                query={guidedModeState.query}
-                                steps={guidedModeState.steps}
-                                isLoading={guidedModeState.isLoading}
-                                onAddStep={handleAddStepBlock}
-                                onFinish={handleClearGuidedMode}
-                                onResetAndFinish={handleResetAndClearGuidedMode}
-                                selectedBlockId={selectedBlockId}
-                                blocks={blocks}
-                                onRegeneratePlan={handleRegeneratePlan}
-                            />
-                      ) : selectedBlockId ? (
-                        <SettingsPanel
-                            block={selectedBlock}
-                            onUpdate={handleUpdateBlock}
-                            onClose={() => setSelectedBlockId(null)}
-                        />
-                      ) : null}
+                      <SettingsPanel
+                          block={selectedBlock}
+                          onUpdate={handleUpdateBlock}
+                          onClose={() => setSelectedBlockId(null)}
+                      />
                    </div>
                 </ResizablePanel>
               </>
@@ -1155,14 +874,11 @@ const RegexVisionWorkspace: React.FC = () => {
             <div className="h-full flex flex-col">
               <div className="mb-3">
                 <RegexOutputDisplay 
-                    blocks={blocks} 
                     generatedRegex={regexOutput.regexString} 
                     regexFlags={regexFlags} 
                     onFlagsChange={setRegexFlags}
-                    selectedBlockId={selectedBlockId} 
-                    hoveredBlockId={hoveredBlockId}
-                    onHoverBlockInOutput={handleHoverBlockInOutput}
-                    onSelectBlockInOutput={handleSelectBlockInOutput}
+                    onParseRegexString={handleParseRegexString}
+                    isParsing={isParsing}
                 />
               </div>
               <Tabs defaultValue="testing" className="flex-1 flex flex-col min-h-0">
@@ -1214,18 +930,6 @@ const RegexVisionWorkspace: React.FC = () => {
         }}
         parentIdForNewBlock={parentIdForNewBlock}
       />
-      {isWizardModalOpen && (
-        <RegexWizardModal
-          isOpen={isWizardModalOpen}
-          onClose={() => {
-            setIsWizardModalOpen(false);
-            setParentIdForNewBlock(null);
-          }}
-          onCompleteQuickGen={handleAddBlocksFromQuickGen}
-          onStartGuidedMode={handleStartGuidedMode}
-          initialParentId={parentIdForNewBlock}
-        />
-      )}
     </div>
   );
 };
