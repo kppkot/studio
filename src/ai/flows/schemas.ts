@@ -1,12 +1,19 @@
-
 /**
  * @fileOverview Shared Zod schemas for AI flows.
  */
 import {z} from 'genkit';
 import { BlockType } from '@/components/regex-vision/types';
 
-// This is a recursive schema, so we must use z.lazy()
-export const BlockSchema: z.ZodTypeAny = z.lazy(() =>
+// This is a recursive schema, so we must use z.lazy().
+// To avoid "Recursive reference detected" warnings in some development tooling,
+// we explicitly define the recursive type first.
+type AiBlock = {
+    type: BlockType;
+    settings: any;
+    children?: AiBlock[];
+};
+
+export const BlockSchema: z.ZodType<AiBlock> = z.lazy(() =>
   z.object({
     type: z.nativeEnum(BlockType).describe('The type of the block.'),
     settings: z.any().describe('An object containing settings specific to the block type. Examples: LITERAL: {"text": "abc"}, CHARACTER_CLASS: {"pattern": "[a-z]", "negated": false}, QUANTIFIER: {"type": "*", "mode": "greedy"}, GROUP: {"type": "capturing", "name": "myGroup"}.'),
