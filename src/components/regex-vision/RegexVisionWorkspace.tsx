@@ -7,7 +7,7 @@ import { BLOCK_CONFIGS } from './constants';
 import { generateId, generateRegexStringAndGroupInfo, createLiteral, processAiBlocks, cloneBlockForState, breakdownPatternIntoChildren, reconstructPatternFromChildren, correctAndSanitizeAiBlocks } from './utils'; 
 import { useToast } from '@/hooks/use-toast';
 import { generateRegexFromNaturalLanguage, type NaturalLanguageRegexOutput } from '@/ai/flows/natural-language-regex-flow';
-import { generateNextGuidedStep, regenerateGuidedStep } from '@/ai/flows/guided-regex-flow';
+import { generateNextGuidedStep, regenerateGuidedStep } from '@/ai/flows/guided-regex-flow2';
 import type { GuidedRegexStep, NextGuidedStepInput, RegenerateGuidedStepInput } from '@/ai/flows/schemas';
 
 import BlockNode from './BlockNode';
