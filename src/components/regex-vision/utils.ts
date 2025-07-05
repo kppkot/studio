@@ -44,7 +44,7 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
         b.children.forEach((child, index) => {
           generateRecursive(child);
           if (index < b.children.length - 1) {
-            stringParts.push({ text: '|', blockId: b.id });
+            stringParts.push({ text: '|', blockId: b.id, blockType: b.type });
           }
         });
       } else {
@@ -56,7 +56,7 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
       case BlockType.LITERAL:
         const litSettings = settings as LiteralSettings;
         const text = litSettings.isRawRegex ? litSettings.text || '' : escapeRegexCharsForGenerator(litSettings.text || '');
-        if (text) stringParts.push({ text, blockId: block.id });
+        if (text) stringParts.push({ text, blockId: block.id, blockType: block.type });
         break;
       case BlockType.CHARACTER_CLASS:
         const ccSettings = settings as CharacterClassSettings;
@@ -68,7 +68,7 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
           const content = block.children && block.children.length > 0 ? reconstructPatternFromChildren(block.children) : ccSettings.pattern || '';
           pattern = `[${ccSettings.negated ? '^' : ''}${content}]`;
         }
-        stringParts.push({ text: pattern, blockId: block.id });
+        stringParts.push({ text: pattern, blockId: block.id, blockType: block.type });
         break;
       case BlockType.QUANTIFIER: {
         const qSettings = settings as QuantifierSettings;
@@ -83,7 +83,7 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
             let mode = '';
             if (qSettings.mode === 'lazy') mode = '?';
             else if (qSettings.mode === 'possessive') mode = '+';
-            stringParts.push({ text: qStr + mode, blockId: block.id });
+            stringParts.push({ text: qStr + mode, blockId: block.id, blockType: block.type });
         }
         break;
       }
@@ -103,12 +103,12 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
         } else if (gSettings.type === 'non-capturing') {
           groupOpen = "(?:";
         }
-        stringParts.push({ text: groupOpen, blockId: block.id });
+        stringParts.push({ text: groupOpen, blockId: block.id, blockType: block.type });
         processChildren(block);
-        stringParts.push({ text: ')', blockId: block.id });
+        stringParts.push({ text: ')', blockId: block.id, blockType: block.type });
         break;
       case BlockType.ANCHOR:
-        stringParts.push({ text: (settings as AnchorSettings).type, blockId: block.id });
+        stringParts.push({ text: (settings as AnchorSettings).type, blockId: block.id, blockType: block.type });
         break;
       case BlockType.ALTERNATION:
         processChildren(block);
@@ -119,25 +119,25 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
           'positive-lookahead': `(?=`, 'negative-lookahead': `(?!`,
           'positive-lookbehind': `(?<=`, 'negative-lookbehind': `(?<!`
         };
-        stringParts.push({ text: lookaroundMap[lSettings.type], blockId: block.id });
+        stringParts.push({ text: lookaroundMap[lSettings.type], blockId: block.id, blockType: block.type });
         processChildren(block);
-        stringParts.push({ text: ')', blockId: block.id });
+        stringParts.push({ text: ')', blockId: block.id, blockType: block.type });
         break;
       case BlockType.BACKREFERENCE:
         const ref = (settings as BackreferenceSettings).ref;
         const backrefText = isNaN(Number(ref)) ? `\\k<${ref}>` : `\\${ref}`;
-        stringParts.push({ text: backrefText, blockId: block.id });
+        stringParts.push({ text: backrefText, blockId: block.id, blockType: block.type });
         break;
       case BlockType.CONDITIONAL:
          const condSettings = settings as ConditionalSettings;
          const { condition, yesPattern, noPattern } = condSettings;
-         stringParts.push({ text: `(?(${condition})`, blockId: block.id });
+         stringParts.push({ text: `(?(${condition})`, blockId: block.id, blockType: block.type });
          generateRecursive(createLiteral(yesPattern, true));
          if (noPattern) {
-           stringParts.push({ text: `|`, blockId: block.id });
+           stringParts.push({ text: `|`, blockId: block.id, blockType: block.type });
            generateRecursive(createLiteral(noPattern, true));
          }
-         stringParts.push({ text: `)`, blockId: block.id });
+         stringParts.push({ text: `)`, blockId: block.id, blockType: block.type });
          break;
       default:
         processChildren(block);

@@ -112,4 +112,5 @@ export interface SavedPattern {
 export interface RegexStringPart {
   text: string;
   blockId: string;
+  blockType: BlockType;
 }
