@@ -48,8 +48,8 @@ const RegexVisionWorkspace: React.FC = () => {
   const [isReady, setIsReady] = useState(false);
   const [isCodeGenOpen, setIsCodeGenOpen] = useState(false);
 
-  const [testText, setTestText] = useState<string>('Быстрая коричневая лиса прыгает через ленивую собаку.');
-  const [regexFlags, setRegexFlags] = useState<string>('gu');
+  const [testText, setTestText] = useState<string>('Pass123!\nweak\n12345678');
+  const [regexFlags, setRegexFlags] = useState<string>('gmu');
   const [matches, setMatches] = useState<RegexMatch[]>([]);
   const [regexError, setRegexError] = useState<string | null>(null);
   const [regexOutputState, setRegexOutputState] = useState<{

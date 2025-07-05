@@ -1,3 +1,4 @@
+
 "use client";
 import React from 'react';
 import { Textarea } from '@/components/ui/textarea';
@@ -5,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import type { RegexMatch } from './types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { AlertCircle, Search } from 'lucide-react';
+import { AlertCircle, Search, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface TestAreaProps {
@@ -27,72 +28,93 @@ const TestArea: React.FC<TestAreaProps> = ({ testText, onTestTextChange, matches
     if (regexError) {
       return <span className="whitespace-pre-wrap">{testText}</span>;
     }
+    
+    const lines = testText.split('\n');
+    const allMatches = matches;
 
-    type HighlightEvent = {
-        index: number;
-        type: 'start' | 'end';
-        className: string;
-    };
+    return (
+         <div className="whitespace-pre-wrap">
+            {lines.map((line, lineIndex) => {
+                const lineStart = lines.slice(0, lineIndex).reduce((acc, l) => acc + l.length + 1, 0);
+                const lineEnd = lineStart + line.length;
 
-    const events: HighlightEvent[] = [];
+                const lineMatches = allMatches.filter(m => {
+                    const matchStart = m.index;
+                    const matchEnd = matchStart + m.match.length;
+                    // Check if the match is primarily on this line.
+                    // A match is on this line if its start point is within the line's bounds.
+                    return matchStart >= lineStart && matchStart < lineEnd;
+                });
 
-    matches.forEach(m => {
-        events.push({ index: m.index, type: 'start', className: 'bg-accent/30' });
-        events.push({ index: m.index + m.match.length, type: 'end', className: 'bg-accent/30' });
-    });
+                if (!line.trim() && lineIndex !== lines.length - 1) {
+                    return <br key={`line-${lineIndex}`} />;
+                }
+                if (lineMatches.length === 0) {
+                   return <div key={`line-${lineIndex}`} className="flex items-center gap-2"><span className="text-destructive w-4 h-4 text-xs font-bold flex-shrink-0">✗</span><span>{line}</span></div>;
+                }
+                
+                type HighlightEvent = {
+                    index: number;
+                    type: 'start' | 'end';
+                    className: string;
+                };
+                const events: HighlightEvent[] = [];
 
-    if (highlightedGroupIndex > 0) {
-      matches.forEach(match => {
-        if (match.groupIndices && match.groupIndices[highlightedGroupIndex - 1]) {
-            const groupSpan = match.groupIndices[highlightedGroupIndex - 1];
-            if (groupSpan) {
-                events.push({ index: groupSpan[0], type: 'start', className: 'ring-1 ring-inset ring-primary' });
-                events.push({ index: groupSpan[1], type: 'end', className: 'ring-1 ring-inset ring-primary' });
-            }
-        }
-      });
-    }
+                lineMatches.forEach(m => {
+                    const relativeStartIndex = m.index - lineStart;
+                    events.push({ index: relativeStartIndex, type: 'start', className: 'bg-accent/30' });
+                    events.push({ index: relativeStartIndex + m.match.length, type: 'end', className: 'bg-accent/30' });
 
-    events.sort((a, b) => {
-        if (a.index !== b.index) return a.index - b.index;
-        if (a.type === 'end' && b.type === 'start') return -1;
-        if (a.type === 'start' && b.type === 'end') return 1;
-        return 0;
-    });
+                     if (highlightedGroupIndex > 0 && m.groupIndices && m.groupIndices[highlightedGroupIndex - 1]) {
+                        const groupSpan = m.groupIndices[highlightedGroupIndex - 1];
+                        if (groupSpan) {
+                           events.push({ index: groupSpan[0] - lineStart, type: 'start', className: 'ring-1 ring-inset ring-primary' });
+                           events.push({ index: groupSpan[1] - lineStart, type: 'end', className: 'ring-1 ring-inset ring-primary' });
+                        }
+                    }
+                });
 
-    const parts: React.ReactNode[] = [];
-    let lastIndex = 0;
-    const activeClasses = new Set<string>();
+                 events.sort((a, b) => {
+                    if (a.index !== b.index) return a.index - b.index;
+                    if (a.type === 'end' && b.type === 'start') return -1;
+                    if (a.type === 'start' && b.type === 'end') return 1;
+                    return 0;
+                });
+                
+                const parts: React.ReactNode[] = [];
+                let lastIndex = 0;
+                const activeClasses = new Set<string>();
 
-    events.forEach((event, i) => {
-        if (event.index > lastIndex) {
-            const text = testText.substring(lastIndex, event.index);
-            if (activeClasses.size > 0) {
-                parts.push(<mark key={`part-${lastIndex}`} className={cn("rounded-sm", Array.from(activeClasses))}>{text}</mark>);
-            } else {
-                parts.push(<span key={`part-${lastIndex}`}>{text}</span>);
-            }
-        }
-        
-        if (event.type === 'start') {
-            activeClasses.add(event.className);
-        } else {
-            activeClasses.delete(event.className);
-        }
+                events.forEach(event => {
+                    if (event.index > lastIndex) {
+                        const text = line.substring(lastIndex, event.index);
+                        if (activeClasses.size > 0) {
+                            parts.push(<mark key={`part-${lastIndex}`} className={cn("rounded-sm", Array.from(activeClasses))}>{text}</mark>);
+                        } else {
+                            parts.push(<span key={`part-${lastIndex}`}>{text}</span>);
+                        }
+                    }
+                    if (event.type === 'start') {
+                        activeClasses.add(event.className);
+                    } else {
+                        activeClasses.delete(event.className);
+                    }
+                    lastIndex = event.index;
+                });
 
-        lastIndex = event.index;
-    });
-
-    if (lastIndex < testText.length) {
-        const text = testText.substring(lastIndex);
-        if (activeClasses.size > 0) {
-             parts.push(<mark key="part-end" className={cn("rounded-sm", Array.from(activeClasses))}>{text}</mark>);
-        } else {
-            parts.push(<span key="part-end">{text}</span>);
-        }
-    }
-
-    return <div className="whitespace-pre-wrap">{parts}</div>;
+                if (lastIndex < line.length) {
+                    const text = line.substring(lastIndex);
+                    if (activeClasses.size > 0) {
+                        parts.push(<mark key="part-end" className={cn("rounded-sm", Array.from(activeClasses))}>{text}</mark>);
+                    } else {
+                        parts.push(<span key="part-end">{text}</span>);
+                    }
+                }
+                
+                return <div key={`line-${lineIndex}`} className="flex items-center gap-2"><span className="text-green-600 w-4 h-4 flex-shrink-0"><CheckCircle size={16}/></span><div>{parts}</div></div>;
+            })}
+        </div>
+    );
   };
 
 
@@ -105,7 +127,7 @@ const TestArea: React.FC<TestAreaProps> = ({ testText, onTestTextChange, matches
           value={testText}
           onChange={(e) => onTestTextChange(e.target.value)}
           className="mt-1 min-h-[120px] max-h-[300px] resize-y font-mono text-sm"
-          placeholder="Введите текст для проверки вашего regex..."
+          placeholder="Введите текст для проверки вашего regex (каждая строка - отдельный тест)"
         />
       </div>
 
