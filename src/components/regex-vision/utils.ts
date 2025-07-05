@@ -91,7 +91,7 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): { regexString:
         }
         return `${groupOpen}${processChildren(block)})`;
       case BlockType.ANCHOR:
-        return (settings as AnchorSettings).type || '^';
+        return (settings as AnchorSettings).type;
       case BlockType.ALTERNATION:
         return processChildren(block);
       case BlockType.LOOKAROUND:

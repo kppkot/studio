@@ -223,10 +223,12 @@ function transformNodeToBlock(node: any): Block | null {
                 isExpanded: true
             };
         } else { // Anchor
+            // `regexp-tree` uses `kind: 'b'` for `\b`. We need to reconstruct the raw value.
+            const anchorType = (node.kind === 'b' || node.kind === 'B') ? `\\${node.kind}` : node.kind;
             return {
                 id: newId,
                 type: BlockType.ANCHOR,
-                settings: { type: node.raw } as AnchorSettings,
+                settings: { type: anchorType } as AnchorSettings,
                 children: [],
                 isExpanded: false
             };
