@@ -60,7 +60,12 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
         break;
       case BlockType.CHARACTER_CLASS:
         const ccSettings = settings as CharacterClassSettings;
-        const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.', '\\p{L}'];
+        const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '\\p{L}'];
+        // Critical fix: '.' is a special meta-character that should NOT be wrapped in brackets.
+        if (ccSettings.pattern === '.') {
+            stringParts.push({ text: '.', blockId: block.id, blockType: block.type });
+            break;
+        }
         let pattern;
         if (!ccSettings.negated && specialShorthands.includes(ccSettings.pattern)) {
           pattern = ccSettings.pattern;
