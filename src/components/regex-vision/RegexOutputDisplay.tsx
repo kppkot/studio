@@ -122,10 +122,8 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
             <div 
               className="flex items-center h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background cursor-text flex-wrap"
               onClick={(e) => {
-                // Only switch to editing if the click is directly on the container,
-                // not on one of the colored span elements.
-                if (e.currentTarget === e.target) {
-                  setIsEditing(true);
+                if (e.target === e.currentTarget) {
+                   setIsEditing(true);
                 }
               }}
               role="textbox"
@@ -138,10 +136,12 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
                         onMouseEnter={() => onHoverPart(part.blockId)}
                         onClick={(e) => { e.stopPropagation(); onSelectBlock(part.blockId); }}
                         className={cn(
-                            "transition-all duration-100 rounded-sm px-0.5 cursor-pointer",
-                            getColorForType(part.blockType),
-                            part.blockId === selectedBlockId ? "ring-2 ring-primary scale-105 shadow-lg z-10 relative font-bold" : 
-                            part.blockId === hoveredBlockId ? "ring-1 ring-primary brightness-110" : ""
+                          "transition-all duration-100 rounded-sm px-0.5 cursor-pointer",
+                          getColorForType(part.blockType),
+                          {
+                            "ring-2 ring-primary scale-105 shadow-lg z-10 relative font-bold brightness-110": part.blockId === selectedBlockId,
+                            "ring-1 ring-primary brightness-110": part.blockId === hoveredBlockId && part.blockId !== selectedBlockId,
+                          }
                         )}
                     >
                         {part.text}

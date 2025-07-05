@@ -282,8 +282,8 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           "bg-orange-100 text-orange-800 border-orange-300 border",
           "dark:bg-orange-900/50 dark:text-orange-300 dark:border-orange-700/50",
           "px-2 py-1 rounded-full text-xs font-semibold shadow-sm hover:shadow-md transition-all flex items-center gap-1.5",
-          isQuantifierSelected && "ring-2 ring-primary",
-          isQuantifierHovered && "ring-2 ring-accent bg-accent/20"
+          isQuantifierHovered && "ring-2 ring-accent bg-accent/20",
+          isQuantifierSelected && "ring-2 ring-primary bg-primary/20"
         )}
         title={`${modeMap[qSettings.mode]} квантификатор`}
       >
@@ -315,8 +315,8 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           className={cn(
             "block-main-content border rounded-md relative transition-all",
             "bg-card",
-            (isBlockSelected || isQuantifierSelected) && "ring-2 ring-primary shadow-lg",
-            isBlockHovered && "bg-accent/10 ring-1 ring-accent"
+            isBlockHovered && "bg-accent/10 ring-1 ring-accent",
+            (isBlockSelected || isQuantifierSelected) && "ring-2 ring-primary shadow-lg bg-primary/10"
           )}
         >
           <div className="absolute top-1 right-1 flex items-center gap-0.5 z-20">
