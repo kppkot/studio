@@ -198,7 +198,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
       case BlockType.ANCHOR:
         const aSettings = settings as AnchorSettings;
-        const anchorMap: {[key: string]: string} = {
+        const anchorMap: {[key: string]: {title: string, regex: string}} = {
             '^': {title: 'Начало строки/текста', regex: '^'},
             '$': {title: 'Конец строки/текста', regex: '$'},
             '\\b': {title: 'Граница слова', regex: '\\b'},
@@ -270,10 +270,10 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     switch (qSettings.type) {
       case '*': badgeDetails = '0+'; break;
       case '+': badgeDetails = '1+'; break;
-      case '?': badgeDetails = '0-1'; break;
+      case '?': badgeDetails = '0–1'; break;
       case '{n}': badgeDetails = `{${qSettings.min ?? 0}}`; break;
-      case '{n,}': badgeDetails = `min ${qSettings.min ?? 0}`; break;
-      case '{n,m}': badgeDetails = `${qSettings.min ?? 0}-${qSettings.max ?? '∞'}`; break;
+      case '{n,}': badgeDetails = `${qSettings.min ?? 0}+`; break;
+      case '{n,m}': badgeDetails = `${qSettings.min ?? 0}–${qSettings.max ?? ''}`; break;
     }
     const modeMap: {[key in QuantifierSettings['mode']]: string} = {'greedy': 'Жадный', 'lazy': 'Ленивый', 'possessive': 'Ревнивый'};
     
@@ -286,13 +286,13 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           "absolute top-1/2 -translate-y-1/2 right-14 z-10 cursor-pointer",
           "bg-sky-100 text-sky-800 border-sky-300 border",
           "dark:bg-sky-900/50 dark:text-sky-300 dark:border-sky-700/50",
-          "px-2 py-1 rounded-full text-xs font-semibold shadow-sm hover:shadow-md transition-all flex items-center gap-1.5",
+          "px-2.5 py-1.5 rounded-full text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2",
           (hoveredId === quantifierToRender.id) && !isQuantifierSelected && "ring-2 ring-accent bg-accent/20 brightness-110",
           isQuantifierSelected && "ring-2 ring-primary bg-primary/20 brightness-110"
         )}
         title={`${modeMap[qSettings.mode]} квантификатор`}
       >
-        <Repeat size={12} />
+        <Repeat size={14} />
         <span>{badgeDetails}</span>
       </div>
     );
