@@ -1,6 +1,5 @@
-
 "use client";
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import type { Block, GroupInfo, QuantifierSettings, GroupSettings, CharacterClassSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, LiteralSettings } from './types';
 import { BlockType } from './types';
 import { ChevronDown, ChevronRight, GripVertical, Repeat, Trash2, PlusCircle } from 'lucide-react';
@@ -11,15 +10,14 @@ import { reconstructPatternFromChildren } from './utils';
 
 interface BlockNodeProps {
   block: Block;
-  quantifierToRender?: Block | null; 
+  quantifierToRender?: Block | null;
   onUpdate: (id: string, updatedBlock: Partial<Block>) => void;
-  onDelete: (id: string, deleteAttachedQuantifier?: boolean) => void; 
+  onDelete: (id: string, deleteAttachedQuantifier?: boolean) => void;
   onAddChild: (parentId: string | null, contextId: string) => void;
   onAddSibling: (parentId: string | null, contextId: string) => void;
   onDuplicate: (id: string) => void;
   onUngroup: (id: string) => void;
   onWrapBlock: (id: string) => void;
-  onReorder: (draggedId: string, targetId: string, newParentId: string | null) => void;
   selectedId: string | null;
   onSelect: (id: string) => void;
   parentId: string | null;
@@ -40,38 +38,35 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   onDuplicate,
   onUngroup,
   onWrapBlock,
-  onReorder,
   selectedId,
   onSelect,
   parentId,
-  depth = 0, 
+  depth = 0,
   hoveredId,
   onBlockHover,
   renderChildNodes,
   groupInfos,
 }) => {
-  const [isDraggingOver, setIsDraggingOver] = useState(false);
-  const [showAsParentDropTarget, setShowAsParentDropTarget] = useState(false);
 
   const hasChildren = block.children && block.children.length > 0;
 
-  const isContainerBlock = 
+  const isContainerBlock =
       block.type === BlockType.GROUP ||
       block.type === BlockType.LOOKAROUND ||
       block.type === BlockType.ALTERNATION ||
       block.type === BlockType.CONDITIONAL ||
       (block.type === BlockType.CHARACTER_CLASS && hasChildren);
-      
+
   const isCurrentlyExpanded = block.isExpanded ?? (isContainerBlock ? true : false);
   const isEmptyContainer = isContainerBlock && !hasChildren;
 
   const isBlockSelected = selectedId === block.id;
   const isQuantifierSelected = quantifierToRender && selectedId === quantifierToRender.id;
-  
+
   const isSelected = useMemo(() => isBlockSelected || isQuantifierSelected, [isBlockSelected, isQuantifierSelected]);
 
   const isBlockHovered = (hoveredId === block.id) && !isSelected;
-  
+
   const handleToggleExpand = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isContainerBlock) {
@@ -83,60 +78,14 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     e.stopPropagation();
     onSelect(idToSelect);
   };
-  
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
-    e.stopPropagation();
-    e.dataTransfer.setData('text/plain', block.id);
-    e.dataTransfer.effectAllowed = 'move';
-  };
 
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = 'move';
-    setIsDraggingOver(true);
-
-    const canThisBlockAcceptChildren = [
-        BlockType.GROUP,
-        BlockType.LOOKAROUND,
-        BlockType.ALTERNATION,
-        BlockType.CONDITIONAL,
-        BlockType.CHARACTER_CLASS, // Added CHARACTER_CLASS as a potential parent
-    ].includes(block.type);
-    
-    const draggedId = e.dataTransfer.types.includes('text/plain') ? e.dataTransfer.getData('text/plain') : null;
-
-    if (draggedId && draggedId !== block.id && canThisBlockAcceptChildren) {
-      setShowAsParentDropTarget(true);
-    } else {
-      setShowAsParentDropTarget(false);
-    }
-  };
-
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-    e.stopPropagation();
-    setIsDraggingOver(false);
-    setShowAsParentDropTarget(false);
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingOver(false);
-    setShowAsParentDropTarget(false);
-    const draggedId = e.dataTransfer.getData('text/plain');
-    if (draggedId && draggedId !== block.id) {
-      onReorder(draggedId, block.id, showAsParentDropTarget ? block.id : parentId);
-    }
-  };
-  
   const getBlockVisuals = () => {
     const config = BLOCK_CONFIGS[block.type];
     const settings = block.settings;
     let title = config.name;
     let details = '';
     let regexFragment = '';
-    
+
     switch (block.type) {
       case BlockType.LITERAL:
         const litSettings = settings as LiteralSettings;
@@ -155,7 +104,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
       case BlockType.CHARACTER_CLASS:
         const ccSettings = settings as CharacterClassSettings;
         const pattern = block.children && block.children.length > 0 ? reconstructPatternFromChildren(block.children) : ccSettings.pattern;
-        
+
         const shorthandInfo: { [key: string]: { title: string; details: string } } = {
           '\\d': { title: 'Любая цифра', details: 'Эквивалент [0-9]' },
           '\\D': { title: 'Не цифра', details: 'Эквивалент [^0-9]' },
@@ -178,7 +127,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             details = 'Пустой или составной набор';
           }
         }
-        
+
         const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.', '\\p{L}'];
         if (!ccSettings.negated && specialShorthands.includes(pattern)) {
           regexFragment = pattern;
@@ -240,14 +189,14 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         details = lookaroundDetails[lSettings.type];
         regexFragment = lookaroundRegex[lSettings.type];
         break;
-      
+
       case BlockType.BACKREFERENCE:
         const bSettings = settings as BackreferenceSettings;
         title = 'Обратная ссылка';
         details = `Совпадает с текстом группы №${bSettings.ref}`;
         regexFragment = `\\${bSettings.ref}`;
         break;
-      
+
       case BlockType.ALTERNATION:
         title = 'Чередование (ИЛИ)';
         details = 'Совпадает с одним из вариантов';
@@ -268,7 +217,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   };
 
   const { icon, title, details, regexFragment } = getBlockVisuals();
-  
+
   const renderQuantifierBadge = () => {
     if (!quantifierToRender) return null;
 
@@ -283,7 +232,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
       case '{n,m}': badgeDetails = `${qSettings.min ?? 0}–${qSettings.max ?? ''}`; break;
     }
     const modeMap: {[key in QuantifierSettings['mode']]: string} = {'greedy': 'Жадный', 'lazy': 'Ленивый', 'possessive': 'Ревнивый'};
-    
+
     return (
       <div
         onClick={(e) => handleSelectBlock(e, quantifierToRender!.id)}
@@ -309,21 +258,12 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   return (
     <div className="relative">
       <div
-        draggable
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
         onMouseEnter={() => onBlockHover(block.id)}
         onMouseLeave={() => onBlockHover(null)}
-        className={cn(
-          "transition-all relative group/blocknode rounded-md",
-          isDraggingOver && !showAsParentDropTarget && "bg-accent/20",
-          showAsParentDropTarget && "bg-green-100 dark:bg-green-800/30 ring-2 ring-green-500",
-        )}
+        className="transition-all relative group/blocknode rounded-md"
         onClick={(e) => handleSelectBlock(e, block.id)}
       >
-        <div 
+        <div
           className={cn(
             "block-main-content border rounded-md relative transition-all",
             "bg-card",
@@ -359,7 +299,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           </div>
 
           <div className="p-2 flex items-start gap-3">
-            <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab flex-shrink-0 mt-1" />
+            <GripVertical className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1" />
 
             {isContainerBlock ? (
               <Button variant="ghost" size="iconSm" onClick={handleToggleExpand} className="flex-shrink-0 mt-0.5">
@@ -368,7 +308,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             ) : (
                 <div className="w-7 h-7 flex-shrink-0" />
             )}
-            
+
              <div className="flex-1 min-w-0 pr-4">
                 <div className="flex items-center gap-2">
                   <span className="text-primary h-5 w-5 flex items-center justify-center">{icon}</span>
@@ -389,13 +329,13 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           </div>
           {renderQuantifierBadge()}
         </div>
-        
+
         {isContainerBlock && isCurrentlyExpanded && (
           <div className="children-container mt-1 pl-6 relative">
             <div className="absolute left-[18px] top-0 bottom-2 w-px bg-primary/20"></div>
              {isEmptyContainer ? (
                <div className="pt-2 pb-1">
-                 <div 
+                 <div
                   className="ml-5 pl-4 pr-2 py-4 border-l-2 border-dashed border-muted-foreground/50 bg-muted/30 rounded-r-md text-center text-muted-foreground text-xs italic hover:border-primary hover:text-primary cursor-pointer"
                   onClick={(e) => { e.stopPropagation(); onAddChild(block.id, block.id); }}
                 >

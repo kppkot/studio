@@ -1,10 +1,9 @@
-
 "use client";
 import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
-import type { Block, RegexMatch, GroupInfo, CharacterClassSettings, RegexStringPart, SavedPattern } from './types'; 
+import type { Block, RegexMatch, GroupInfo, CharacterClassSettings, RegexStringPart, SavedPattern } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { generateId, generateRegexStringAndGroupInfo, cloneBlockForState } from './utils'; 
+import { generateId, generateRegexStringAndGroupInfo, cloneBlockForState } from './utils';
 import { useToast } from '@/hooks/use-toast';
 import { parseRegexWithLibrary } from './regex-parser';
 
@@ -25,7 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Layers, Edit3, Code2, Plus, FoldVertical, UnfoldVertical, Menu, Puzzle, Share2, DownloadCloud, UploadCloud, Loader2 } from 'lucide-react'; 
+import { Layers, Edit3, Code2, Plus, FoldVertical, UnfoldVertical, Menu, Puzzle, Share2, DownloadCloud, UploadCloud, Loader2 } from 'lucide-react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import AnalysisPanel from './AnalysisPanel';
@@ -40,7 +39,7 @@ const DebugView = lazy(() => import('./DebugView'));
 const RegexVisionWorkspace: React.FC = () => {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
-  const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null); 
+  const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null);
   const [parentIdForNewBlock, setParentIdForNewBlock] = useState<string | null>(null);
   const [contextualBlockId, setContextualBlockId] = useState<string | null>(null);
   const [isPaletteVisible, setIsPaletteVisible] = useState(false);
@@ -62,7 +61,7 @@ const RegexVisionWorkspace: React.FC = () => {
     stringParts: [],
   });
   const [naturalLanguageQuery, setNaturalLanguageQuery] = useState('');
-  
+
   const { toast } = useToast();
 
   useEffect(() => {
@@ -86,7 +85,7 @@ const RegexVisionWorkspace: React.FC = () => {
         const formattedMatches: RegexMatch[] = foundRawMatches.map(rawMatch => ({
           match: rawMatch[0],
           index: rawMatch.index!,
-          groups: Array.from(rawMatch).slice(1), 
+          groups: Array.from(rawMatch).slice(1),
         }));
         setMatches(formattedMatches);
         setRegexError(null);
@@ -101,7 +100,7 @@ const RegexVisionWorkspace: React.FC = () => {
        setRegexError(null);
     }
   }, [blocks, testText, regexFlags]);
-  
+
 
   const findBlockRecursive = (searchBlocks: Block[], id: string): Block | null => {
     for (const block of searchBlocks) {
@@ -143,7 +142,7 @@ const RegexVisionWorkspace: React.FC = () => {
             }
             return null;
         }
-        
+
         const findRecursively = (nodes: Block[], id: string) : {parentArr: Block[], index: number} | null => {
             const directFind = findInArray(nodes, id);
             if(directFind) return directFind;
@@ -155,7 +154,7 @@ const RegexVisionWorkspace: React.FC = () => {
             }
             return null;
         }
-        
+
         const foundInfo = findRecursively(currentBlocks, targetId);
         if (foundInfo) {
             const { parentArr, index } = foundInfo;
@@ -164,7 +163,7 @@ const RegexVisionWorkspace: React.FC = () => {
             }
         }
     }
-    
+
     if (idsToDelete.has(selectedBlockId || "")) blockWasSelected = true;
 
     const filterAndDelete = (nodes: Block[]): Block[] => {
@@ -226,7 +225,7 @@ const RegexVisionWorkspace: React.FC = () => {
             // Can't quantify a quantifier or a block that already has one.
             if (currentNode.type === BlockType.QUANTIFIER) return null;
             if (i + 1 < nodes.length && nodes[i+1].type === BlockType.QUANTIFIER) return null;
-            
+
             const newNodes = [...nodes];
             newNodes.splice(i + 1, 0, newBlock);
             return newNodes;
@@ -262,7 +261,7 @@ const RegexVisionWorkspace: React.FC = () => {
     if (!targetParentId && selectedBlockId) {
       const selBlock = findBlockRecursive(blocks, selectedBlockId);
       if (selBlock) {
-         const isContainer = 
+         const isContainer =
             [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(selBlock.type) ||
             (selBlock.type === BlockType.CHARACTER_CLASS && (!(selBlock.settings as CharacterClassSettings).pattern || (selBlock.children && selBlock.children.length > 0)));
 
@@ -288,7 +287,7 @@ const RegexVisionWorkspace: React.FC = () => {
         return null;
       }
       const selectedParentId = selectedBlockId ? findParentOfSelected(blocks, selectedBlockId, null) : null;
-      
+
       if(selectedParentId && selectedBlockId) {
         setBlocks(prev => {
             const insertSibling = (bs: Block[], sId: string, newB: Block): Block[] => {
@@ -440,7 +439,7 @@ const RegexVisionWorkspace: React.FC = () => {
           }
           return null;
       }
-      
+
       const updatedTree = replaceInTree(blocksCopy);
 
       if (updatedTree) {
@@ -448,84 +447,9 @@ const RegexVisionWorkspace: React.FC = () => {
         toast({ title: "Блок обернут", description: "Выбранный блок был обернут в новую группу." });
         return updatedTree;
       }
-      
+
       toast({ title: "Ошибка", description: "Не удалось обернуть блок.", variant: "destructive" });
       return prevBlocks;
-    });
-  }, [toast]);
-
-  const handleReorderBlock = useCallback((draggedId: string, targetId: string, newParentId: string | null) => {
-    if (draggedId === targetId) return;
-
-    setBlocks(prevBlocks => {
-      const blocksCopy = JSON.parse(JSON.stringify(prevBlocks));
-
-      let draggedItem: { block: Block; quantifier: Block | null } | null = null;
-      
-      const findAndRemove = (nodes: Block[]): Block[] => {
-        const remaining: Block[] = [];
-        for (let i = 0; i < nodes.length; i++) {
-          const node = nodes[i];
-          if (node.id === draggedId) {
-            draggedItem = { block: node, quantifier: null };
-            if (i + 1 < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
-              draggedItem.quantifier = nodes[i + 1];
-              i++;
-            }
-          } else {
-            if (node.children) {
-              node.children = findAndRemove(node.children);
-            }
-            remaining.push(node);
-          }
-        }
-        return remaining;
-      };
-      
-      let treeWithoutDraggedItem = findAndRemove(blocksCopy);
-      
-      if (!draggedItem) {
-        return prevBlocks;
-      }
-
-      const isDescendant = (parent: Block, childId: string): boolean => {
-        return parent.id === childId || (parent.children?.some(child => isDescendant(child, childId)) ?? false);
-      }
-      if (isDescendant(draggedItem.block, targetId)) {
-        toast({ title: "Недопустимое действие", description: "Нельзя переместить блок внутрь самого себя.", variant: "destructive" });
-        return prevBlocks;
-      }
-
-      const blocksToInsert = [draggedItem.block];
-      if (draggedItem.quantifier) {
-        blocksToInsert.push(draggedItem.quantifier);
-      }
-
-      const isDroppingInside = newParentId === targetId;
-
-      const findAndInsert = (nodes: Block[]): boolean => {
-        for (let i = 0; i < nodes.length; i++) {
-          const node = nodes[i];
-          if (node.id === targetId) {
-            if (isDroppingInside) {
-              node.children = [...(node.children || []), ...blocksToInsert];
-              node.isExpanded = true;
-            } else {
-              nodes.splice(i + 1, 0, ...blocksToInsert);
-            }
-            return true;
-          }
-          if (node.children && findAndInsert(node.children)) {
-            return true;
-          }
-        }
-        return false;
-      };
-      
-      findAndInsert(treeWithoutDraggedItem);
-
-      toast({ title: "Блок перемещен" });
-      return treeWithoutDraggedItem;
     });
   }, [toast]);
 
@@ -534,9 +458,9 @@ const RegexVisionWorkspace: React.FC = () => {
     setContextualBlockId(ctxId);
     setIsPaletteVisible(true);
   };
-  
+
   const selectedBlock = selectedBlockId ? findBlockRecursive(blocks, selectedBlockId) : null;
-  
+
   // Memoize the highlighted group index to prevent re-calculation on every render.
   const highlightedGroupIndex = React.useMemo(() => {
     if (selectedBlock && (selectedBlock.type === BlockType.GROUP)) {
@@ -776,12 +700,12 @@ const RegexVisionWorkspace: React.FC = () => {
             // Quantifiers are rendered as badges on the block they quantify, so we skip rendering them as standalone nodes.
             continue;
         }
-        
+
         // Check if the next block is a quantifier for the current block.
         if (i + 1 < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
             quantifierToRender = nodes[i + 1];
         }
-        
+
         nodeList.push(
           <BlockNode
             key={block.id}
@@ -794,21 +718,20 @@ const RegexVisionWorkspace: React.FC = () => {
             onDuplicate={handleDuplicateBlock}
             onUngroup={handleUngroupBlock}
             onWrapBlock={handleWrapBlock}
-            onReorder={handleReorderBlock}
             selectedId={selectedBlockId}
             onSelect={setSelectedBlockId}
             parentId={parentId}
-            depth={depth} 
+            depth={depth}
             hoveredId={hoveredBlockId}
             onBlockHover={handleBlockHover}
             renderChildNodes={(childNodes, pId, nextDepth, gInfos) => renderBlockNodes(childNodes, pId, nextDepth, gInfos)}
             groupInfos={groupInfos}
           />
         );
-        
+
         // If we found and used a quantifier, we need to advance the loop index to skip it in the next iteration.
         if (quantifierToRender) {
-            i++; 
+            i++;
         }
     }
     return nodeList;
@@ -837,7 +760,7 @@ const RegexVisionWorkspace: React.FC = () => {
                     <p className="text-sm">Вставьте Regex в поле выше или добавьте блоки вручную.</p>
                     </div>
                 ) : (
-                    <div className="space-y-1 p-1"> 
+                    <div className="space-y-1 p-1">
                       {renderBlockNodes(blocks, null, 0, regexOutputState.groupInfos)}
                     </div>
                 )}
@@ -853,9 +776,9 @@ const RegexVisionWorkspace: React.FC = () => {
     <div className="flex flex-col h-screen bg-background text-foreground">
       <header className="flex items-center gap-4 p-3 border-b bg-card shadow-sm z-10">
           <div className="flex-1">
-              <RegexOutputDisplay 
-                generatedRegex={regexOutputState.regexString} 
-                regexFlags={regexFlags} 
+              <RegexOutputDisplay
+                generatedRegex={regexOutputState.regexString}
+                regexFlags={regexFlags}
                 onFlagsChange={setRegexFlags}
                 onParseRegexString={handleParseRegexString}
                 isParsing={isParsing}
