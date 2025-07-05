@@ -1,5 +1,5 @@
 import regexpTree from 'regexp-tree';
-import type { Block, CharacterClassSettings, LiteralSettings, QuantifierSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, GroupSettings } from './types';
+import type { Block, CharacterClassSettings, LiteralSettings, QuantifierSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, GroupSettings, ConditionalSettings } from './types';
 import { BlockType } from './types';
 import { generateId } from './utils';
 
@@ -10,7 +10,6 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
     const ast = regexpTree.parse(`/${regexString}/u`, { allowGroupNameDuplicates: true });
     
     if (ast.body) {
-      // The root is often an Alternative (sequence of blocks).
       return transformNodeToBlocks(ast.body);
     }
     return [];
@@ -35,48 +34,10 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
 }
 
 // Returns an array of blocks. A simple node returns a single-element array.
-// A quantified node returns [subject, quantifier]. An Alternative returns a flat list of its children's blocks.
+// A repetition node returns [subject, quantifier]. An Alternative returns a flat list of its children's blocks.
 function transformNodeToBlocks(node: any): Block[] {
   if (!node) return [];
 
-  // Handle quantifiers first. They modify the result of their subject expression.
-  if (node.quantifier) {
-    // Call transform on the node *without* the quantifier to get the subject block(s).
-    const subjectBlocks = transformNodeToBlocks({ ...node, quantifier: null });
-    
-    // This should not happen for valid regex, but as a safeguard:
-    if (subjectBlocks.length === 0) return [];
-
-    const q = node.quantifier;
-    let type: QuantifierSettings['type'] = q.kind;
-    let min, max;
-
-    if (q.kind === '{' && q.range) {
-        min = q.range.from;
-        max = q.range.to; // This can be undefined
-        if (min !== undefined && max === undefined) type = '{n,}';
-        else if (min !== undefined && max !== undefined && min === max) type = '{n}';
-        else if (min !== undefined && max !== undefined) type = '{n,m}';
-    }
-
-    const quantifierBlock: Block = {
-        id: generateId(),
-        type: BlockType.QUANTIFIER,
-        settings: {
-            type,
-            min: min,
-            max: max,
-            mode: q.greedy ? 'greedy' : (q.lazy ? 'lazy' : 'possessive'),
-        } as QuantifierSettings,
-        children: [],
-        isExpanded: false,
-    };
-    
-    // The result is the subject's blocks followed by the new quantifier block.
-    return [...subjectBlocks, quantifierBlock];
-  }
-
-  // --- Base cases (without a quantifier) ---
   const newId = generateId();
 
   switch (node.type) {
@@ -85,8 +46,38 @@ function transformNodeToBlocks(node: any): Block[] {
         return node.expressions.flatMap((expr: any) => transformNodeToBlocks(expr));
     }
 
+    case 'Repetition': {
+        const subjectBlocks = transformNodeToBlocks(node.expression);
+        const q = node.quantifier;
+        let type: QuantifierSettings['type'] = q.kind;
+        let min, max;
+
+        if (q.kind === '{') {
+            min = q.from;
+            max = q.to;
+            if (min !== undefined && max === undefined) type = '{n,}';
+            else if (min !== undefined && max !== undefined && min === max) type = '{n}';
+            else if (min !== undefined && max !== undefined) type = '{n,m}';
+        }
+
+        const quantifierBlock: Block = {
+            id: generateId(),
+            type: BlockType.QUANTIFIER,
+            settings: {
+                type,
+                min: min,
+                max: max,
+                mode: q.greedy ? 'greedy' : (q.lazy ? 'lazy' : 'possessive'),
+            } as QuantifierSettings,
+            children: [],
+            isExpanded: false,
+        };
+        
+        return [...subjectBlocks, quantifierBlock];
+    }
+
     case 'Char': {
-        if (node.kind === 'meta') { // For \d, \w, \s, etc.
+        if (node.kind === 'meta' || node.value === '.') { // For \d, \w, \s, ., etc.
             const charClassBlock: Block = {
                 id: newId,
                 type: BlockType.CHARACTER_CLASS,
@@ -104,12 +95,123 @@ function transformNodeToBlocks(node: any): Block[] {
         };
         return [literalBlock];
     }
-    
-    // --- Future cases to be added here ---
+
+    case 'CharacterClass': {
+      const pattern = node.expressions.map((expr: any) => expr.raw || expr.value).join('');
+      const charClassBlock: Block = {
+          id: newId,
+          type: BlockType.CHARACTER_CLASS,
+          settings: { pattern: pattern, negated: node.negative } as CharacterClassSettings,
+          children: [],
+      };
+      return [charClassBlock];
+    }
+
+    case 'Group': {
+      let groupType: GroupSettings['type'] = 'capturing';
+      let name: string | undefined = undefined;
+      if (node.capturing === false) {
+        groupType = 'non-capturing';
+      } else if (typeof node.name === 'string') {
+        groupType = 'named';
+        name = node.name;
+      }
+      
+      const isAlternation = node.expression && node.expression.type === 'Disjunction';
+      const type = isAlternation ? BlockType.ALTERNATION : BlockType.GROUP;
+      
+      const settings = type === BlockType.GROUP ? { type: groupType, name } : {};
+
+      const collectAlternationChildren = (disNode: any): Block[] => {
+          if (disNode.type !== 'Disjunction') return transformNodeToBlocks(disNode);
+          return [
+              ...collectAlternationChildren(disNode.left),
+              ...collectAlternationChildren(disNode.right)
+          ];
+      };
+
+      let children: Block[];
+      if(isAlternation) {
+        children = collectAlternationChildren(node.expression);
+      } else {
+        children = transformNodeToBlocks(node.expression);
+      }
+      
+      const groupBlock: Block = {
+        id: newId,
+        type: type,
+        settings: settings,
+        children: children,
+        isExpanded: true,
+      };
+      
+      return [groupBlock];
+    }
+
+    case 'Disjunction': {
+      // This handles top-level alternations `a|b` not in a group
+      const collectAlternationChildren = (disNode: any): Block[] => {
+          if (disNode.type !== 'Disjunction') {
+            const transformedBlocks = transformNodeToBlocks(disNode);
+            // Wrap sequences in a non-capturing group to keep them together
+            if (transformedBlocks.length > 1) {
+              return [{id: generateId(), type: BlockType.GROUP, settings: {type: 'non-capturing'}, children: transformedBlocks, isExpanded: true}];
+            }
+            return transformedBlocks;
+          }
+          return [
+              ...collectAlternationChildren(disNode.left),
+              ...collectAlternationChildren(disNode.right)
+          ];
+      };
+      const children = collectAlternationChildren(node);
+      const alternationBlock: Block = {
+          id: newId,
+          type: BlockType.ALTERNATION,
+          settings: {},
+          children: children,
+          isExpanded: true,
+      };
+      return [alternationBlock];
+    }
+
+    case 'Assertion': {
+      let blockType: BlockType | null = null;
+      let settings: any = {};
+
+      if (node.kind === 'Lookahead' || node.kind === 'Lookbehind') {
+        blockType = BlockType.LOOKAROUND;
+        let prefix = node.negative ? 'negative' : 'positive';
+        settings.type = `${prefix}-${node.kind.toLowerCase()}`;
+      } else {
+        blockType = BlockType.ANCHOR;
+        settings.type = node.value;
+      }
+
+      if (blockType) {
+        const assertionBlock: Block = {
+          id: newId,
+          type: blockType,
+          settings: settings,
+          children: node.assertion ? transformNodeToBlocks(node.assertion) : [],
+          isExpanded: blockType === BlockType.LOOKAROUND,
+        };
+        return [assertionBlock];
+      }
+      return [];
+    }
+
+    case 'Backreference': {
+       const backrefBlock: Block = {
+          id: newId,
+          type: BlockType.BACKREFERENCE,
+          settings: { ref: node.reference } as BackreferenceSettings,
+          children: [],
+      };
+      return [backrefBlock];
+    }
 
     default:
-        console.warn('Unknown AST node type:', node.type, node);
-        // Fallback for unknown nodes: if they have a raw representation, treat as a raw literal.
         if (node.raw) {
              const fallbackBlock: Block = {
                 id: newId,
