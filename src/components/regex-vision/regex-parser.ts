@@ -15,21 +15,30 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
     return [];
   } catch (error) {
     if (error instanceof Error) {
+      // Provide more specific, user-friendly error messages.
       if (error.message.includes('Unexpected quantifier')) {
-        throw new Error('Синтаксическая ошибка: квантификатор (например, *, +, ?) без элемента для повторения.');
+        throw new Error('Синтаксическая ошибка: квантификатор (например, *, +, ?) оказался в неожиданном месте, ему нечего повторять.');
       }
-       if (error.message.includes('Unmatched left parenthesis')) {
-        throw new Error('Синтаксическая ошибка: незакрытая открывающая скобка `(`.');
+      if (error.message.includes('Unmatched left parenthesis')) {
+        throw new Error('Синтаксическая ошибка: есть незакрытая открывающая скобка `(`.');
       }
       if (error.message.includes('Unmatched right parenthesis')) {
-        throw new Error('Синтаксическая ошибка: лишняя закрывающая скобка `)`.');
+        throw new Error('Синтаксическая ошибка: найдена лишняя закрывающая скобка `)`.');
       }
        if (error.message.includes('Invalid group')) {
         throw new Error('Синтаксическая ошибка: неверная или неполная группа.');
       }
-      throw new Error(`Ошибка синтаксиса: ${error.message}`);
+      if (error.message.includes('Invalid character class')) {
+        throw new Error('Синтаксическая ошибка: неверно сформирован символьный класс (выражение в квадратных скобках `[]`).');
+      }
+      if (error.message.includes('Trailing backslash')) {
+        throw new Error('Синтаксическая ошибка: выражение не может заканчиваться одиночным обратным слэшем `\\`.');
+      }
+      // Fallback for other syntax errors from regexp-tree
+      throw new Error(`Ошибка синтаксиса в выражении. ${error.message}`);
     }
-    throw new Error('Неизвестная ошибка при разборе выражения.');
+    // Fallback for non-Error objects thrown
+    throw new Error('Произошла неизвестная ошибка при разборе выражения.');
   }
 }
 
@@ -87,18 +96,9 @@ function transformNodeToBlocks(node: any): Block[] {
 
     case 'Char': {
         const value = node.value;
-        // A meta character like '.', '\d', '\w', '\s'
+
+        // Meta characters like '.', '\d', '\w', '\s'
         if (node.kind === 'meta') {
-            // This handles escaped characters like '\.' correctly, mapping them to literals.
-            if (value.length > 1 && value.startsWith('\\')) {
-                 const literalBlock: Block = {
-                    id: newId,
-                    type: BlockType.LITERAL,
-                    settings: { text: value.slice(1), isRawRegex: false } as LiteralSettings,
-                    children: [],
-                };
-                return [literalBlock];
-            }
             const charClassBlock: Block = {
                 id: newId,
                 type: BlockType.CHARACTER_CLASS,
@@ -107,7 +107,21 @@ function transformNodeToBlocks(node: any): Block[] {
             };
             return [charClassBlock];
         }
+
+        // Unicode property escapes like \p{L}
+        if (node.kind === 'unicode-property') {
+            const charClassBlock: Block = {
+                id: newId,
+                type: BlockType.CHARACTER_CLASS,
+                // node.raw will be something like `\p{L}`
+                settings: { pattern: node.raw, negated: false } as CharacterClassSettings,
+                children: [],
+            };
+            return [charClassBlock];
+        }
+
         // A simple literal character like 'a', or an escaped one like '\.'
+        // For both, `node.value` is the character itself.
         const literalBlock: Block = {
             id: newId,
             type: BlockType.LITERAL,
