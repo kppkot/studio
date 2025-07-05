@@ -19,7 +19,7 @@ interface BlockNodeProps {
   onDuplicate: (id: string) => void;
   onUngroup: (id: string) => void;
   onWrapBlock: (id: string) => void;
-  onReorder: (draggedId: string, targetId: string, parentId: string | null) => void;
+  onReorder: (draggedId: string, targetId: string, newParentId: string | null) => void;
   selectedId: string | null;
   onSelect: (id: string) => void;
   parentId: string | null;
@@ -96,7 +96,14 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     e.dataTransfer.dropEffect = 'move';
     setIsDraggingOver(true);
 
-    const canThisBlockAcceptChildren = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(block.type);
+    const canThisBlockAcceptChildren = [
+        BlockType.GROUP,
+        BlockType.LOOKAROUND,
+        BlockType.ALTERNATION,
+        BlockType.CONDITIONAL,
+        BlockType.CHARACTER_CLASS, // Added CHARACTER_CLASS as a potential parent
+    ].includes(block.type);
+    
     const draggedId = e.dataTransfer.types.includes('text/plain') ? e.dataTransfer.getData('text/plain') : null;
 
     if (draggedId && draggedId !== block.id && canThisBlockAcceptChildren) {

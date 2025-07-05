@@ -301,7 +301,7 @@ const RegexVisionWorkspace: React.FC = () => {
       }
       const selectedParentId = selectedBlockId ? findParentOfSelected(blocks, selectedBlockId, null) : null;
       
-      if(selectedParentId) {
+      if(selectedParentId && selectedBlockId) {
         setBlocks(prev => {
             const insertSibling = (bs: Block[], sId: string, newB: Block): Block[] => {
                 return bs.flatMap(b => {
@@ -484,103 +484,86 @@ const RegexVisionWorkspace: React.FC = () => {
     return { block: null, parent: null, indexInParent: -1 };
   };
 
-  const handleReorderBlock = useCallback((draggedId: string, dropOnBlockId: string, newParentId: string | null) => {
+  const handleReorderBlock = useCallback((draggedId: string, targetId: string, newParentId: string | null) => {
+    if (draggedId === targetId) return;
+
     setBlocks(prevBlocks => {
-      let draggedBlock: Block | null = null;
-      let draggedQuantifier: Block | null = null;
-
-      // Remove the dragged block (and its quantifier) from the tree first
-      const removeDraggedRecursive = (nodes: Block[], idToRemove: string): Block[] => {
-        const result: Block[] = [];
-        for (let i = 0; i < nodes.length; i++) {
-          const node = nodes[i];
-          if (node.id === idToRemove) {
-            draggedBlock = cloneBlockForState(node);
-            // Check for and remove attached quantifier
-            if (i + 1 < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
-              draggedQuantifier = cloneBlockForState(nodes[i + 1]);
-              i++; // Skip quantifier
+        const blocksCopy = cloneBlockForState({ id: 'root', type: BlockType.GROUP, settings: {}, children: prevBlocks }).children!;
+        
+        let draggedItem: { block: Block; quantifier: Block | null } | null = null;
+        function findAndRemove(nodes: Block[]): Block[] {
+            const result: Block[] = [];
+            for (let i = 0; i < nodes.length; i++) {
+                const node = nodes[i];
+                if (node.id === draggedId) {
+                    draggedItem = { block: cloneBlockForState(node), quantifier: null };
+                    if (i + 1 < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
+                        draggedItem.quantifier = cloneBlockForState(nodes[i + 1]);
+                        i++;
+                    }
+                } else {
+                    if (node.children) {
+                        node.children = findAndRemove(node.children);
+                    }
+                    result.push(node);
+                }
             }
-          } else {
-            if (node.children) {
-              node.children = removeDraggedRecursive(node.children, idToRemove);
-            }
-            result.push(node);
-          }
+            return result;
         }
-        return result;
-      };
+        let treeWithoutDraggedItem = findAndRemove(blocksCopy);
+        
+        if (!draggedItem) return prevBlocks;
 
-      const blocksWithoutDragged = removeDraggedRecursive(cloneBlockForState({ id: 'root', type: BlockType.LITERAL, settings:{text:''}, children: prevBlocks }).children!);
-      
-      if (!draggedBlock) return prevBlocks;
-
-      // Prevent dropping a block into itself or its descendants
-      const isDescendant = (nodes: Block[], idToFind: string): boolean => {
-        for (const node of nodes) {
-          if (node.id === idToFind) return true;
-          if (node.children && isDescendant(node.children, idToFind)) return true;
+        function isDescendant(parent: Block, childId: string): boolean {
+            return parent.id === childId || (parent.children?.some(child => isDescendant(child, childId)) ?? false);
         }
-        return false;
-      };
+        if (isDescendant(draggedItem.block, targetId)) {
+            toast({ title: "Недопустимое действие", description: "Нельзя переместить блок внутрь самого себя.", variant: "destructive" });
+            return prevBlocks;
+        }
 
-      if (draggedBlock.id === dropOnBlockId || (draggedBlock.children && isDescendant(draggedBlock.children, dropOnBlockId))) {
-        toast({ title: "Недопустимое действие", description: "Нельзя переместить блок внутрь самого себя.", variant: "destructive" });
-        return prevBlocks;
-      }
+        const blocksToInsert = [draggedItem.block];
+        if (draggedItem.quantifier) blocksToInsert.push(draggedItem.quantifier);
 
-      const blocksToAdd = [draggedBlock];
-      if (draggedQuantifier) blocksToAdd.push(draggedQuantifier);
+        const isDroppingInside = newParentId === targetId;
 
-      // Insert the dragged block at the new position
-      const insertRecursive = (nodes: Block[]): Block[] => {
-        // Case 1: Drop into a container (newParentId is the container's ID)
-        if (newParentId === dropOnBlockId) {
-          return nodes.map(node => {
-            if (node.id === newParentId) {
-              return { ...node, children: [...(node.children || []), ...blocksToAdd], isExpanded: true };
+        function findAndInsert(nodes: Block[]): Block[] {
+            if (isDroppingInside) {
+                return nodes.map(node => {
+                    if (node.id === targetId) {
+                        return { ...node, children: [...(node.children || []), ...blocksToInsert], isExpanded: true };
+                    }
+                    if (node.children) {
+                        return { ...node, children: findAndInsert(node.children) };
+                    }
+                    return node;
+                });
             }
-            if (node.children) {
-              return { ...node, children: insertRecursive(node.children) };
-            }
-            return node;
-          });
+
+            return nodes.flatMap(node => {
+                if (node.id === targetId) {
+                    return [node, ...blocksToInsert];
+                }
+                if (node.children) {
+                    return [{ ...node, children: findAndInsert(node.children) }];
+                }
+                return [node];
+            });
         }
         
-        // Case 2: Drop as a sibling
-        const newNodes: Block[] = [];
-        for (const node of nodes) {
-            if (node.id === dropOnBlockId) {
-                const parentInfo = findBlockAndParentRecursive(prevBlocks, dropOnBlockId);
-                if ((parentInfo.parent?.id ?? null) === newParentId) {
-                    newNodes.push(node, ...blocksToAdd);
-                } else {
-                    newNodes.push(node);
-                }
-            } else if (node.children) {
-                newNodes.push({ ...node, children: insertRecursive(node.children) });
-            } else {
-                newNodes.push(node);
-            }
+        if (newParentId === null && !isDroppingInside) {
+             const targetIndex = treeWithoutDraggedItem.findIndex(b => b.id === targetId);
+             if (targetIndex !== -1) {
+                 treeWithoutDraggedItem.splice(targetIndex + 1, 0, ...blocksToInsert);
+             }
+        } else {
+            treeWithoutDraggedItem = findAndInsert(treeWithoutDraggedItem);
         }
-        return newNodes;
-      };
-      
-      let finalBlocks: Block[]
-      if (newParentId === null) { // Dropping in root
-          const dropIndex = blocksWithoutDragged.findIndex(b => b.id === dropOnBlockId);
-          if (dropIndex > -1) {
-              blocksWithoutDragged.splice(dropIndex + 1, 0, ...blocksToAdd);
-          }
-          finalBlocks = blocksWithoutDragged;
-      } else {
-          finalBlocks = insertRecursive(blocksWithoutDragged);
-      }
-
-      toast({ title: "Блок перемещен", description: "Порядок блоков обновлен." });
-      return finalBlocks;
+        
+        toast({ title: "Блок перемещен" });
+        return treeWithoutDraggedItem;
     });
-  }, [toast]);
+}, [toast]);
 
   const handleOpenPaletteFor = (pId: string | null, ctxId: string | null = null) => {
     setParentIdForNewBlock(pId);
@@ -1092,5 +1075,3 @@ const RegexVisionWorkspace: React.FC = () => {
 };
 
 export default RegexVisionWorkspace;
-
-    
