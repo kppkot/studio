@@ -172,39 +172,24 @@ function transformNodeToBlocks(node: any): Block[] {
     }
 
     case 'Disjunction': {
-      // This handles alternations. If the alternation is inside a group,
-      // the parent 'Group' case will handle the grouping, and this will handle the `|`.
-      // The structure (a|b) should be Group -> Alternation -> [Literal a, Literal b]
-      // But the AST for `a|b` is Disjunction(a,b). We need to create an Alternation block.
-      // And the structure for `(a|b)` is Group(Disjunction(a,b)).
-      // The `Group` case above will call transformNodeToBlocks on Disjunction.
-      
       const leftBlocks = transformNodeToBlocks(node.left);
       const rightBlocks = transformNodeToBlocks(node.right);
       
-      // If the right side is also an alternation, flatten it.
-      if (rightBlocks.length === 1 && rightBlocks[0].type === BlockType.ALTERNATION) {
-          const alternationBlock: Block = {
-              id: newId,
-              type: BlockType.ALTERNATION,
-              settings: {},
-              children: [
-                  (leftBlocks.length > 1 ? {id: generateId(), type: BlockType.GROUP, settings: {type: 'non-capturing'}, children: leftBlocks, isExpanded: true} : leftBlocks[0]),
-                  ...rightBlocks[0].children,
-              ],
-              isExpanded: true,
-          };
-          return [alternationBlock];
-      }
+      const leftNode = leftBlocks.length > 1
+          ? { id: generateId(), type: BlockType.GROUP, settings: { type: 'non-capturing' as const }, children: leftBlocks, isExpanded: true }
+          : leftBlocks[0];
+
+      // If right side was already an alternation, its children are the alternatives to be flattened.
+      // Otherwise, it's a single alternative that might need grouping.
+      const rightAlternatives = (rightBlocks.length === 1 && rightBlocks[0].type === BlockType.ALTERNATION)
+          ? rightBlocks[0].children
+          : [ rightBlocks.length > 1 ? {id: generateId(), type: BlockType.GROUP, settings: {type: 'non-capturing' as const}, children: rightBlocks, isExpanded: true } : rightBlocks[0] ];
 
       const alternationBlock: Block = {
           id: newId,
           type: BlockType.ALTERNATION,
           settings: {},
-          children: [
-              (leftBlocks.length > 1 ? {id: generateId(), type: BlockType.GROUP, settings: {type: 'non-capturing'}, children: leftBlocks, isExpanded: true} : leftBlocks[0]),
-              (rightBlocks.length > 1 ? {id: generateId(), type: BlockType.GROUP, settings: {type: 'non-capturing'}, children: rightBlocks, isExpanded: true} : rightBlocks[0])
-          ].filter(Boolean), // Filter out undefined/null if a side was empty
+          children: [leftNode, ...rightAlternatives].filter(Boolean),
           isExpanded: true,
       };
       return [alternationBlock];
