@@ -1,4 +1,3 @@
-
 import type { Block, CharacterClassSettings, ConditionalSettings, GroupSettings, LiteralSettings, LookaroundSettings, QuantifierSettings, AnchorSettings, BackreferenceSettings, GroupInfo } from './types';
 import { BlockType } from './types';
 
@@ -59,20 +58,35 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): { regexString:
            return `[${ccSettings.negated ? '^' : ''}${content}]`;
         }
         return `[${ccSettings.negated ? '^' : ''}${ccSettings.pattern || ''}]`;
-      case BlockType.QUANTIFIER:
+      case BlockType.QUANTIFIER: {
         const qSettings = settings as QuantifierSettings;
-        let qStr = qSettings.type || '*';
-        if (qStr.includes('{')) {
-          const min = qSettings.min ?? 0;
-          const max = qSettings.max;
-          if (qStr === '{n}') qStr = `{${min}}`;
-          else if (qStr === '{n,}') qStr = `{${min},}`;
-          else if (qStr === '{n,m}') qStr = `{${min},${max ?? ''}}`;
+        let qStr = '';
+
+        switch (qSettings.type) {
+            case '*':
+            case '+':
+            case '?':
+                qStr = qSettings.type;
+                break;
+            case '{n}':
+                qStr = `{${qSettings.min ?? 0}}`;
+                break;
+            case '{n,}':
+                qStr = `{${qSettings.min ?? 0},}`;
+                break;
+            case '{n,m}':
+                qStr = `{${qSettings.min ?? 0},${qSettings.max === null ? '' : qSettings.max}}`;
+                break;
+            default:
+                // This case should not be reached with the new robust parser.
+                return ''; 
         }
+
         let mode = '';
         if (qSettings.mode === 'lazy') mode = '?';
         else if (qSettings.mode === 'possessive') mode = '+';
         return qStr + mode;
+      }
       case BlockType.GROUP:
         const gSettings = settings as GroupSettings;
         let groupOpen = "(";

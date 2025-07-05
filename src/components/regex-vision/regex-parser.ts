@@ -49,15 +49,25 @@ function transformNodeToBlocks(node: any): Block[] {
     case 'Repetition': {
         const subjectBlocks = transformNodeToBlocks(node.expression);
         const q = node.quantifier;
-        let type: QuantifierSettings['type'] = q.kind;
+        let type: QuantifierSettings['type'] | null = null;
         let min, max;
 
-        if (q.kind === '{') {
-            min = q.from;
-            max = q.to;
-            if (min !== undefined && max === undefined) type = '{n,}';
-            else if (min !== undefined && max !== undefined && min === max) type = '{n}';
-            else if (min !== undefined && max !== undefined) type = '{n,m}';
+        switch (q.kind) {
+            case '*': type = '*'; break;
+            case '+': type = '+'; break;
+            case '?': type = '?'; break;
+            case '{':
+                min = q.from;
+                max = q.to;
+                if (min !== undefined && max === undefined) type = '{n,}';
+                else if (min !== undefined && max !== undefined && min === max) type = '{n}';
+                else if (min !== undefined && max !== undefined) type = '{n,m}';
+                break;
+        }
+
+        if (type === null) {
+            // If quantifier is unknown, don't create a block for it, return only the subject.
+            return subjectBlocks;
         }
 
         const quantifierBlock: Block = {
