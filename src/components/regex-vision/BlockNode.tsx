@@ -1,6 +1,6 @@
 
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { Block, GroupInfo, QuantifierSettings, GroupSettings, CharacterClassSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, LiteralSettings } from './types';
 import { BlockType } from './types';
 import { ChevronDown, ChevronRight, GripVertical, Repeat, Trash2, PlusCircle } from 'lucide-react';
@@ -67,8 +67,10 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
   const isBlockSelected = selectedId === block.id;
   const isQuantifierSelected = quantifierToRender && selectedId === quantifierToRender.id;
-  const isQuantifierHovered = quantifierToRender && hoveredId === quantifierToRender.id;
-  const isBlockHovered = (hoveredId === block.id || isQuantifierHovered) && !isBlockSelected && !isQuantifierSelected;
+  
+  const isSelected = useMemo(() => isBlockSelected || isQuantifierSelected, [isBlockSelected, isQuantifierSelected]);
+
+  const isBlockHovered = (hoveredId === block.id) && !isSelected;
   
   const handleToggleExpand = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -279,11 +281,11 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         onMouseEnter={() => onBlockHover(quantifierToRender!.id)}
         className={cn(
           "absolute top-1/2 -translate-y-1/2 right-14 z-10 cursor-pointer",
-          "bg-orange-100 text-orange-800 border-orange-300 border",
-          "dark:bg-orange-900/50 dark:text-orange-300 dark:border-orange-700/50",
+          "bg-sky-100 text-sky-800 border-sky-300 border",
+          "dark:bg-sky-900/50 dark:text-sky-300 dark:border-sky-700/50",
           "px-2 py-1 rounded-full text-xs font-semibold shadow-sm hover:shadow-md transition-all flex items-center gap-1.5",
-          isQuantifierHovered && "ring-2 ring-accent bg-accent/20",
-          isQuantifierSelected && "ring-2 ring-primary bg-primary/20"
+          (hoveredId === quantifierToRender.id) && "ring-2 ring-accent bg-accent/20 brightness-110",
+          (selectedId === quantifierToRender.id) && "ring-2 ring-primary bg-primary/20 brightness-110"
         )}
         title={`${modeMap[qSettings.mode]} квантификатор`}
       >
@@ -316,7 +318,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             "block-main-content border rounded-md relative transition-all",
             "bg-card",
             isBlockHovered && "bg-accent/10 ring-1 ring-accent",
-            (isBlockSelected || isQuantifierSelected) && "ring-2 ring-primary shadow-lg bg-primary/10"
+            isSelected && "ring-2 ring-primary shadow-lg bg-primary/10"
           )}
         >
           <div className="absolute top-1 right-1 flex items-center gap-0.5 z-20">
