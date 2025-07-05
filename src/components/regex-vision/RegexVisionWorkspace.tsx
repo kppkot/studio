@@ -1,7 +1,7 @@
 
 "use client";
 import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
-import type { Block, RegexMatch, GroupInfo, SavedPattern, CharacterClassSettings, RegexStringPart } from './types'; 
+import type { Block, RegexMatch, GroupInfo, CharacterClassSettings, RegexStringPart } from './types'; 
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
 import { generateId, generateRegexStringAndGroupInfo, cloneBlockForState, breakdownPatternIntoChildren, reconstructPatternFromChildren } from './utils'; 
@@ -16,7 +16,6 @@ import TestArea from './TestArea';
 import { Button } from '@/components/ui/button';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   DropdownMenu,
@@ -26,14 +25,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Gauge, Library, Menu, Puzzle, Share2, DownloadCloud, UploadCloud, Loader2 } from 'lucide-react'; 
+import { Layers, Edit3, Code2, Plus, FoldVertical, UnfoldVertical, Menu, Puzzle, Share2, DownloadCloud, UploadCloud, Loader2 } from 'lucide-react'; 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 
-// Lazy load tab panels to improve initial load time
+// Lazy load panels to improve initial load time
 const CodeGenerationPanel = lazy(() => import('./CodeGenerationPanel'));
-const DebugView = lazy(() => import('./DebugView'));
-const PerformanceAnalyzerView = lazy(() => import('./PerformanceAnalyzerView'));
-const PatternLibraryView = lazy(() => import('./PatternLibraryView'));
 
 
 const RegexVisionWorkspace: React.FC = () => {
@@ -45,6 +42,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const [isPaletteVisible, setIsPaletteVisible] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const [isCodeGenOpen, setIsCodeGenOpen] = useState(false);
 
   const [testText, setTestText] = useState<string>('Быстрая коричневая лиса прыгает через ленивую собаку.');
   const [regexFlags, setRegexFlags] = useState<string>('gu');
@@ -57,8 +55,7 @@ const RegexVisionWorkspace: React.FC = () => {
   useEffect(() => {
     // This effect runs once on the client after hydration, indicating that
     // the component has mounted and is ready for interaction.
-    // The previous timeout "hack" is removed in favor of code-splitting optimizations.
-    setIsReady(true);
+    setTimeout(() => setIsReady(true), 50);
   }, []);
 
   useEffect(() => {
@@ -713,14 +710,6 @@ const RegexVisionWorkspace: React.FC = () => {
     };
   }, [selectedBlockId, blocks, handleDeleteBlock, handleExpandAll, handleCollapseAll, handleUpdateBlock]);
 
-  const handleApplySavedPattern = (pattern: SavedPattern) => {
-    setRegexFlags(pattern.flags);
-    setTestText(pattern.testString || '');
-    setSelectedBlockId(null); 
-    setHoveredBlockId(null);
-    handleParseRegexString(pattern.regexString);
-  };
-
   const handleParseRegexString = useCallback((regexString: string) => {
     if (!regexString) {
       setBlocks([]);
@@ -808,6 +797,9 @@ const RegexVisionWorkspace: React.FC = () => {
                         <Edit3 size={18} className="text-primary"/> Дерево выражения
                       </CardTitle>
                       <div className="flex items-center gap-1">
+                        <Button variant="outline" size="iconSm" onClick={() => setIsCodeGenOpen(true)} title="Сгенерировать код">
+                          <Code2 size={14} />
+                        </Button>
                         <Button variant="outline" size="iconSm" onClick={handleExpandAll} title="Развернуть всё (Ctrl+Shift+Вниз)">
                           <UnfoldVertical size={14} />
                         </Button>
@@ -901,15 +893,7 @@ const RegexVisionWorkspace: React.FC = () => {
                     isReady={isReady}
                 />
               </div>
-              <Tabs defaultValue="testing" className="flex-1 flex flex-col min-h-0">
-                <TabsList className="grid w-full grid-cols-5">
-                  <TabsTrigger value="testing"><PlayCircle size={16} className="mr-1.5"/>Тестирование</TabsTrigger>
-                  <TabsTrigger value="codegen"><Code2 size={16} className="mr-1.5"/>Генерация кода</TabsTrigger>
-                  <TabsTrigger value="debug"><Bug size={16} className="mr-1.5"/>Отладка</TabsTrigger>
-                  <TabsTrigger value="performance"><Gauge size={16} className="mr-1.5"/>Производительность</TabsTrigger>
-                  <TabsTrigger value="library"><Library size={16} className="mr-1.5"/>Библиотека</TabsTrigger>
-                </TabsList>
-                <TabsContent value="testing" className="mt-2 flex-1 overflow-y-auto p-0.5">
+              <div className="flex-1 min-h-0">
                   <TestArea
                     testText={testText}
                     onTestTextChange={setTestText}
@@ -917,36 +901,23 @@ const RegexVisionWorkspace: React.FC = () => {
                     generatedRegex={regexOutput.regexString}
                     highlightedGroupIndex={highlightedGroupIndex}
                   />
-                </TabsContent>
-                <TabsContent value="codegen" className="mt-2 flex-1 overflow-y-auto p-0.5">
-                   <Suspense fallback={<div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Загрузка...</div>}>
-                      <CodeGenerationPanel generatedRegex={regexOutput.regexString} regexFlags={regexFlags} testText={testText} />
-                   </Suspense>
-                </TabsContent>
-                <TabsContent value="debug" className="mt-2 flex-1 overflow-y-auto p-0.5">
-                   <Suspense fallback={<div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Загрузка...</div>}>
-                    <DebugView />
-                   </Suspense>
-                </TabsContent>
-                <TabsContent value="performance" className="mt-2 flex-1 overflow-y-auto p-0.5">
-                   <Suspense fallback={<div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Загрузка...</div>}>
-                    <PerformanceAnalyzerView regexString={regexOutput.regexString} />
-                   </Suspense>
-                </TabsContent>
-                <TabsContent value="library" className="mt-2 flex-1 overflow-y-auto p-0.5">
-                   <Suspense fallback={<div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Загрузка...</div>}>
-                    <PatternLibraryView
-                      currentRegexString={regexOutput.regexString}
-                      currentFlags={regexFlags}
-                      currentTestString={testText}
-                      onApplyPattern={handleApplySavedPattern}
-                    />
-                   </Suspense>
-                </TabsContent>
-              </Tabs>
+              </div>
             </div>
         </ResizablePanel>
       </ResizablePanelGroup>
+
+      <Sheet open={isCodeGenOpen} onOpenChange={setIsCodeGenOpen}>
+        <SheetContent className="w-[600px] sm:max-w-2xl">
+            <SheetHeader>
+                <SheetTitle className="flex items-center gap-2"><Code2 size={20}/> Генерация кода</SheetTitle>
+            </SheetHeader>
+            <div className="py-4 h-[calc(100%-4rem)]">
+                <Suspense fallback={<div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Загрузка...</div>}>
+                    <CodeGenerationPanel generatedRegex={regexOutput.regexString} regexFlags={regexFlags} testText={testText} />
+                </Suspense>
+            </div>
+        </SheetContent>
+    </Sheet>
 
       <BlockPalette
         onAddBlock={handleAddBlock}
