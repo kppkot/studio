@@ -167,18 +167,10 @@ function transformNodeToBlocks(node: any): Block[] {
         isExpanded: true,
       };
       
-      if (children.length === 1 && children[0].type === BlockType.ALTERNATION) {
-        const alternationBlock = children[0];
-        groupBlock.children = alternationBlock.children;
-        groupBlock.type = BlockType.ALTERNATION; // Promote group to alternation
-        return [groupBlock];
-      }
-
       return [groupBlock];
     }
 
     case 'Disjunction': {
-        // Recursively collect all parts of the disjunction.
         const collectAlternatives = (n: any): any[] => {
             if (n && n.type === 'Disjunction') {
                 return [...collectAlternatives(n.left), ...collectAlternatives(n.right)];
@@ -188,12 +180,9 @@ function transformNodeToBlocks(node: any): Block[] {
         
         const alternativesAstNodes = collectAlternatives(node);
         
-        // Transform each alternative AST node into our block structure.
         const alternativeBlocks = alternativesAstNodes.map(altNode => {
             if (!altNode) return null;
             const blocks = transformNodeToBlocks(altNode);
-            // If an alternative consists of multiple blocks (e.g., `ab` in `ab|c`),
-            // wrap them in a non-capturing group to preserve precedence.
             if (blocks.length > 1) {
                 return { 
                     id: generateId(), 
@@ -204,7 +193,7 @@ function transformNodeToBlocks(node: any): Block[] {
                 };
             }
             return blocks.length === 1 ? blocks[0] : null;
-        }).filter(Boolean); // Filter out any nulls from empty alternatives
+        }).filter(Boolean);
 
         const alternationBlock: Block = {
             id: newId,
@@ -228,12 +217,14 @@ function transformNodeToBlocks(node: any): Block[] {
       } else {
         blockType = BlockType.ANCHOR;
         switch(node.kind) {
-            case 'Start': // Handle \A and ^ in non-multiline mode
-            case 'StartOfLine': // Handle ^ in multiline mode
+            case '^':
+            case 'Start':
+            case 'StartOfLine':
                 settings.type = '^';
                 break;
-            case 'End': // Handle \Z, \z and $ in non-multiline mode
-            case 'EndOfLine': // Handle $ in multiline mode
+            case '$':
+            case 'End':
+            case 'EndOfLine':
                 settings.type = '$';
                 break;
             case 'WordBoundary':
