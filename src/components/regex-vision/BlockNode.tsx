@@ -244,7 +244,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         onMouseEnter={() => onBlockHover(quantifierToRender!.id)}
         onMouseLeave={() => onBlockHover(null)}
         className={cn(
-          "absolute top-1/2 -translate-y-1/2 right-14 z-10 cursor-pointer",
+          "absolute top-1/2 -translate-y-1/2 right-20 z-10 cursor-pointer",
           "bg-sky-100 text-sky-800 border-sky-300 border",
           "dark:bg-sky-900/50 dark:text-sky-300 dark:border-sky-700/50",
           "px-2.5 py-1.5 rounded-full text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2",
@@ -295,6 +295,11 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           )}
         >
           <div className="absolute top-1 right-1 flex items-center gap-0.5 z-20">
+              {isContainerBlock && (
+                <Button variant="ghost" size="iconSm" onClick={handleToggleExpand} className="h-6 w-6 text-muted-foreground hover:text-primary">
+                  {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                </Button>
+              )}
               <Button
                   variant="ghost"
                   size="iconSm"
@@ -323,14 +328,8 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
           <div className="p-2 flex items-start gap-3">
             <GripVertical className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1 cursor-grab" />
-
-            {isContainerBlock ? (
-              <Button variant="ghost" size="iconSm" onClick={handleToggleExpand} className="flex-shrink-0 mt-0.5">
-                {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-              </Button>
-            ) : (
-                <div className="w-7 h-7 flex-shrink-0" />
-            )}
+            
+            <div className="w-7 h-7 flex-shrink-0" />
 
              <div className="flex-1 min-w-0 pr-4">
                 <div className="flex items-center gap-2">
