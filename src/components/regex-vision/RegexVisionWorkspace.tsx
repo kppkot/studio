@@ -250,23 +250,30 @@ const RegexVisionWorkspace: React.FC = () => {
   }, [toast, blocks, selectedBlockId, contextualBlockId]);
 
   const handleUpdateBlock = useCallback((id: string, updatedBlockData: Partial<Block>) => {
-      if (updatedBlockData.settings && 'pattern' in updatedBlockData.settings) {
-          const blockToUpdate = findBlockRecursive(blocks, id);
-          if (blockToUpdate && blockToUpdate.type === BlockType.CHARACTER_CLASS) {
-              const newPattern = (updatedBlockData.settings as CharacterClassSettings).pattern;
-              const newChildren = breakdownPatternIntoChildren(newPattern);
-              
-              const reparsedBlock: Partial<Block> = { 
-                  settings: { ...(blockToUpdate.settings as CharacterClassSettings), pattern: '' },
-                  children: newChildren,
-                  isExpanded: newChildren.length > 0 ? true : undefined,
-              };
-              setBlocks(prev => updateBlockRecursive(prev, id, reparsedBlock));
-              return;
-          }
-      }
+    // Check if we are updating a pattern of a character class
+    if (updatedBlockData.settings && 'pattern' in updatedBlockData.settings) {
+        const blockToUpdate = findBlockRecursive(blocks, id);
 
-      setBlocks(prev => updateBlockRecursive(prev, id, updatedBlockData));
+        if (blockToUpdate && blockToUpdate.type === BlockType.CHARACTER_CLASS) {
+            const newPattern = (updatedBlockData.settings as CharacterClassSettings).pattern;
+
+            // Only re-parse into children IF the block is already a composite container.
+            if (blockToUpdate.children && blockToUpdate.children.length > 0) {
+                const newChildren = breakdownPatternIntoChildren(newPattern);
+                const reparsedBlock: Partial<Block> = {
+                    settings: { ...(blockToUpdate.settings as CharacterClassSettings), pattern: '' }, // Clear pattern
+                    children: newChildren,
+                    isExpanded: true,
+                };
+                setBlocks(prev => updateBlockRecursive(prev, id, reparsedBlock));
+                return;
+            }
+            // If it's a simple block (no children), fall through to default update logic.
+        }
+    }
+
+    // Default update logic for all other cases
+    setBlocks(prev => updateBlockRecursive(prev, id, updatedBlockData));
   }, [blocks]);
 
 
