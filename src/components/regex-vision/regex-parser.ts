@@ -156,52 +156,61 @@ function transformNodeToBlocks(node: any): Block[] {
         name = node.name;
       }
       
+      const expression = node.expression || { type: 'Alternative', expressions: [] };
+      const children = transformNodeToBlocks(expression);
+      
       const groupBlock: Block = {
         id: newId,
         type: BlockType.GROUP,
         settings: { type: groupType, name } as GroupSettings,
-        children: transformNodeToBlocks(node.expression),
+        children: children,
         isExpanded: true,
       };
       
+      if (children.length === 1 && children[0].type === BlockType.ALTERNATION) {
+        const alternationBlock = children[0];
+        groupBlock.children = alternationBlock.children;
+        groupBlock.type = BlockType.ALTERNATION; // Promote group to alternation
+        return [groupBlock];
+      }
+
       return [groupBlock];
     }
 
     case 'Disjunction': {
-        // This is for `|` operator.
-        // `a|b|c` is parsed as a nested structure: Disjunction(a, Disjunction(b, c)).
-        // We need to traverse this structure to flatten it into one ALTERNATION block with multiple children.
-        const alternatives: Block[] = [];
-        let currentNode: any = node;
-
-        while (currentNode && currentNode.type === 'Disjunction') {
-            // The `left` side of a disjunction is always a complete alternative.
-            // It might be a complex expression (like `ab` or `(ab)`) which resolves to multiple blocks.
-            // If so, we wrap it in a non-capturing group to keep it together as one alternative.
-            const leftBlocks = transformNodeToBlocks(currentNode.left);
-            if (leftBlocks.length > 1) {
-                alternatives.push({ id: generateId(), type: BlockType.GROUP, settings: { type: 'non-capturing' } as GroupSettings, children: leftBlocks, isExpanded: true });
-            } else if (leftBlocks.length === 1) {
-                alternatives.push(leftBlocks[0]);
+        // Recursively collect all parts of the disjunction.
+        const collectAlternatives = (n: any): any[] => {
+            if (n && n.type === 'Disjunction') {
+                return [...collectAlternatives(n.left), ...collectAlternatives(n.right)];
             }
-            currentNode = currentNode.right;
-        }
-
-        // The final node in the chain (the rightmost part of the original regex)
-        if (currentNode) {
-            const rightBlocks = transformNodeToBlocks(currentNode);
-            if (rightBlocks.length > 1) {
-                alternatives.push({ id: generateId(), type: BlockType.GROUP, settings: { type: 'non-capturing' } as GroupSettings, children: rightBlocks, isExpanded: true });
-            } else if (rightBlocks.length === 1) {
-                alternatives.push(rightBlocks[0]);
+            return [n];
+        };
+        
+        const alternativesAstNodes = collectAlternatives(node);
+        
+        // Transform each alternative AST node into our block structure.
+        const alternativeBlocks = alternativesAstNodes.map(altNode => {
+            if (!altNode) return null;
+            const blocks = transformNodeToBlocks(altNode);
+            // If an alternative consists of multiple blocks (e.g., `ab` in `ab|c`),
+            // wrap them in a non-capturing group to preserve precedence.
+            if (blocks.length > 1) {
+                return { 
+                    id: generateId(), 
+                    type: BlockType.GROUP, 
+                    settings: { type: 'non-capturing' } as GroupSettings, 
+                    children: blocks, 
+                    isExpanded: true 
+                };
             }
-        }
+            return blocks.length === 1 ? blocks[0] : null;
+        }).filter(Boolean); // Filter out any nulls from empty alternatives
 
         const alternationBlock: Block = {
             id: newId,
             type: BlockType.ALTERNATION,
             settings: {},
-            children: alternatives.filter(Boolean),
+            children: alternativeBlocks as Block[],
             isExpanded: true,
         };
         
