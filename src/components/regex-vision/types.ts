@@ -71,7 +71,7 @@ export interface Block {
   type: BlockType;
   settings: BlockSettings;
   children: Block[];
-  isExpanded?: boolean; // Added to control expansion state from parent
+  isExpanded?: boolean;
 }
 
 export interface BlockConfig {

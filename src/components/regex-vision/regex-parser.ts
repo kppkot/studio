@@ -159,8 +159,6 @@ function transformNodeToBlocks(node: any): Block[] {
       // A Group node from the AST must always be represented as a GROUP block
       // to preserve the parentheses and group type (capturing, etc.).
       // The content of the group (node.expression) is transformed into child blocks.
-      // If the content is an alternation (Disjunction), the recursive call will
-      // correctly create an ALTERNATION block inside this GROUP block.
       
       const groupBlock: Block = {
         id: newId,
@@ -174,27 +172,39 @@ function transformNodeToBlocks(node: any): Block[] {
     }
 
     case 'Disjunction': {
-      // This handles top-level alternations `a|b` not in a group
-      const collectAlternationChildren = (disNode: any): Block[] => {
-          if (disNode.type !== 'Disjunction') {
-            const transformedBlocks = transformNodeToBlocks(disNode);
-            // Wrap sequences in a non-capturing group to keep them together
-            if (transformedBlocks.length > 1) {
-              return [{id: generateId(), type: BlockType.GROUP, settings: {type: 'non-capturing'}, children: transformedBlocks, isExpanded: true}];
-            }
-            return transformedBlocks;
-          }
-          return [
-              ...collectAlternationChildren(disNode.left),
-              ...collectAlternationChildren(disNode.right)
-          ];
-      };
-      const children = collectAlternationChildren(node);
+      // This handles alternations. If the alternation is inside a group,
+      // the parent 'Group' case will handle the grouping, and this will handle the `|`.
+      // The structure (a|b) should be Group -> Alternation -> [Literal a, Literal b]
+      // But the AST for `a|b` is Disjunction(a,b). We need to create an Alternation block.
+      // And the structure for `(a|b)` is Group(Disjunction(a,b)).
+      // The `Group` case above will call transformNodeToBlocks on Disjunction.
+      
+      const leftBlocks = transformNodeToBlocks(node.left);
+      const rightBlocks = transformNodeToBlocks(node.right);
+      
+      // If the right side is also an alternation, flatten it.
+      if (rightBlocks.length === 1 && rightBlocks[0].type === BlockType.ALTERNATION) {
+          const alternationBlock: Block = {
+              id: newId,
+              type: BlockType.ALTERNATION,
+              settings: {},
+              children: [
+                  (leftBlocks.length > 1 ? {id: generateId(), type: BlockType.GROUP, settings: {type: 'non-capturing'}, children: leftBlocks, isExpanded: true} : leftBlocks[0]),
+                  ...rightBlocks[0].children,
+              ],
+              isExpanded: true,
+          };
+          return [alternationBlock];
+      }
+
       const alternationBlock: Block = {
           id: newId,
           type: BlockType.ALTERNATION,
           settings: {},
-          children: children,
+          children: [
+              (leftBlocks.length > 1 ? {id: generateId(), type: BlockType.GROUP, settings: {type: 'non-capturing'}, children: leftBlocks, isExpanded: true} : leftBlocks[0]),
+              (rightBlocks.length > 1 ? {id: generateId(), type: BlockType.GROUP, settings: {type: 'non-capturing'}, children: rightBlocks, isExpanded: true} : rightBlocks[0])
+          ].filter(Boolean), // Filter out undefined/null if a side was empty
           isExpanded: true,
       };
       return [alternationBlock];
