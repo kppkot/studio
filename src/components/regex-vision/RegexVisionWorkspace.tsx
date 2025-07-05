@@ -48,8 +48,8 @@ const RegexVisionWorkspace: React.FC = () => {
   const [isReady, setIsReady] = useState(false);
   const [isCodeGenOpen, setIsCodeGenOpen] = useState(false);
 
-  const [testText, setTestText] = useState<string>('Pass123!\nweak\n12345678');
-  const [regexFlags, setRegexFlags] = useState<string>('gmu');
+  const [testText, setTestText] = useState<string>('');
+  const [regexFlags, setRegexFlags] = useState<string>('gu');
   const [matches, setMatches] = useState<RegexMatch[]>([]);
   const [regexError, setRegexError] = useState<string | null>(null);
   const [regexOutputState, setRegexOutputState] = useState<{
@@ -606,12 +606,17 @@ const RegexVisionWorkspace: React.FC = () => {
 
   // Memoize the highlighted group index to prevent re-calculation on every render.
   const highlightedGroupIndex = React.useMemo(() => {
-    if (selectedBlock && (selectedBlock.type === BlockType.GROUP)) {
-      const groupInfo = regexOutputState.groupInfos.find(gi => gi.blockId === selectedBlock.id);
+    if (selectedBlock && (selectedBlock.type === BlockType.GROUP || selectedBlock.type === BlockType.ALTERNATION)) {
+        let blockToCheck = selectedBlock;
+        if (selectedBlock.type === BlockType.ALTERNATION) {
+            const parent = findParentRecursive(blocks, selectedBlock.id);
+            if(parent) blockToCheck = parent;
+        }
+      const groupInfo = regexOutputState.groupInfos.find(gi => gi.blockId === blockToCheck.id);
       return groupInfo ? groupInfo.groupIndex : -1;
     }
     return -1;
-  }, [selectedBlock, regexOutputState.groupInfos]);
+  }, [selectedBlock, blocks, regexOutputState.groupInfos]);
 
 
   const handleShare = () => {
@@ -767,10 +772,19 @@ const RegexVisionWorkspace: React.FC = () => {
   const getIdsToHighlight = (id: string | null): string[] => {
       if (!id) return [];
       const block = findBlockRecursive(blocks, id);
-      if (block?.type === BlockType.ALTERNATION) {
+      if (!block) return [id];
+
+      // If an alternation is selected, also highlight its parent group
+      if (block.type === BlockType.ALTERNATION) {
           const parent = findParentRecursive(blocks, id);
           if (parent) return [id, parent.id];
       }
+      
+      // If a group is selected, also highlight its alternation child
+      if (block.type === BlockType.GROUP && block.children?.length === 1 && block.children[0].type === BlockType.ALTERNATION) {
+          return [id, block.children[0].id];
+      }
+      
       return [id];
   }
 
