@@ -141,7 +141,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         } else {
           details = 'Точное совпадение';
         }
-        regexFragment = litSettings.isRawRegex ? litSettings.text : escapeForDisplay(litSettings.text || '');
+        regexFragment = litSettings.isRawRegex ? litSettings.text || '' : escapeForDisplay(litSettings.text || '');
         if (!regexFragment) {
             details = 'Пустой литерал. Введите текст.';
         }
@@ -150,24 +150,27 @@ const BlockNode: React.FC<BlockNodeProps> = ({
       case BlockType.CHARACTER_CLASS:
         const ccSettings = settings as CharacterClassSettings;
         const pattern = block.children && block.children.length > 0 ? reconstructPatternFromChildren(block.children) : ccSettings.pattern;
-        title = 'Символьный класс';
         
-        const shorthands: {[key: string]: string} = {
-            '\\d': 'Любая цифра (0-9)',
-            '\\D': 'Не цифра',
-            '\\w': 'Буква/цифра/_',
-            '\\W': 'Не буква/цифра/_',
-            '\\s': 'Пробельный символ',
-            '\\S': 'Не пробельный символ',
-            '.': 'Любой символ',
+        const shorthandInfo: { [key: string]: { title: string; details: string } } = {
+          '\\d': { title: 'Любая цифра', details: 'Эквивалент [0-9]' },
+          '\\D': { title: 'Не цифра', details: 'Эквивалент [^0-9]' },
+          '\\w': { title: 'Символ слова', details: 'Буква, цифра или _' },
+          '\\W': { title: 'Не символ слова', details: 'Кроме \\w' },
+          '\\s': { title: 'Пробельный символ', details: 'Пробел, таб, новая строка...' },
+          '\\S': { title: 'Не пробельный символ', details: 'Кроме \\s' },
+          '.': { title: 'Любой символ', details: 'Кроме новой строки' },
         };
 
-        if (shorthands[pattern]) {
-            details = shorthands[pattern];
-        } else if (pattern) {
-            details = ccSettings.negated ? 'Кроме символов в классе' : 'Любой символ из класса';
+        if (shorthandInfo[pattern]) {
+          title = shorthandInfo[pattern].title;
+          details = shorthandInfo[pattern].details;
         } else {
-            details = 'Пустой или составной класс'
+          title = 'Набор символов';
+          if (pattern) {
+            details = ccSettings.negated ? 'Кроме указанных символов' : 'Любой из указанных символов';
+          } else {
+            details = 'Пустой или составной набор';
+          }
         }
         
         const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];

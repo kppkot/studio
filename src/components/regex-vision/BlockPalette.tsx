@@ -34,15 +34,16 @@ interface WizardCategory {
 
 const WIZARD_CATEGORIES: WizardCategory[] = [
   {
-    name: "Простые элементы",
+    name: "Самые нужные",
     icon: <AlignLeft size={18} className="mr-2 text-primary" />,
     actions: [
-      { label: "Конкретный текст", type: BlockType.LITERAL, description: "Найти точное совпадение с введенным текстом." },
-      { label: "Любая цифра (0-9)", type: BlockType.CHARACTER_CLASS, settings: { pattern: '\\d', negated: false }, description: "Соответствует одной цифровой символу." },
-      { label: "Любая буква (a-z, A-Z)", type: BlockType.CHARACTER_CLASS, settings: { pattern: 'a-zA-Z', negated: false }, description: "Соответствует одной букве латинского алфавита." },
-      { label: "Любой пробельный символ", type: BlockType.CHARACTER_CLASS, settings: { pattern: '\\s', negated: false }, description: "Пробел, таб, перенос строки и т.д." },
-      { label: "Любой символ (.)", type: BlockType.CHARACTER_CLASS, settings: { pattern: '.', negated: false }, description: "Соответствует любому символу, кроме новой строки." },
-      { label: "Пользовательский набор символов", type: BlockType.CHARACTER_CLASS, settings: { pattern: '', negated: false }, description: "Например, [aeiou] для гласных." },
+      { label: "Обычный текст", type: BlockType.LITERAL, description: "Найти точное совпадение с введенным текстом." },
+      { label: "Любая цифра", type: BlockType.CHARACTER_CLASS, settings: { pattern: '\\d', negated: false }, description: "Эквивалент [0-9]." },
+      { label: "Любая буква", type: BlockType.CHARACTER_CLASS, settings: { pattern: '\\p{L}', negated: false }, description: "Буквы любых языков, требует флаг 'u'." },
+      { label: "Любой символ слова", type: BlockType.CHARACTER_CLASS, settings: { pattern: '\\w', negated: false }, description: "Буква, цифра или знак подчеркивания." },
+      { label: "Пробельный символ", type: BlockType.CHARACTER_CLASS, settings: { pattern: '\\s', negated: false }, description: "Пробел, таб, перенос строки и т.д." },
+      { label: "Любой символ", type: BlockType.CHARACTER_CLASS, settings: { pattern: '.', negated: false }, description: "Соответствует любому символу, кроме новой строки." },
+      { label: "Свой набор символов", type: BlockType.CHARACTER_CLASS, settings: { pattern: '', negated: false }, description: "Например, [aeiou] для гласных." },
     ],
   },
   {

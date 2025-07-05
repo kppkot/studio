@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import type { Block, BlockConfig, CharacterClassSettings, QuantifierSettings, GroupSettings, LiteralSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, ConditionalSettings } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { reconstructPatternFromChildren, breakdownPatternIntoChildren } from './utils';
+import { reconstructPatternFromChildren } from './utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -13,15 +13,35 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { X, Lightbulb } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-
 
 interface SettingsPanelProps {
   block: Block | null;
   onUpdate: (id: string, updatedBlock: Partial<Block>) => void;
   onClose: () => void;
 }
+
+// Helper to get a dynamic, user-friendly title for a block
+const getDynamicTitle = (block: Block): string => {
+    if (block.type === BlockType.CHARACTER_CLASS) {
+        const settings = block.settings as CharacterClassSettings;
+        const pattern = settings.pattern;
+        const shorthandTitles: { [key: string]: string } = {
+          '\\d': 'Любая цифра',
+          '\\D': 'Не цифра',
+          '\\w': 'Символ слова',
+          '\\W': 'Не символ слова',
+          '\\s': 'Пробельный символ',
+          '\\S': 'Не пробельный символ',
+          '.': 'Любой символ',
+        };
+        if (pattern && shorthandTitles[pattern]) {
+            return shorthandTitles[pattern];
+        }
+        return 'Набор символов';
+    }
+    return BLOCK_CONFIGS[block.type]?.name || 'Блок';
+};
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose }) => {
   if (!block) return null;
@@ -400,7 +420,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
   return (
     <Card className="h-full shadow-none border-0 border-l rounded-none flex flex-col">
       <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b">
-        <CardTitle className="text-lg">Настройки: {config.name}</CardTitle>
+        <CardTitle className="text-lg">Настройки: {getDynamicTitle(block)}</CardTitle>
         <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
           <X size={18} />
         </Button>

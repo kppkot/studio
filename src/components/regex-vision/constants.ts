@@ -19,17 +19,17 @@ export const BLOCK_CONFIGS: BlockConfigs = {
     modes: ['greedy', 'lazy', 'possessive'],
   },
   [BlockType.CHARACTER_CLASS]: {
-    name: 'Символьный класс',
+    name: 'Набор символов',
     icon: React.createElement(Brackets, { size: 18 }),
     defaultSettings: { pattern: 'a-z', negated: false },
     presets: [
-      { value: '\\p{L}', label: 'Любая буква (Unicode)' },
-      { value: 'a-zA-Z', label: 'Буквы (только латиница)' },
-      { value: '0-9', label: 'Цифры (0-9)' },
-      { value: '\\d', label: '\\d (любая цифра)' },
+      { value: '\\d', label: 'Любая цифра (\\d)' },
       { value: '\\w', label: 'Символ слова (\\w)' },
-      { value: '\\s', label: 'Любой пробел (\\s)' },
+      { value: '\\s', label: 'Пробельный символ (\\s)' },
       { value: '.', label: 'Любой символ (.)' },
+      { value: 'a-z', label: 'Буквы a-z' },
+      { value: 'A-Z', label: 'Буквы A-Z' },
+      { value: '\\p{L}', label: 'Буквы (все языки)' },
     ],
   },
   [BlockType.LITERAL]: {
