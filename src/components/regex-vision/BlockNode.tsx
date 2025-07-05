@@ -24,7 +24,8 @@ interface BlockNodeProps {
   onSelect: (id: string) => void;
   parentId: string | null;
   depth?: number;
-  onBlockHover?: (blockId: string | null) => void;
+  hoveredId: string | null;
+  onBlockHover: (blockId: string | null) => void;
   renderChildNodes: (nodes: Block[], parentId: string, depth: number, groupInfos: GroupInfo[]) => React.ReactNode[];
   groupInfos: GroupInfo[];
 }
@@ -80,6 +81,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   onSelect,
   parentId,
   depth = 0, 
+  hoveredId,
   onBlockHover,
   renderChildNodes,
   groupInfos,
@@ -100,6 +102,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   const isEmptyContainer = isContainerBlock && !hasChildren;
 
   const isBlockSelected = selectedId === block.id;
+  const isBlockHovered = (hoveredId === block.id || (quantifierToRender && hoveredId === quantifierToRender.id)) && !isBlockSelected;
   
   const handleToggleExpand = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -297,6 +300,8 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+        onMouseEnter={() => onBlockHover(block.id)}
+        onMouseLeave={() => onBlockHover(null)}
         className={cn(
           "transition-all relative group/blocknode rounded-md",
           isDraggingOver && !showAsParentDropTarget && "bg-accent/20",
@@ -308,7 +313,8 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           className={cn(
             "block-main-content border rounded-md relative transition-all",
             "bg-card",
-            isBlockSelected && "ring-2 ring-primary shadow-lg"
+            isBlockSelected && "ring-2 ring-primary shadow-lg",
+            isBlockHovered && "bg-accent/10 ring-1 ring-accent"
           )}
         >
           <div className="absolute top-1 right-1 flex items-center gap-0.5 z-20">

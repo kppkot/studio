@@ -18,6 +18,8 @@ interface RegexOutputDisplayProps {
   stringParts: RegexStringPart[];
   selectedBlockId: string | null;
   onSelectBlock: (id: string | null) => void;
+  hoveredBlockId: string | null;
+  onHoverPart: (blockId: string | null) => void;
 }
 
 const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
@@ -28,7 +30,9 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
   isParsing,
   stringParts,
   selectedBlockId,
-  onSelectBlock
+  onSelectBlock,
+  hoveredBlockId,
+  onHoverPart
 }) => {
   const { toast } = useToast();
   const [inputValue, setInputValue] = useState(generatedRegex);
@@ -36,8 +40,11 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setInputValue(generatedRegex);
-  }, [generatedRegex]);
+    // Only update from parent if not currently editing
+    if (!isEditing) {
+      setInputValue(generatedRegex);
+    }
+  }, [generatedRegex, isEditing]);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -59,7 +66,6 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
   };
 
   const handleParse = () => {
-    // Разбираем выражение, только если оно изменилось
     if (inputValue !== generatedRegex) {
         onParseRegexString(inputValue);
     }
@@ -95,20 +101,22 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
             />
            ) : (
             <div 
-              className="flex items-center h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background cursor-text"
+              className="flex items-center h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background cursor-text flex-wrap"
               onClick={() => setIsEditing(true)}
               role="textbox"
               tabIndex={0}
               onFocus={() => setIsEditing(true)}
+              onMouseLeave={() => onHoverPart(null)}
             >
                 {stringParts.length > 0 ? stringParts.map((part, index) => (
                     <span 
                         key={index}
+                        onMouseEnter={() => onHoverPart(part.blockId)}
                         onClick={(e) => { e.stopPropagation(); onSelectBlock(part.blockId); }}
                         className={cn(
-                            "transition-colors rounded-sm px-0.5",
-                            part.blockId === selectedBlockId ? "bg-primary/20" : "bg-transparent",
-                             "hover:bg-primary/10"
+                            "transition-colors rounded-sm px-0.5 cursor-pointer",
+                            part.blockId === selectedBlockId ? "bg-primary/20" : 
+                            part.blockId === hoveredBlockId ? "bg-accent/20" : "bg-transparent"
                         )}
                     >
                         {part.text}
