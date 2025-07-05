@@ -58,7 +58,7 @@ function transformNodeToBlocks(node: any): Block[] {
             case '?': type = '?'; break;
             case 'Range': // Correctly handle quantifiers like {n}, {n,m}, {n,}
                 min = q.from;
-                max = q.to;
+                max = q.to === Infinity ? null : q.to;
                 if (min !== undefined && max === undefined) type = '{n,}';
                 else if (min !== undefined && max !== undefined && min === max) type = '{n}';
                 else if (min !== undefined && max !== undefined) type = '{n,m}';
@@ -87,7 +87,8 @@ function transformNodeToBlocks(node: any): Block[] {
     }
 
     case 'Char': {
-        if (node.kind === 'meta' || node.value === '.') { // For \d, \w, \s, ., etc.
+        // A meta character like '.', '\d', '\w', '\s'
+        if (node.kind === 'meta') { 
             const charClassBlock: Block = {
                 id: newId,
                 type: BlockType.CHARACTER_CLASS,
@@ -96,7 +97,7 @@ function transformNodeToBlocks(node: any): Block[] {
             };
             return [charClassBlock];
         }
-        // For simple literals like 'a', '-', etc.
+        // A simple literal character like 'a', or an escaped one like '\.'
         const literalBlock: Block = {
             id: newId,
             type: BlockType.LITERAL,
@@ -107,7 +108,6 @@ function transformNodeToBlocks(node: any): Block[] {
     }
 
     case 'CharacterClass': {
-      // FIX: Use regexpTree.generate on each expression to reliably get the string representation.
       const pattern = node.expressions.map((expr: any) => regexpTree.generate(expr)).join('');
       const charClassBlock: Block = {
           id: newId,
@@ -196,11 +196,19 @@ function transformNodeToBlocks(node: any): Block[] {
         settings.type = `${prefix}-${node.kind.toLowerCase()}`;
       } else {
         blockType = BlockType.ANCHOR;
-        // FIX: Correctly handle different assertion kinds like WordBoundary, StartOfLine etc.
-        if (node.kind === 'WordBoundary') {
-          settings.type = node.negative ? '\\B' : '\\b';
-        } else { // This handles ^ and $ correctly via their raw value.
-          settings.type = node.raw;
+        switch(node.kind) {
+            case 'StartOfLine':
+                settings.type = '^';
+                break;
+            case 'EndOfLine':
+                settings.type = '$';
+                break;
+            case 'WordBoundary':
+                settings.type = node.negative ? '\\B' : '\\b';
+                break;
+            default:
+                // If we don't know the anchor type, we can't create a block for it.
+                return []; 
         }
       }
 
