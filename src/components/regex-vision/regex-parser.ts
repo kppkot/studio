@@ -107,7 +107,8 @@ function transformNodeToBlocks(node: any): Block[] {
     }
 
     case 'CharacterClass': {
-      const pattern = node.expressions.map((expr: any) => expr.raw || expr.value).join('');
+      // FIX: Use regexpTree.generate on each expression to reliably get the string representation.
+      const pattern = node.expressions.map((expr: any) => regexpTree.generate(expr)).join('');
       const charClassBlock: Block = {
           id: newId,
           type: BlockType.CHARACTER_CLASS,
@@ -195,7 +196,12 @@ function transformNodeToBlocks(node: any): Block[] {
         settings.type = `${prefix}-${node.kind.toLowerCase()}`;
       } else {
         blockType = BlockType.ANCHOR;
-        settings.type = node.value;
+        // FIX: Correctly handle different assertion kinds like WordBoundary, StartOfLine etc.
+        if (node.kind === 'WordBoundary') {
+          settings.type = node.negative ? '\\B' : '\\b';
+        } else { // This handles ^ and $ correctly via their raw value.
+          settings.type = node.raw;
+        }
       }
 
       if (blockType) {
