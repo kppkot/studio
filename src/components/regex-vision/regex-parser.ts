@@ -6,8 +6,12 @@ import { generateId } from './utils';
 // Main exported function
 export function parseRegexWithLibrary(regexString: string): Block[] {
   try {
+    // Escape forward slashes in the regex string so they don't conflict with
+    // the delimiters of the regex literal we are constructing for the parser.
+    const escapedRegexString = regexString.replace(/\//g, '\\/');
+
     // The `u` flag is important for regexp-tree to correctly parse complex patterns like unicode properties `\p{L}`
-    const ast = regexpTree.parse(`/${regexString}/u`, { allowGroupNameDuplicates: true });
+    const ast = regexpTree.parse(`/${escapedRegexString}/u`, { allowGroupNameDuplicates: true });
     
     if (ast.body) {
       return transformNodeToBlocks(ast.body);
