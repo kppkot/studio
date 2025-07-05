@@ -394,25 +394,61 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
       
       case BlockType.LOOKAROUND:
         const lookSettings = settings as LookaroundSettings;
+        const lookaroundExplanations: Record<LookaroundSettings['type'], { title: string, description: string, example: string }> = {
+            'positive-lookahead': {
+            title: 'Позитивный просмотр вперёд (?=...)',
+            description: 'Проверяет, что сразу после текущей позиции в тексте следует определённый шаблон, но НЕ ВКЛЮЧАЕТ его в итоговое совпадение. Это "заглядывание" вперёд.',
+            example: 'Пример: `q(?=u)` найдёт букву `q` только в слове "queen", но не в слове "qat". Само `u` в результат не попадёт.'
+            },
+            'negative-lookahead': {
+            title: 'Негативный просмотр вперёд (?!...)',
+            description: 'Проверяет, что сразу после текущей позиции НЕ следует определённый шаблон. Также не включает символы в результат.',
+            example: 'Пример: `q(?!u)` найдёт `q` в "qat", но не в "queen".'
+            },
+            'positive-lookbehind': {
+            title: 'Позитивный просмотр назад (?<=...)',
+            description: 'Проверяет, что перед текущей позицией есть определённый шаблон, не включая его в результат. Это "оглядывание" назад.',
+            example: 'Пример: `(?<=\\$)d+` найдёт число `123` только в строке "$123", но не в "€123". Знак `$` в результат не попадёт.'
+            },
+            'negative-lookbehind': {
+            title: 'Негативный просмотр назад (?<!...)',
+            description: 'Проверяет, что перед текущей позицией НЕТ определённого шаблона.',
+            example: 'Пример: `(?<!\\$)d+` найдёт `123` в "€123", но не в "$123".'
+            }
+        };
+
+        const currentExplanation = lookaroundExplanations[lookSettings.type];
         return (
-          <div>
-            <Label htmlFor="lookaroundType" className="text-sm font-medium">Тип просмотра</Label>
-            <Select value={lookSettings.type || 'positive-lookahead'} onValueChange={(value) => handleSettingChange('type', value)}>
-              <SelectTrigger id="lookaroundType" className="mt-1">
-                <SelectValue placeholder="Выберите тип просмотра" />
-              </SelectTrigger>
-              <SelectContent>
-                {config.types?.map(type => (
-                  <SelectItem key={type} value={type}>
-                    {type === 'positive-lookahead' ? 'Позитивный просмотр вперед (?=...)' :
-                     type === 'negative-lookahead' ? 'Негативный просмотр вперед (?!...)' :
-                     type === 'positive-lookbehind' ? 'Позитивный просмотр назад (?<=...)' : 
-                     'Негативный просмотр назад (?<!...)'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <>
+            <div>
+              <Label htmlFor="lookaroundType" className="text-sm font-medium">Тип просмотра</Label>
+              <Select value={lookSettings.type || 'positive-lookahead'} onValueChange={(value) => handleSettingChange('type', value)}>
+                <SelectTrigger id="lookaroundType" className="mt-1">
+                  <SelectValue placeholder="Выберите тип просмотра" />
+                </SelectTrigger>
+                <SelectContent>
+                  {config.types?.map(type => (
+                    <SelectItem key={type} value={type}>
+                      {type === 'positive-lookahead' ? 'Позитивный просмотр вперёд (?=...)' :
+                       type === 'negative-lookahead' ? 'Негативный просмотр вперёд (?!...)' :
+                       type === 'positive-lookbehind' ? 'Позитивный просмотр назад (?<=...)' : 
+                       'Негативный просмотр назад (?<!...)'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {currentExplanation && (
+              <Alert className="mt-4">
+                  <Lightbulb className="h-4 w-4" />
+                  <AlertTitle className="font-semibold">{currentExplanation.title}</AlertTitle>
+                  <AlertDescription className="flex flex-col gap-2 mt-2">
+                      <p>{currentExplanation.description}</p>
+                      <p className="italic text-muted-foreground">{currentExplanation.example}</p>
+                  </AlertDescription>
+              </Alert>
+            )}
+          </>
         );
 
       case BlockType.BACKREFERENCE:

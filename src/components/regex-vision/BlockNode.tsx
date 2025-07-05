@@ -99,6 +99,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     let title = config.name;
     let details = '';
     let regexFragment = '';
+    let visualHint: React.ReactNode = null;
 
     switch (block.type) {
       case BlockType.LITERAL:
@@ -181,27 +182,17 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
       case BlockType.LOOKAROUND:
         const lSettings = settings as LookaroundSettings;
-        const lookaroundMap: {[key: string]: string} = {
-            'positive-lookahead': 'Просмотр вперед (+)',
-            'negative-lookahead': 'Просмотр вперед (-)',
-            'positive-lookbehind': 'Просмотр назад (+)',
-            'negative-lookbehind': 'Просмотр назад (-)',
+        const lookaroundInfo: {[key in LookaroundSettings['type']]: {title: string, details: string, regex: string, hint: React.ReactNode} } = {
+          'positive-lookahead': { title: 'Просмотр вперёд (+)', details: 'Условие: далее следует шаблон', regex: '(?=...)', hint: <div className="flex items-center gap-1 text-xs text-muted-foreground/80 font-semibold"><span className="font-bold text-lg leading-none text-primary/70">→</span><span>Проверка</span></div> },
+          'negative-lookahead': { title: 'Просмотр вперёд (-)', details: 'Условие: далее НЕ следует шаблон', regex: '(?!...)', hint: <div className="flex items-center gap-1 text-xs text-muted-foreground/80 font-semibold"><span className="font-bold text-lg leading-none text-primary/70">→</span><span>Проверка</span></div> },
+          'positive-lookbehind': { title: 'Просмотр назад (+)', details: 'Условие: этому предшествует шаблон', regex: '(?<=...)', hint: <div className="flex items-center gap-1 text-xs text-muted-foreground/80 font-semibold"><span className="font-bold text-lg leading-none text-primary/70">←</span><span>Проверка</span></div> },
+          'negative-lookbehind': { title: 'Просмотр назад (-)', details: 'Условие: этому НЕ предшествует шаблон', regex: '(?<!...)', hint: <div className="flex items-center gap-1 text-xs text-muted-foreground/80 font-semibold"><span className="font-bold text-lg leading-none text-primary/70">←</span><span>Проверка</span></div> },
         };
-        const lookaroundDetails: {[key: string]: string} = {
-            'positive-lookahead': 'Условие: далее следует...',
-            'negative-lookahead': 'Условие: далее НЕ следует...',
-            'positive-lookbehind': 'Условие: этому предшествует...',
-            'negative-lookbehind': 'Условие: этому НЕ предшествует...',
-        };
-        const lookaroundRegex: {[key: string]: string} = {
-            'positive-lookahead': '(?=...)',
-            'negative-lookahead': '(?!...)',
-            'positive-lookbehind': '(?<=...)',
-            'negative-lookbehind': '(?<!...)',
-        };
-        title = lookaroundMap[lSettings.type];
-        details = lookaroundDetails[lSettings.type];
-        regexFragment = lookaroundRegex[lSettings.type];
+        const info = lookaroundInfo[lSettings.type];
+        title = info.title;
+        details = info.details;
+        regexFragment = info.regex;
+        visualHint = info.hint;
         break;
 
       case BlockType.BACKREFERENCE:
@@ -227,10 +218,10 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         title = config.name;
     }
 
-    return { icon: config.icon, title, details, regexFragment };
+    return { icon: config.icon, title, details, regexFragment, visualHint };
   };
 
-  const { icon, title, details, regexFragment } = getBlockVisuals();
+  const { icon, title, details, regexFragment, visualHint } = getBlockVisuals();
 
   const renderQuantifierBadge = () => {
     if (!quantifierToRender) return null;
@@ -345,6 +336,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                 <div className="flex items-center gap-2">
                   <span className="text-primary h-5 w-5 flex items-center justify-center">{icon}</span>
                   <h3 className="font-semibold text-sm truncate">{title}</h3>
+                  {visualHint}
                 </div>
 
                 {(details || regexFragment) && (
