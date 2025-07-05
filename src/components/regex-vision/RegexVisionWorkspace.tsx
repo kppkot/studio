@@ -1,6 +1,6 @@
 
 "use client";
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import type { Block, RegexMatch, GroupInfo, SavedPattern, CharacterClassSettings, RegexStringPart } from './types'; 
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
@@ -13,10 +13,6 @@ import SettingsPanel from './SettingsPanel';
 import BlockPalette from './BlockPalette';
 import RegexOutputDisplay from './RegexOutputDisplay';
 import TestArea from './TestArea';
-import CodeGenerationPanel from './CodeGenerationPanel';
-import DebugView from './DebugView';
-import PerformanceAnalyzerView from './PerformanceAnalyzerView';
-import PatternLibraryView from './PatternLibraryView';
 import { Button } from '@/components/ui/button';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -30,8 +26,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Gauge, Library, Menu, Puzzle, Share2, DownloadCloud, UploadCloud } from 'lucide-react'; 
+import { Layers, Edit3, Code2, PlayCircle, Bug, Plus, FoldVertical, UnfoldVertical, Gauge, Library, Menu, Puzzle, Share2, DownloadCloud, UploadCloud, Loader2 } from 'lucide-react'; 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+
+// Lazy load tab panels to improve initial load time
+const CodeGenerationPanel = lazy(() => import('./CodeGenerationPanel'));
+const DebugView = lazy(() => import('./DebugView'));
+const PerformanceAnalyzerView = lazy(() => import('./PerformanceAnalyzerView'));
+const PatternLibraryView = lazy(() => import('./PatternLibraryView'));
+
 
 const RegexVisionWorkspace: React.FC = () => {
   const [blocks, setBlocks] = useState<Block[]>([]);
@@ -52,15 +55,10 @@ const RegexVisionWorkspace: React.FC = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // This effect runs once on the client after hydration.
-    // Using a timeout gives React a moment to finish its initial render
-    // and attach all event listeners, ensuring the UI is fully interactive
-    // when the loading skeleton is removed. This prevents a "dead" UI state.
-    const timer = setTimeout(() => {
-      setIsReady(true);
-    }, 50); // A small delay is enough for the event loop to clear.
-
-    return () => clearTimeout(timer);
+    // This effect runs once on the client after hydration, indicating that
+    // the component has mounted and is ready for interaction.
+    // The previous timeout "hack" is removed in favor of code-splitting optimizations.
+    setIsReady(true);
   }, []);
 
   useEffect(() => {
@@ -921,21 +919,29 @@ const RegexVisionWorkspace: React.FC = () => {
                   />
                 </TabsContent>
                 <TabsContent value="codegen" className="mt-2 flex-1 overflow-y-auto p-0.5">
-                  <CodeGenerationPanel generatedRegex={regexOutput.regexString} regexFlags={regexFlags} testText={testText} />
+                   <Suspense fallback={<div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Загрузка...</div>}>
+                      <CodeGenerationPanel generatedRegex={regexOutput.regexString} regexFlags={regexFlags} testText={testText} />
+                   </Suspense>
                 </TabsContent>
                 <TabsContent value="debug" className="mt-2 flex-1 overflow-y-auto p-0.5">
-                  <DebugView />
+                   <Suspense fallback={<div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Загрузка...</div>}>
+                    <DebugView />
+                   </Suspense>
                 </TabsContent>
                 <TabsContent value="performance" className="mt-2 flex-1 overflow-y-auto p-0.5">
-                  <PerformanceAnalyzerView regexString={regexOutput.regexString} />
+                   <Suspense fallback={<div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Загрузка...</div>}>
+                    <PerformanceAnalyzerView regexString={regexOutput.regexString} />
+                   </Suspense>
                 </TabsContent>
                 <TabsContent value="library" className="mt-2 flex-1 overflow-y-auto p-0.5">
-                  <PatternLibraryView
-                    currentRegexString={regexOutput.regexString}
-                    currentFlags={regexFlags}
-                    currentTestString={testText}
-                    onApplyPattern={handleApplySavedPattern}
-                  />
+                   <Suspense fallback={<div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Загрузка...</div>}>
+                    <PatternLibraryView
+                      currentRegexString={regexOutput.regexString}
+                      currentFlags={regexFlags}
+                      currentTestString={testText}
+                      onApplyPattern={handleApplySavedPattern}
+                    />
+                   </Suspense>
                 </TabsContent>
               </Tabs>
             </div>
