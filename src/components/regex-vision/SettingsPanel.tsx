@@ -9,10 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { X, Lightbulb, Settings } from 'lucide-react';
+import { Settings, Lightbulb } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface SettingsPanelProps {
@@ -136,7 +135,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
               id="text"
               type="text"
               value={literalSettings.text || ''}
-              onChange={(e) => onUpdate(block.id, { settings: { text: e.target.value } })}
+              onChange={(e) => onUpdate(block.id, { settings: { text: e.target.value, isRawRegex: literalSettings.isRawRegex } })}
               placeholder="Введите литеральный текст"
               className="mt-1"
             />
@@ -217,6 +216,34 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
 
       case BlockType.QUANTIFIER:
         const qSettings = settings as QuantifierSettings;
+
+        const quantifierOptions = [
+            { value: '*', label: '* (ноль или более)' },
+            { value: '+', label: '+ (один или более)' },
+            { value: '?', label: '? (ноль или один)' },
+            { value: '{n}', label: '{n} (ровно n раз)' },
+            { value: '{n,}', label: '{n,} (минимум n раз)' },
+            { value: '{n,m}', label: '{n,m} (от n до m раз)' },
+        ];
+
+        const qExplanation: { [key: string]: { title: string, description: string} } = {
+          '*': { title: 'Звезда (ноль или более)', description: 'Совпадает с предыдущим элементом 0 или более раз. Например, /a*/ найдет "", "a", "aa".' },
+          '+': { title: 'Плюс (один или более)', description: 'Совпадает с предыдущим элементом 1 или более раз. Например, /a+/ найдет "a", "aa", но не "".' },
+          '?': { title: 'Вопросительный знак (ноль или один)', description: 'Совпадает с предыдущим элементом 0 или 1 раз. Делает элемент необязательным. Например, /colou?r/ найдет "color" и "colour".' },
+          '{n}': { title: 'Точное количество {n}', description: 'Совпадает с предыдущим элементом ровно N раз.' },
+          '{n,}': { title: 'Минимум {n,}', description: 'Совпадает с предыдущим элементом как минимум N раз.' },
+          '{n,m}': { title: 'Диапазон {n,m}', description: 'Совпадает с предыдущим элементом от N до M раз включительно.' },
+        };
+
+        const modeExplanation: { [key:string]: { title: string, description: string }} = {
+            'greedy': { title: 'Жадный режим (по умолчанию)', description: 'Квантификатор захватывает как можно больше символов.' },
+            'lazy': { title: 'Ленивый режим', description: 'Квантификатор захватывает как можно меньше символов. Добавляет ? после квантификатора (например, *?).' },
+            'possessive': { title: 'Ревнивый (сверхжадный) режим', description: 'Захватывает как можно больше, не "отдавая" символы для остальной части выражения (не поддерживает откат). Добавляет + после квантификатора (например, *+). Поддерживается не всеми движками.' },
+        }
+        
+        const selectedQuantifierInfo = qExplanation[qSettings.type];
+        const selectedModeInfo = modeExplanation[qSettings.mode || 'greedy'];
+
         return (
           <>
             <div>
@@ -226,7 +253,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
                   <SelectValue placeholder="Выберите тип" />
                 </SelectTrigger>
                 <SelectContent>
-                  {config.types?.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}
+                  {quantifierOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -234,7 +261,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
             {(qSettings.type?.includes('{')) && (
               <>
                 <div className="mt-3">
-                  <Label htmlFor="min" className="text-sm font-medium">Минимум</Label>
+                  <Label htmlFor="min" className="text-sm font-medium">Минимум (n)</Label>
                   <Input
                     id="min"
                     type="number"
@@ -246,7 +273,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
                 </div>
                 {qSettings.type === '{n,m}' && (
                   <div className="mt-3">
-                    <Label htmlFor="max" className="text-sm font-medium">Максимум (необязательно)</Label>
+                    <Label htmlFor="max" className="text-sm font-medium">Максимум (m)</Label>
                     <Input
                       id="max"
                       type="number"
@@ -276,6 +303,24 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
                 </SelectContent>
               </Select>
             </div>
+
+            <Alert className="mt-4 text-xs">
+                <Lightbulb className="h-4 w-4" />
+                {selectedQuantifierInfo && (
+                    <>
+                    <AlertTitle>{selectedQuantifierInfo.title}</AlertTitle>
+                    <AlertDescription>
+                        {selectedQuantifierInfo.description}
+                        {selectedModeInfo && (
+                            <div className="mt-2 pt-2 border-t border-border/50">
+                                <p className="font-semibold">{selectedModeInfo.title}</p>
+                                <p>{selectedModeInfo.description}</p>
+                            </div>
+                        )}
+                    </AlertDescription>
+                    </>
+                )}
+            </Alert>
           </>
         );
         
@@ -450,5 +495,3 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
 };
 
 export default SettingsPanel;
-
-    

@@ -130,18 +130,16 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     let details = '';
     let regexFragment = '';
     
-    const escapeForDisplay = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
     switch (block.type) {
       case BlockType.LITERAL:
         const litSettings = settings as LiteralSettings;
-        title = 'Текст';
         if (litSettings.isRawRegex) {
-          details = 'Необработанный фрагмент Regex';
+          title = 'Необработанный Regex';
+          regexFragment = litSettings.text || '';
         } else {
-          details = 'Точное совпадение';
+          title = 'Текст';
+          regexFragment = (litSettings.text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         }
-        regexFragment = litSettings.isRawRegex ? litSettings.text || '' : escapeForDisplay(litSettings.text || '');
         if (!regexFragment) {
             details = 'Пустой литерал. Введите текст.';
         }
@@ -200,15 +198,15 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
       case BlockType.ANCHOR:
         const aSettings = settings as AnchorSettings;
-        title = 'Якорь';
         const anchorMap: {[key: string]: string} = {
-            '^': 'Начало строки/текста',
-            '$': 'Конец строки/текста',
-            '\\b': 'Граница слова',
-            '\\B': 'Не граница слова',
+            '^': {title: 'Начало строки/текста', regex: '^'},
+            '$': {title: 'Конец строки/текста', regex: '$'},
+            '\\b': {title: 'Граница слова', regex: '\\b'},
+            '\\B': {title: 'Не граница слова', regex: '\\B'},
         };
-        details = anchorMap[aSettings.type] || 'Неизвестный якорь';
-        regexFragment = aSettings.type;
+        title = anchorMap[aSettings.type]?.title || 'Якорь';
+        details = 'Указывает на позицию в тексте';
+        regexFragment = anchorMap[aSettings.type]?.regex || aSettings.type;
         break;
 
       case BlockType.LOOKAROUND:
