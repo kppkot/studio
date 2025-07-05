@@ -52,9 +52,15 @@ const RegexVisionWorkspace: React.FC = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // This effect runs once on the client after hydration,
-    // indicating that the component is ready for interaction.
-    setIsReady(true);
+    // This effect runs once on the client after hydration.
+    // Using a timeout gives React a moment to finish its initial render
+    // and attach all event listeners, ensuring the UI is fully interactive
+    // when the loading skeleton is removed. This prevents a "dead" UI state.
+    const timer = setTimeout(() => {
+      setIsReady(true);
+    }, 50); // A small delay is enough for the event loop to clear.
+
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
