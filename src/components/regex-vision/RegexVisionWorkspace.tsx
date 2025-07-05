@@ -724,7 +724,7 @@ const RegexVisionWorkspace: React.FC = () => {
     setHoveredBlockId(blockId);
   };
   
-  const renderBlockNodes = useCallback((nodes: Block[], parentId: string | null, depth: number, groupInfos: GroupInfo[], hoveredId: string | null, onHover: (id: string | null) => void): React.ReactNode[] => {
+  const renderBlockNodes = (nodes: Block[], parentId: string | null, depth: number, groupInfos: GroupInfo[]): React.ReactNode[] => {
     const nodeList: React.ReactNode[] = [];
 
     for (let i = 0; i < nodes.length; i++) {
@@ -756,9 +756,9 @@ const RegexVisionWorkspace: React.FC = () => {
             onSelect={setSelectedBlockId}
             parentId={parentId}
             depth={depth} 
-            hoveredId={hoveredId}
-            onBlockHover={onHover}
-            renderChildNodes={(childNodes, pId, nextDepth, gInfos) => renderBlockNodes(childNodes, pId, nextDepth, gInfos, hoveredId, onHover)}
+            hoveredId={hoveredBlockId}
+            onBlockHover={handleBlockHover}
+            renderChildNodes={(childNodes, pId, nextDepth, gInfos) => renderBlockNodes(childNodes, pId, nextDepth, gInfos)}
             groupInfos={groupInfos}
           />
         );
@@ -768,7 +768,7 @@ const RegexVisionWorkspace: React.FC = () => {
         }
     }
     return nodeList;
-  }, [selectedBlockId, handleUpdateBlock, handleDeleteBlock, handleDuplicateBlock, handleUngroupBlock, handleWrapBlock, handleReorderBlock]);
+  };
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
@@ -833,7 +833,7 @@ const RegexVisionWorkspace: React.FC = () => {
                         </div>
                       ) : (
                         <div className="space-y-1"> 
-                          {renderBlockNodes(blocks, null, 0, regexOutput.groupInfos, hoveredBlockId, handleBlockHover)}
+                          {renderBlockNodes(blocks, null, 0, regexOutput.groupInfos)}
                         </div>
                       )}
                     </ScrollArea>
