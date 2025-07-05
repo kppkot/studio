@@ -12,13 +12,12 @@ interface TestAreaProps {
   testText: string;
   onTestTextChange: (text: string) => void;
   matches: RegexMatch[];
-  hoveredPartMatches: RegexMatch[];
   generatedRegex: string;
   highlightedGroupIndex: number; // 1-based index
   regexError: string | null;
 }
 
-const TestArea: React.FC<TestAreaProps> = ({ testText, onTestTextChange, matches, hoveredPartMatches, generatedRegex, highlightedGroupIndex, regexError }) => {
+const TestArea: React.FC<TestAreaProps> = ({ testText, onTestTextChange, matches, generatedRegex, highlightedGroupIndex, regexError }) => {
   
   const renderHighlightedText = () => {
     if (!testText) {
@@ -40,11 +39,6 @@ const TestArea: React.FC<TestAreaProps> = ({ testText, onTestTextChange, matches
     matches.forEach(m => {
         events.push({ index: m.index, type: 'start', className: 'bg-accent/30' });
         events.push({ index: m.index + m.match.length, type: 'end', className: 'bg-accent/30' });
-    });
-
-    hoveredPartMatches.forEach(m => {
-        events.push({ index: m.index, type: 'start', className: 'bg-primary/30' });
-        events.push({ index: m.index + m.match.length, type: 'end', className: 'bg-primary/30' });
     });
 
     if (highlightedGroupIndex > 0) {

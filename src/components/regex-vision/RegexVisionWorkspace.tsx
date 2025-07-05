@@ -40,7 +40,6 @@ const RegexVisionWorkspace: React.FC = () => {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null);
-  const [hoveredPartMatches, setHoveredPartMatches] = useState<RegexMatch[]>([]);
   const [parentIdForNewBlock, setParentIdForNewBlock] = useState<string | null>(null);
   const [contextualBlockId, setContextualBlockId] = useState<string | null>(null);
   const [isPaletteVisible, setIsPaletteVisible] = useState(false);
@@ -108,68 +107,6 @@ const RegexVisionWorkspace: React.FC = () => {
        setRegexError(null);
     }
   }, [blocks, testText, regexFlags]);
-
-  // Effect to highlight parts of the text when hovering over a block
-  useEffect(() => {
-    const findBlockAndQuantifier = (nodes: Block[], id: string): { baseBlock: Block, quantifierBlock: Block | null } | null => {
-        for (let i = 0; i < nodes.length; i++) {
-            const node = nodes[i];
-
-            if (node.id === id) {
-                if (node.type === BlockType.QUANTIFIER) { // Hovered on quantifier
-                    if (i > 0) return { baseBlock: nodes[i-1], quantifierBlock: node };
-                } else { // Hovered on base block
-                    const quantifier = (i + 1 < nodes.length && nodes[i+1].type === BlockType.QUANTIFIER) ? nodes[i+1] : null;
-                    return { baseBlock: node, quantifierBlock: quantifier };
-                }
-            }
-
-            if (node.children) {
-                const found = findBlockAndQuantifier(node.children, id);
-                if (found) return found;
-            }
-        }
-        return null;
-    };
-
-    if (!hoveredBlockId) {
-        setHoveredPartMatches([]);
-        return;
-    }
-    
-    const found = findBlockAndQuantifier(blocks, hoveredBlockId);
-    if (!found) {
-        setHoveredPartMatches([]);
-        return;
-    }
-
-    const { baseBlock, quantifierBlock } = found;
-    const blocksToParse = [baseBlock];
-    if (quantifierBlock) {
-        blocksToParse.push(quantifierBlock);
-    }
-
-    const { regexString: partialRegex } = generateRegexStringAndGroupInfo(blocksToParse);
-
-    if (partialRegex) {
-        try {
-            const currentFlags = 'g' + regexFlags.replace('g', '') + (regexFlags.includes('d') ? '' : 'd');
-            const regex = new RegExp(partialRegex, currentFlags);
-            const newMatches = [...testText.matchAll(regex)].map(rawMatch => ({
-                match: rawMatch[0],
-                index: rawMatch.index!,
-                groups: Array.from(rawMatch).slice(1),
-                groupIndices: rawMatch.indices ? rawMatch.indices.slice(1) as [number, number][] : [],
-            }));
-            setHoveredPartMatches(newMatches);
-        } catch (e) {
-            setHoveredPartMatches([]);
-        }
-    } else {
-        setHoveredPartMatches([]);
-    }
-  }, [hoveredBlockId, blocks, testText, regexFlags]);
-
 
   const findBlockRecursive = (searchBlocks: Block[], id: string): Block | null => {
     for (const block of searchBlocks) {
@@ -979,7 +916,6 @@ const RegexVisionWorkspace: React.FC = () => {
                         testText={testText}
                         onTestTextChange={setTestText}
                         matches={matches}
-                        hoveredPartMatches={hoveredPartMatches}
                         generatedRegex={regexOutputState.regexString}
                         highlightedGroupIndex={highlightedGroupIndex}
                         regexError={regexError}
