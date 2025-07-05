@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import type { Block, RegexMatch, GroupInfo, CharacterClassSettings, RegexStringPart, SavedPattern, DropIndicator } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { generateId, cloneBlockForState } from './utils';
+import { generateId, cloneBlockForState, generateRegexStringAndGroupInfo } from './utils';
 import { useToast } from '@/hooks/use-toast';
 import { parseRegexWithLibrary } from './regex-parser';
 
