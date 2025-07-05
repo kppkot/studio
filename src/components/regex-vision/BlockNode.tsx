@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo } from 'react';
-import type { Block, GroupInfo, QuantifierSettings, GroupSettings, CharacterClassSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, LiteralSettings } from './types';
+import type { Block, GroupInfo, QuantifierSettings, GroupSettings, CharacterClassSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, LiteralSettings, DropIndicator } from './types';
 import { BlockType } from './types';
 import { ChevronDown, ChevronRight, GripVertical, Repeat, Trash2, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ interface BlockNodeProps {
   onUpdate: (id: string, updatedBlock: Partial<Block>) => void;
   onDelete: (id: string, deleteAttachedQuantifier?: boolean) => void;
   onAddChild: (parentId: string | null, contextId: string) => void;
-  onAddSibling: (parentId: string | null, contextId: string) => void;
+  onAddSibling: (parentId: string | null, contextId:string) => void;
   onDuplicate: (id: string) => void;
   onUngroup: (id: string) => void;
   onWrapBlock: (id: string) => void;
@@ -26,6 +26,14 @@ interface BlockNodeProps {
   onBlockHover: (blockId: string | null) => void;
   renderChildNodes: (nodes: Block[], parentId: string, depth: number, groupInfos: GroupInfo[]) => React.ReactNode[];
   groupInfos: GroupInfo[];
+  
+  // Drag and Drop props
+  onDragStart: (e: React.DragEvent, blockId: string) => void;
+  onDragEnd: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent, targetBlockId: string) => void;
+  onDragOver: (e: React.DragEvent, targetBlockId: string) => void;
+  onDragLeave: (e: React.DragEvent) => void;
+  dropIndicator: DropIndicator | null;
 }
 
 const BlockNode: React.FC<BlockNodeProps> = ({
@@ -46,6 +54,12 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   onBlockHover,
   renderChildNodes,
   groupInfos,
+  onDragStart,
+  onDragEnd,
+  onDrop,
+  onDragOver,
+  onDragLeave,
+  dropIndicator,
 }) => {
 
   const hasChildren = block.children && block.children.length > 0;
@@ -256,8 +270,25 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
 
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      onDragOver={(e) => onDragOver(e, block.id)}
+      onDragLeave={onDragLeave}
+      onDrop={(e) => onDrop(e, block.id)}
+    >
+       {dropIndicator && dropIndicator.targetId === block.id && (
+          <div
+            className={cn('absolute left-0 right-0 z-20 h-1 bg-blue-500 rounded-full pointer-events-none', {
+              'top-[-4px]': dropIndicator.position === 'before',
+              'bottom-[-4px]': dropIndicator.position === 'after',
+              'hidden': dropIndicator.position === 'inside',
+            })}
+          />
+        )}
       <div
+        draggable="true"
+        onDragStart={(e) => onDragStart(e, block.id)}
+        onDragEnd={onDragEnd}
         onMouseEnter={() => onBlockHover(block.id)}
         onMouseLeave={() => onBlockHover(null)}
         className="transition-all relative group/blocknode rounded-md"
@@ -268,7 +299,8 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             "block-main-content border rounded-md relative transition-all",
             "bg-card",
             isBlockHovered && "bg-accent/10 ring-1 ring-accent",
-            isSelected && "ring-2 ring-primary shadow-lg bg-primary/10"
+            isSelected && "ring-2 ring-primary shadow-lg bg-primary/10",
+            dropIndicator?.targetId === block.id && dropIndicator?.position === 'inside' && 'ring-2 ring-blue-500 ring-inset'
           )}
         >
           <div className="absolute top-1 right-1 flex items-center gap-0.5 z-20">
@@ -299,7 +331,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           </div>
 
           <div className="p-2 flex items-start gap-3">
-            <GripVertical className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1" />
+            <GripVertical className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1 cursor-grab" />
 
             {isContainerBlock ? (
               <Button variant="ghost" size="iconSm" onClick={handleToggleExpand} className="flex-shrink-0 mt-0.5">
@@ -339,7 +371,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                   className="ml-5 pl-4 pr-2 py-4 border-l-2 border-dashed border-muted-foreground/50 bg-muted/30 rounded-r-md text-center text-muted-foreground text-xs italic hover:border-primary hover:text-primary cursor-pointer"
                   onClick={(e) => { e.stopPropagation(); onAddChild(block.id, block.id); }}
                 >
-                  <p>{block.type === BlockType.ALTERNATION ? 'Добавьте дочерний блок как первую альтернативу' : 'Добавьте или перетащите дочерние блоки сюда'}</p>
+                  <p>{block.type === BlockType.ALTERNATION ? 'Добавьте дочерний блок как первую альтернативу' : 'Перетащите дочерние блоки сюда'}</p>
                  </div>
                </div>
             ) : block.type === BlockType.ALTERNATION ? (

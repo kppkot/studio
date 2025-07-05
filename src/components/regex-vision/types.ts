@@ -114,3 +114,8 @@ export interface RegexStringPart {
   blockId: string;
   blockType: BlockType;
 }
+
+export interface DropIndicator {
+  targetId: string;
+  position: 'before' | 'after' | 'inside';
+}

@@ -1,9 +1,9 @@
 "use client";
 import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
-import type { Block, RegexMatch, GroupInfo, CharacterClassSettings, RegexStringPart, SavedPattern } from './types';
+import type { Block, RegexMatch, GroupInfo, CharacterClassSettings, RegexStringPart, SavedPattern, DropIndicator } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { generateId, generateRegexStringAndGroupInfo, cloneBlockForState } from './utils';
+import { generateId, cloneBlockForState } from './utils';
 import { useToast } from '@/hooks/use-toast';
 import { parseRegexWithLibrary } from './regex-parser';
 
@@ -61,6 +61,11 @@ const RegexVisionWorkspace: React.FC = () => {
     stringParts: [],
   });
   const [naturalLanguageQuery, setNaturalLanguageQuery] = useState('');
+
+  // Drag and Drop State
+  const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
+  const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null);
+
 
   const { toast } = useToast();
 
@@ -453,6 +458,142 @@ const RegexVisionWorkspace: React.FC = () => {
     });
   }, [toast]);
 
+  // --- Drag and Drop Handlers ---
+
+  const handleDragStart = (e: React.DragEvent, blockId: string) => {
+    e.dataTransfer.setData('text/plain', blockId);
+    e.dataTransfer.effectAllowed = 'move';
+    setTimeout(() => {
+        setDraggedBlockId(blockId);
+    }, 0);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedBlockId(null);
+    setDropIndicator(null);
+  };
+
+  const handleDragOver = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!draggedBlockId || draggedBlockId === targetId) {
+      setDropIndicator(null);
+      return;
+    }
+
+    const targetElement = e.currentTarget as HTMLElement;
+    const rect = targetElement.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const height = rect.height;
+    
+    let position: DropIndicator['position'] = 'after';
+    const targetBlock = findBlockRecursive(blocks, targetId);
+    const isContainer = targetBlock && (targetBlock.children !== undefined);
+
+    if (isContainer && y > height * 0.25 && y < height * 0.75) {
+        position = 'inside';
+    } else if (y < height / 2) {
+        position = 'before';
+    } else {
+        position = 'after';
+    }
+    
+    setDropIndicator({ targetId, position });
+  };
+  
+  const handleDragLeave = () => {
+    setDropIndicator(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    const sourceId = e.dataTransfer.getData('text/plain');
+    if (sourceId && dropIndicator) {
+      handleMoveBlock(sourceId, dropIndicator.targetId, dropIndicator.position);
+    }
+    handleDragEnd();
+  };
+
+  const handleMoveBlock = (sourceId: string, targetId: string, position: 'before' | 'after' | 'inside') => {
+    if (sourceId === targetId) return;
+
+    // Prevent dropping a block into itself or its descendants
+    const isDescendant = (nodes: Block[], parentId: string, childId: string): boolean => {
+        const node = findBlockRecursive(nodes, parentId);
+        if (!node) return false;
+        return !!findBlockRecursive(node.children || [], childId);
+    };
+
+    if (isDescendant(blocks, sourceId, targetId)) {
+        toast({ title: "Неверное действие", description: "Нельзя переместить блок внутрь самого себя.", variant: "destructive" });
+        return;
+    }
+
+    setBlocks(currentBlocks => {
+      let foundBlock: Block | null = null;
+      let foundQuantifier: Block | null = null;
+
+      // 1. Find and remove the source block (and its quantifier) from the tree
+      const removeRecursive = (nodes: Block[]): Block[] => {
+        const result: Block[] = [];
+        for (let i = 0; i < nodes.length; i++) {
+          const node = nodes[i];
+          if (node.id === sourceId) {
+            foundBlock = node;
+            if (i + 1 < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
+              foundQuantifier = nodes[i + 1];
+              i++; // Skip the quantifier in the next iteration
+            }
+          } else {
+            if (node.children) {
+              result.push({ ...node, children: removeRecursive(node.children) });
+            } else {
+              result.push(node);
+            }
+          }
+        }
+        return result;
+      };
+
+      const blocksAfterRemoval = removeRecursive(currentBlocks);
+
+      if (!foundBlock) return currentBlocks; // Should not happen
+
+      // 2. Insert the found block at the target position
+      const insertRecursive = (nodes: Block[]): Block[] => {
+        if (position === 'inside') {
+          const targetNode = nodes.find(n => n.id === targetId);
+          if (targetNode) {
+            if (!targetNode.children) targetNode.children = [];
+            targetNode.children.push(foundBlock!);
+            if (foundQuantifier) targetNode.children.push(foundQuantifier);
+            return nodes;
+          }
+        }
+        
+        return nodes.flatMap(node => {
+          if (node.id === targetId) {
+            const itemsToInsert = [foundBlock!];
+            if (foundQuantifier) itemsToInsert.push(foundQuantifier);
+
+            if (position === 'before') return [...itemsToInsert, node];
+            if (position === 'after') return [node, ...itemsToInsert];
+          }
+          if (node.children) {
+            return { ...node, children: insertRecursive(node.children) };
+          }
+          return node;
+        });
+      };
+      
+      const newBlocks = insertRecursive(blocksAfterRemoval);
+      setSelectedBlockId(sourceId);
+      return newBlocks;
+    });
+  };
+
+  // --- End of Drag and Drop Handlers ---
+
+
   const handleOpenPaletteFor = (pId: string | null, ctxId: string | null = null) => {
     setParentIdForNewBlock(pId);
     setContextualBlockId(ctxId);
@@ -726,6 +867,12 @@ const RegexVisionWorkspace: React.FC = () => {
             onBlockHover={handleBlockHover}
             renderChildNodes={(childNodes, pId, nextDepth, gInfos) => renderBlockNodes(childNodes, pId, nextDepth, gInfos)}
             groupInfos={groupInfos}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            dropIndicator={dropIndicator}
           />
         );
 
@@ -760,7 +907,7 @@ const RegexVisionWorkspace: React.FC = () => {
                     <p className="text-sm">Вставьте Regex в поле выше или добавьте блоки вручную.</p>
                     </div>
                 ) : (
-                    <div className="space-y-1 p-1">
+                    <div className="space-y-1 p-2">
                       {renderBlockNodes(blocks, null, 0, regexOutputState.groupInfos)}
                     </div>
                 )}
