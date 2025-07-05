@@ -47,11 +47,11 @@ const getDynamicTitle = (block: Block): string => {
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose }) => {
   if (!block) {
     return (
-        <Card className="h-full shadow-none border-0 rounded-none flex flex-col items-center justify-center text-center p-4 bg-card">
-            <CardHeader>
+        <Card className="h-full flex flex-col shadow-md border-primary/20 overflow-hidden">
+            <CardHeader className="items-center">
                 <CardTitle className="text-lg">Настройки</CardTitle>
             </CardHeader>
-            <CardContent className="text-muted-foreground flex flex-col items-center gap-4">
+            <CardContent className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-center gap-4 p-4">
                 <Settings size={48} className="opacity-50" />
                 <p>Выберите блок из дерева слева, чтобы увидеть его настройки.</p>
             </CardContent>
@@ -411,7 +411,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
   };
 
   return (
-    <Card className="h-full shadow-none border-0 rounded-none bg-card flex flex-col">
+    <Card className="h-full flex flex-col shadow-md border-primary/20 overflow-hidden">
       <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b">
         <CardTitle className="text-base truncate">Настройки: {getDynamicTitle(block)}</CardTitle>
       </CardHeader>

@@ -642,7 +642,7 @@ const RegexVisionWorkspace: React.FC = () => {
     input.click();
   };
 
-  const toggleAllBlocksExpansion = (expand: boolean) => {
+  const toggleAllBlocksExpansion = useCallback((expand: boolean) => {
     const toggleRecursively = (currentBlocks: Block[]): Block[] => {
       return currentBlocks.map(b => {
         const canBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL, BlockType.CHARACTER_CLASS].includes(b.type);
@@ -654,10 +654,10 @@ const RegexVisionWorkspace: React.FC = () => {
       });
     };
     setBlocks(prev => toggleRecursively(prev));
-  };
+  }, []);
 
-  const handleExpandAll = useCallback(() => toggleAllBlocksExpansion(true), []);
-  const handleCollapseAll = useCallback(() => toggleAllBlocksExpansion(false), []);
+  const handleExpandAll = useCallback(() => toggleAllBlocksExpansion(true), [toggleAllBlocksExpansion]);
+  const handleCollapseAll = useCallback(() => toggleAllBlocksExpansion(false), [toggleAllBlocksExpansion]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -916,7 +916,7 @@ const RegexVisionWorkspace: React.FC = () => {
             <ResizableHandle withHandle />
 
             <ResizablePanel defaultSize={25} minSize={20}>
-                 <div className="h-full">
+                 <div className="h-full p-2">
                     <SettingsPanel
                         block={selectedBlock}
                         onUpdate={handleUpdateBlock}
