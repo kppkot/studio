@@ -89,7 +89,7 @@ function transformNodeToBlocks(node: any): Block[] {
                 type,
                 min: min,
                 max: max,
-                mode: q.greedy ? 'greedy' : (q.lazy ? 'lazy' : 'possessive'),
+                mode: q.greedy ? 'greedy' : 'lazy',
             } as QuantifierSettings,
             children: [],
             isExpanded: false,
@@ -156,10 +156,6 @@ function transformNodeToBlocks(node: any): Block[] {
         name = node.name;
       }
       
-      // A Group node from the AST must always be represented as a GROUP block
-      // to preserve the parentheses and group type (capturing, etc.).
-      // The content of the group (node.expression) is transformed into child blocks.
-      
       const groupBlock: Block = {
         id: newId,
         type: BlockType.GROUP,
@@ -172,27 +168,44 @@ function transformNodeToBlocks(node: any): Block[] {
     }
 
     case 'Disjunction': {
-      const leftBlocks = transformNodeToBlocks(node.left);
-      const rightBlocks = transformNodeToBlocks(node.right);
-      
-      const leftNode = leftBlocks.length > 1
-          ? { id: generateId(), type: BlockType.GROUP, settings: { type: 'non-capturing' as const }, children: leftBlocks, isExpanded: true }
-          : leftBlocks[0];
+        // This is for `|` operator.
+        // `a|b|c` is parsed as a nested structure: Disjunction(a, Disjunction(b, c)).
+        // We need to traverse this structure to flatten it into one ALTERNATION block with multiple children.
+        const alternatives: Block[] = [];
+        let currentNode: any = node;
 
-      // If right side was already an alternation, its children are the alternatives to be flattened.
-      // Otherwise, it's a single alternative that might need grouping.
-      const rightAlternatives = (rightBlocks.length === 1 && rightBlocks[0].type === BlockType.ALTERNATION)
-          ? rightBlocks[0].children
-          : [ rightBlocks.length > 1 ? {id: generateId(), type: BlockType.GROUP, settings: {type: 'non-capturing' as const}, children: rightBlocks, isExpanded: true } : rightBlocks[0] ];
+        while (currentNode && currentNode.type === 'Disjunction') {
+            // The `left` side of a disjunction is always a complete alternative.
+            // It might be a complex expression (like `ab` or `(ab)`) which resolves to multiple blocks.
+            // If so, we wrap it in a non-capturing group to keep it together as one alternative.
+            const leftBlocks = transformNodeToBlocks(currentNode.left);
+            if (leftBlocks.length > 1) {
+                alternatives.push({ id: generateId(), type: BlockType.GROUP, settings: { type: 'non-capturing' } as GroupSettings, children: leftBlocks, isExpanded: true });
+            } else if (leftBlocks.length === 1) {
+                alternatives.push(leftBlocks[0]);
+            }
+            currentNode = currentNode.right;
+        }
 
-      const alternationBlock: Block = {
-          id: newId,
-          type: BlockType.ALTERNATION,
-          settings: {},
-          children: [leftNode, ...rightAlternatives].filter(Boolean),
-          isExpanded: true,
-      };
-      return [alternationBlock];
+        // The final node in the chain (the rightmost part of the original regex)
+        if (currentNode) {
+            const rightBlocks = transformNodeToBlocks(currentNode);
+            if (rightBlocks.length > 1) {
+                alternatives.push({ id: generateId(), type: BlockType.GROUP, settings: { type: 'non-capturing' } as GroupSettings, children: rightBlocks, isExpanded: true });
+            } else if (rightBlocks.length === 1) {
+                alternatives.push(rightBlocks[0]);
+            }
+        }
+
+        const alternationBlock: Block = {
+            id: newId,
+            type: BlockType.ALTERNATION,
+            settings: {},
+            children: alternatives.filter(Boolean),
+            isExpanded: true,
+        };
+        
+        return [alternationBlock];
     }
 
     case 'Assertion': {
