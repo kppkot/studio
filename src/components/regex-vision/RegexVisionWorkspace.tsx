@@ -1,5 +1,6 @@
+
 "use client";
-import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense, useMemo } from 'react';
 import type { Block, RegexMatch, GroupInfo, CharacterClassSettings, RegexStringPart, SavedPattern, DropIndicator } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
@@ -750,6 +751,32 @@ const RegexVisionWorkspace: React.FC = () => {
   }, [toast]);
 
 
+  const findParentRecursive = (nodes: Block[], childId: string): Block | null => {
+    for (const node of nodes) {
+        if (node.children?.some(c => c.id === childId)) {
+            return node;
+        }
+        if (node.children) {
+            const result = findParentRecursive(node.children, childId);
+            if (result) return result;
+        }
+    }
+    return null;
+  }
+  
+  const getIdsToHighlight = (id: string | null): string[] => {
+      if (!id) return [];
+      const block = findBlockRecursive(blocks, id);
+      if (block?.type === BlockType.ALTERNATION) {
+          const parent = findParentRecursive(blocks, id);
+          if (parent) return [id, parent.id];
+      }
+      return [id];
+  }
+
+  const idsToHighlight = useMemo(() => getIdsToHighlight(selectedBlockId), [selectedBlockId, blocks]);
+  const idsToHover = useMemo(() => getIdsToHighlight(hoveredBlockId), [hoveredBlockId, blocks]);
+
   const handleBlockHover = (blockId: string | null) => {
     setHoveredBlockId(blockId);
   };
@@ -858,9 +885,9 @@ const RegexVisionWorkspace: React.FC = () => {
                 onParseRegexString={handleParseRegexString}
                 isParsing={isParsing}
                 stringParts={regexOutputState.stringParts}
-                selectedBlockId={selectedBlockId}
+                highlightedIds={idsToHighlight}
                 onSelectBlock={setSelectedBlockId}
-                hoveredBlockId={hoveredBlockId}
+                hoveredIds={idsToHover}
                 onHoverPart={handleBlockHover}
                 isReady={isReady}
               />

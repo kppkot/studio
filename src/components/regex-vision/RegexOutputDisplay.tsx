@@ -35,9 +35,9 @@ interface RegexOutputDisplayProps {
   onParseRegexString: (regex: string) => void;
   isParsing: boolean;
   stringParts: RegexStringPart[];
-  selectedBlockId: string | null;
+  highlightedIds: string[];
   onSelectBlock: (id: string | null) => void;
-  hoveredBlockId: string | null;
+  hoveredIds: string[];
   onHoverPart: (blockId: string | null) => void;
   isReady: boolean;
 }
@@ -49,9 +49,9 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
   onParseRegexString,
   isParsing,
   stringParts,
-  selectedBlockId,
+  highlightedIds,
   onSelectBlock,
-  hoveredBlockId,
+  hoveredIds,
   onHoverPart,
   isReady,
 }) => {
@@ -139,23 +139,28 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
             tabIndex={0}
             onMouseLeave={() => onHoverPart(null)}
           >
-              {stringParts.length > 0 ? stringParts.map((part, index) => (
-                  <span 
-                      key={`${part.blockId}-${index}`}
-                      onMouseEnter={() => onHoverPart(part.blockId)}
-                      onClick={() => onSelectBlock(part.blockId)}
-                      className={cn(
-                        "transition-all duration-100 rounded-sm px-0.5 cursor-pointer",
-                        getColorForType(part.blockType),
-                        {
-                          "ring-2 ring-primary scale-105 shadow-lg z-10 relative font-bold brightness-110": part.blockId === selectedBlockId,
-                          "ring-1 ring-primary brightness-110": part.blockId === hoveredBlockId && part.blockId !== selectedBlockId,
-                        }
-                      )}
-                  >
-                      {part.text}
-                  </span>
-              )) : <span className="text-muted-foreground text-sm" onClick={() => setIsEditing(true)}>Начните строить выражение...</span>}
+              {stringParts.length > 0 ? stringParts.map((part, index) => {
+                  const isSelected = highlightedIds.includes(part.blockId);
+                  const isHovered = hoveredIds.includes(part.blockId);
+
+                  return (
+                    <span 
+                        key={`${part.blockId}-${index}`}
+                        onMouseEnter={() => onHoverPart(part.blockId)}
+                        onClick={(e) => { e.stopPropagation(); onSelectBlock(part.blockId); }}
+                        className={cn(
+                          "transition-all duration-100 rounded-sm px-0.5 cursor-pointer",
+                          getColorForType(part.blockType),
+                          {
+                            "ring-2 ring-primary scale-105 shadow-lg z-10 relative font-bold brightness-110": isSelected,
+                            "ring-1 ring-primary brightness-110": isHovered && !isSelected,
+                          }
+                        )}
+                    >
+                        {part.text}
+                    </span>
+                  )
+                }) : <span className="text-muted-foreground text-sm" onClick={() => setIsEditing(true)}>Начните строить выражение...</span>}
           </div>
          )}
          {isParsing && !isEditing && <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}
