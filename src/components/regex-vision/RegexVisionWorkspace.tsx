@@ -61,9 +61,8 @@ const RegexVisionWorkspace: React.FC = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // This effect runs once on the client after hydration, indicating that
-    // the component has mounted and is ready for interaction.
-    setIsReady(true);
+    const timer = setTimeout(() => setIsReady(true), 50);
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -867,7 +866,7 @@ const RegexVisionWorkspace: React.FC = () => {
 
       <main className="flex-1 min-h-0">
           <ResizablePanelGroup direction="horizontal" className="h-full">
-            <ResizablePanel defaultSize={30} minSize={25}>
+            <ResizablePanel defaultSize={50} minSize={25}>
                 <div className="h-full flex flex-col p-2">
                     <Card className="flex-1 flex flex-col shadow-md border-primary/20 overflow-hidden">
                     <CardHeader className="py-2 px-3 border-b">
@@ -901,7 +900,7 @@ const RegexVisionWorkspace: React.FC = () => {
 
             <ResizableHandle withHandle />
 
-            <ResizablePanel defaultSize={45} minSize={30}>
+            <ResizablePanel defaultSize={35} minSize={30}>
                 <div className="h-full p-2">
                     <TestArea
                         testText={testText}
@@ -915,7 +914,7 @@ const RegexVisionWorkspace: React.FC = () => {
 
             <ResizableHandle withHandle />
 
-            <ResizablePanel defaultSize={25} minSize={20}>
+            <ResizablePanel defaultSize={15} minSize={20}>
                  <div className="h-full p-2">
                     <SettingsPanel
                         block={selectedBlock}
