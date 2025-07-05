@@ -17,14 +17,13 @@ interface FlagConfig {
   description: React.ReactNode;
 }
 
-// Based on the user provided image, but using standard JS flags
 const FLAGS_CONFIG: FlagConfig[] = [
-  { flag: 'g', title: 'global', description: "Don't return after first match" },
-  { flag: 'i', title: 'insensitive', description: 'Case insensitive match' },
-  { flag: 'm', title: 'multi line', description: <span><code className="font-mono bg-muted px-1 py-0.5 rounded-sm">^</code> and <code className="font-mono bg-muted px-1 py-0.5 rounded-sm">$</code> match start/end of line</span> },
-  { flag: 's', title: 'single line', description: 'Dot matches newline' },
-  { flag: 'u', title: 'unicode', description: 'Match with full unicode' },
-  { flag: 'y', title: 'sticky', description: 'Anchor to start of pattern, or at the end of the most recent match' },
+  { flag: 'g', title: 'Глобальный поиск (global)', description: 'Не останавливаться после первого совпадения' },
+  { flag: 'i', title: 'Игнорировать регистр (insensitive)', description: 'Регистронезависимое совпадение' },
+  { flag: 'm', title: 'Многострочный режим (multi line)', description: <span>Символы <code className="font-mono bg-muted px-1 py-0.5 rounded-sm">^</code> и <code className="font-mono bg-muted px-1 py-0.5 rounded-sm">$</code> соответствуют началу/концу строки</span> },
+  { flag: 's', title: 'Однострочный режим (single line)', description: 'Символ "." соответствует также символу переноса строки' },
+  { flag: 'u', title: 'Unicode', description: 'Корректная обработка полной поддержки Unicode' },
+  { flag: 'y', title: 'Липкий поиск (sticky)', description: 'Поиск только с позиции, указанной в lastIndex' },
 ];
 
 interface FlagsControlProps {
@@ -49,13 +48,13 @@ export const FlagsControl: React.FC<FlagsControlProps> = ({ flags, onFlagsChange
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="h-10 w-24 font-mono text-sm" title="Configure flags">
+        <Button variant="outline" className="h-10 w-24 font-mono text-sm" title="Настроить флаги">
           /{flags}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-80 p-2" align="end">
         <DropdownMenuLabel className="px-2 py-1.5 text-sm font-semibold text-foreground/80 tracking-wider">
-          REGEX FLAGS
+          ФЛАГИ REGEX
         </DropdownMenuLabel>
         
         <div className="flex flex-col gap-1 mt-1">
@@ -69,7 +68,7 @@ export const FlagsControl: React.FC<FlagsControlProps> = ({ flags, onFlagsChange
               className="flex flex-col items-start p-2 cursor-pointer focus:bg-accent/50 rounded-md"
             >
               <div className="flex justify-between w-full items-center">
-                <span className="font-semibold text-green-700 dark:text-green-500 capitalize">{title}</span>
+                <span className="font-semibold text-green-700 dark:text-green-500">{title}</span>
                 {flags.includes(flag) && <Check className="h-4 w-4 text-green-700 dark:text-green-500" />}
               </div>
               <div className="text-xs text-muted-foreground whitespace-normal">{description}</div>
