@@ -114,49 +114,51 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
       
       case BlockType.CHARACTER_CLASS:
         const ccSettings = settings as CharacterClassSettings;
-        const isShorthand = (localPattern.startsWith('\\') && localPattern.length === 2 && !localPattern.match(/\\\d/));
+        
+        const isPresetShorthand = [
+          '\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'
+        ].includes(ccSettings.pattern);
 
-        const handleShorthandCharChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-          const char = e.target.value.slice(0, 1);
-          const newPattern = `\\${char}`;
-          setLocalPattern(newPattern);
-          onUpdate(block.id, { settings: { ...ccSettings, pattern: newPattern } });
-        };
+        if (isPresetShorthand) {
+          const shorthandInfo: { [key: string]: string } = {
+            '\\d': 'Этот блок соответствует любой цифре (0-9).',
+            '\\D': 'Этот блок соответствует любому символу, КРОМЕ цифры.',
+            '\\w': 'Этот блок соответствует любому "символу слова": букве, цифре или знаку подчеркивания `_`.',
+            '\\W': 'Этот блок соответствует любому символу, не являющемуся символом слова.',
+            '\\s': 'Этот блок соответствует любому пробельному символу: пробелу, табуляции, переносу строки и т.д.',
+            '\\S': 'Этот блок соответствует любому символу, КРОМЕ пробельного.',
+            '.': 'Этот блок соответствует абсолютно любому символу, кроме переноса строки.',
+          };
+          return (
+             <Alert>
+                <Lightbulb className="h-4 w-4" />
+                <AlertDescription>
+                    {shorthandInfo[ccSettings.pattern] || 'Это предустановленный символьный класс.'}
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      Это неизменяемый блок. Чтобы использовать другой класс, пожалуйста, удалите этот и добавьте новый из палитры.
+                    </p>
+                </AlertDescription>
+            </Alert>
+          );
+        }
         
         return (
           <>
             <div>
-              <Label htmlFor="pattern" className="text-sm font-medium">Шаблон</Label>
+              <Label htmlFor="pattern" className="text-sm font-medium">Свои символы</Label>
                <div className="flex items-stretch mt-1">
-                 {isShorthand ? (
-                    <>
-                    <span className="flex items-center justify-center w-10 rounded-l-md border border-r-0 border-input bg-muted text-red-500 font-bold text-lg">
-                        \
-                    </span>
-                    <Input
-                        id="pattern-shorthand"
-                        type="text"
-                        value={localPattern.substring(1)}
-                        onChange={handleShorthandCharChange}
-                        className="rounded-l-none text-lg font-mono focus:ring-inset focus:ring-2"
-                        maxLength={1}
-                        autoFocus
-                    />
-                    </>
-                 ) : (
                     <Input
                     id="pattern"
                     type="text"
                     value={localPattern}
                     onChange={(e) => setLocalPattern(e.target.value)}
                     onBlur={handlePatternBlur}
-                    placeholder="например, a-z0-9"
+                    placeholder="например, a-z0-9_!@"
                     className="font-mono"
                     />
-                 )}
                </div>
                <p className="text-xs text-muted-foreground mt-1.5 px-1">
-                 Для спец. класса введите '\' и символ (например, \d, \w).
+                 Введите символы или диапазоны (например, a-z). Для специальных классов (типа `\d`) используйте палитру, чтобы добавить их как отдельные блоки.
               </p>
             </div>
             
@@ -168,30 +170,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
               />
               <Label htmlFor="negated" className="text-sm">Отрицание (например, [^abc])</Label>
             </div>
-
-            {config.presets && (
-              <div className="mt-3">
-                <Label className="text-sm font-medium">Предустановки</Label>
-                <div className="grid grid-cols-2 gap-2 mt-1">
-                  {config.presets.map(preset => (
-                    <Button
-                      key={preset.value}
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setLocalPattern(preset.value);
-                        onUpdate(block.id, {
-                          settings: { ...block.settings, pattern: preset.value },
-                        });
-                      }}
-                      className="justify-start text-left"
-                    >
-                      {preset.label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
+            
              <Alert className="mt-4 text-xs">
                 <Lightbulb className="h-4 w-4" />
                 <AlertDescription>
