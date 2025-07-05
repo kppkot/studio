@@ -219,10 +219,12 @@ function transformNodeToBlocks(node: any): Block[] {
       } else {
         blockType = BlockType.ANCHOR;
         switch(node.kind) {
-            case 'StartOfLine':
+            case 'Start': // Handle \A and ^ in non-multiline mode
+            case 'StartOfLine': // Handle ^ in multiline mode
                 settings.type = '^';
                 break;
-            case 'EndOfLine':
+            case 'End': // Handle \Z, \z and $ in non-multiline mode
+            case 'EndOfLine': // Handle $ in multiline mode
                 settings.type = '$';
                 break;
             case 'WordBoundary':
