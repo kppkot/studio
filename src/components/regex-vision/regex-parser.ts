@@ -1,5 +1,4 @@
 
-'use server';
 import regexpTree from 'regexp-tree';
 import type { Block, CharacterClassSettings, GroupSettings, LiteralSettings, QuantifierSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings } from './types';
 import { BlockType } from './types';
