@@ -10,13 +10,8 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
     const ast = regexpTree.parse(`/${regexString}/u`, { allowGroupNameDuplicates: true });
     
     if (ast.body) {
-      const rootBlock = transformNodeToBlock(ast.body);
-      // The root is often an Alternative (sequence). If our transformer wrapped it in a helper group,
-      // we unwrap it here for a cleaner top-level tree in the UI.
-      if (rootBlock && rootBlock.type === BlockType.GROUP && (rootBlock.settings as any).isSequenceWrapper) {
-          return rootBlock.children || [];
-      }
-      return rootBlock ? [rootBlock] : [];
+      // The root is often an Alternative (sequence). The new transformer handles this correctly.
+      return transformNodeToBlocks(ast.body);
     }
     return [];
   } catch (error) {
@@ -45,211 +40,167 @@ function charToString(charNode: any): string {
     return charNode.raw;
 }
 
-// Recursive transformer function
-function transformNodeToBlock(node: any): Block | null {
-  if (!node) return null;
-  const newId = generateId();
+// Returns an array of blocks. A simple node returns a single-element array.
+// A quantified node returns [subject, quantifier]. An Alternative returns a flat list.
+function transformNodeToBlocks(node: any): Block[] {
+  if (!node) return [];
 
-  // Handle quantifiers first, as they wrap other nodes in the AST.
+  // Handle quantifiers first. They modify the result of their subject.
   if (node.quantifier) {
-      // Recursively transform the node that is being quantified.
-      const subject = transformNodeToBlock({ ...node, quantifier: null });
-      if (!subject) return null;
+    const subjectBlocks = transformNodeToBlocks({ ...node, quantifier: null });
+    // This should not happen for valid regex, but as a safeguard:
+    if (subjectBlocks.length === 0) return [];
 
-      const q = node.quantifier;
-      let type: QuantifierSettings['type'] = q.kind;
-      let min, max;
+    const q = node.quantifier;
+    let type: QuantifierSettings['type'] = q.kind;
+    let min, max;
 
-      if (q.range) {
-          min = q.range.from;
-          max = q.range.to;
-          if (min !== undefined && max === undefined) type = '{n,}';
-          else if (min !== undefined && max !== undefined && min === max) type = '{n}';
-          else if (min !== undefined && max !== undefined) type = '{n,m}';
-      }
+    if (q.range) {
+        min = q.range.from;
+        max = q.range.to;
+        if (min !== undefined && max === undefined) type = '{n,}';
+        else if (min !== undefined && max !== undefined && min === max) type = '{n}';
+        else if (min !== undefined && max !== undefined) type = '{n,m}';
+    }
 
-      const quantifierBlock: Block = {
-          id: generateId(),
-          type: BlockType.QUANTIFIER,
-          settings: {
-              type,
-              min: min,
-              max: max,
-              mode: q.greedy ? 'greedy' : (q.lazy ? 'lazy' : 'possessive'),
-          } as QuantifierSettings,
-          children: [],
-          isExpanded: false,
-      };
-
-      // Since a quantified item is a sequence of [subject, quantifier], we wrap it in a group.
-      // This group is a helper for our block structure and can be unwrapped at the top level.
-      return {
-          id: newId,
-          type: BlockType.GROUP,
-          settings: { type: 'non-capturing', isSequenceWrapper: true } as any,
-          children: [subject, quantifierBlock],
-          isExpanded: true
-      };
+    const quantifierBlock: Block = {
+        id: generateId(),
+        type: BlockType.QUANTIFIER,
+        settings: {
+            type,
+            min: min,
+            max: max,
+            mode: q.greedy ? 'greedy' : (q.lazy ? 'lazy' : 'possessive'),
+        } as QuantifierSettings,
+        children: [],
+        isExpanded: false,
+    };
+    
+    return [...subjectBlocks, quantifierBlock];
   }
+
+  // --- Base cases (no quantifier) ---
+  const newId = generateId();
 
   switch (node.type) {
     case 'Alternative': {
-        const children: Block[] = [];
-        let currentLiteral = '';
-
-        const flushLiteral = () => {
-            if (currentLiteral) {
-                children.push({
-                    id: generateId(),
-                    type: BlockType.LITERAL,
-                    settings: { text: currentLiteral } as LiteralSettings,
-                    children: [], isExpanded: false
-                });
-                currentLiteral = '';
-            }
-        };
-
-        for (const expr of node.expressions) {
-            // Combine consecutive simple characters into a single LITERAL block for readability.
-            if (expr.type === 'Char' && expr.kind === 'simple' && !expr.quantifier) {
-                currentLiteral += expr.value;
-            } else {
-                flushLiteral();
-                const childBlock = transformNodeToBlock(expr);
-                if (childBlock) {
-                    // If a child was a sequence that got wrapped in a group, flatten it into the current sequence.
-                    if (childBlock.type === BlockType.GROUP && (childBlock.settings as any).isSequenceWrapper) {
-                        children.push(...(childBlock.children || []));
-                    } else {
-                        children.push(childBlock);
-                    }
-                }
-            }
-        }
-        flushLiteral();
-        
-        // If the entire sequence resulted in just one block, return that block directly.
-        if (children.length === 1) {
-            return children[0];
-        }
-
-        // A sequence of multiple blocks is represented as a helper non-capturing group.
-        return {
-            id: newId,
-            type: BlockType.GROUP,
-            settings: { type: 'non-capturing', isSequenceWrapper: true } as any,
-            children: children,
-            isExpanded: true,
-        };
+        // Use flatMap to flatten the results of all child expressions into a single array
+        return node.expressions.flatMap((expr: any) => transformNodeToBlocks(expr));
     }
     
     case 'Disjunction': {
         const children: Block[] = [];
-        // Recursively collect all parts of a disjunction tree (e.g., a|b|c) into a flat list.
+        // Recursively collect all parts of a disjunction tree (e.g., a|b|c) into a flat list of children for the Alternation block.
         const collectAlternatives = (disjunctionNode: any) => {
             if (disjunctionNode.type === 'Disjunction') {
                 collectAlternatives(disjunctionNode.left);
                 collectAlternatives(disjunctionNode.right);
             } else {
-                const block = transformNodeToBlock(disjunctionNode);
-                if (block) children.push(block);
+                children.push(...transformNodeToBlocks(disjunctionNode));
             }
         };
         collectAlternatives(node);
-        return {
+        const alternationBlock: Block = {
             id: newId,
             type: BlockType.ALTERNATION,
             settings: {},
             children,
             isExpanded: true,
         };
+        return [alternationBlock];
     }
 
     case 'CharacterClass': {
-        // Handles simple meta classes like `.` or `\d` when they are not inside `[...]`.
+        let patternContent;
         if (node.kind === 'meta' && !node.expressions) {
-            return {
-                id: newId,
-                type: BlockType.CHARACTER_CLASS,
-                settings: { pattern: node.raw, negated: false } as CharacterClassSettings,
-                children: [], isExpanded: false
-            };
+            patternContent = node.raw;
+        } else {
+            patternContent = (node.expressions || []).map((expr: any) => {
+                if (expr.type === 'ClassRange') return `${charToString(expr.from)}-${charToString(expr.to)}`;
+                return charToString(expr);
+            }).join('');
         }
-        // Handles `[...]` character classes.
-        const pattern = node.expressions.map((expr: any) => {
-            if (expr.type === 'ClassRange') return `${charToString(expr.from)}-${charToString(expr.to)}`;
-            return charToString(expr);
-        }).join('');
-        return {
+        const charClassBlock: Block = {
             id: newId,
             type: BlockType.CHARACTER_CLASS,
-            settings: { pattern: pattern, negated: node.negative || false } as CharacterClassSettings,
+            settings: { pattern: patternContent, negated: node.negative || false } as CharacterClassSettings,
             children: [], isExpanded: false
         };
+        return [charClassBlock];
     }
     
-    case 'Char':
-        // A simple character. `raw` is used to preserve things that might need escaping.
-        return {
+    case 'Char': {
+        const literalBlock: Block = {
             id: newId,
             type: BlockType.LITERAL,
             settings: { text: node.raw, isRawRegex: true } as LiteralSettings,
             children: [], isExpanded: false
         };
+        return [literalBlock];
+    }
       
     case 'Group': {
-        const expression = node.expression ? transformNodeToBlock(node.expression) : null;
-        return {
+        const children = node.expression ? transformNodeToBlocks(node.expression) : [];
+        const groupBlock: Block = {
             id: newId,
             type: BlockType.GROUP,
             settings: {
                 type: node.capturing ? (node.name ? 'named' : 'capturing') : 'non-capturing',
                 name: node.name,
             } as GroupSettings,
-            children: expression ? [expression] : [],
+            children,
             isExpanded: true,
         };
+        return [groupBlock];
     }
 
-    case 'Assertion':
+    case 'Assertion': {
         if (node.kind === 'Lookahead' || node.kind === 'Lookbehind') {
             const lookaroundType: LookaroundSettings['type'] = `${node.negative ? 'negative' : 'positive'}-${node.kind.toLowerCase()}` as any;
-            const assertionChild = node.assertion ? transformNodeToBlock(node.assertion) : null;
-            return {
+            const assertionChild = node.assertion ? transformNodeToBlocks(node.assertion) : [];
+            const lookaroundBlock: Block = {
                 id: newId,
                 type: BlockType.LOOKAROUND,
                 settings: { type: lookaroundType } as LookaroundSettings,
-                children: assertionChild ? [assertionChild] : [],
+                children: assertionChild,
                 isExpanded: true
             };
+            return [lookaroundBlock];
         } else { // Anchor
-            // `regexp-tree` uses `kind: 'b'` for `\b`. We need to reconstruct the raw value.
             const anchorType = (node.kind === 'b' || node.kind === 'B') ? `\\${node.kind}` : node.kind;
-            return {
+            const anchorBlock: Block = {
                 id: newId,
                 type: BlockType.ANCHOR,
-                settings: { type: anchorType } as AnchorSettings,
+                settings: { type: anchorType as AnchorSettings['type'] } as AnchorSettings,
                 children: [],
                 isExpanded: false
             };
+            return [anchorBlock];
         }
+    }
       
-    case 'Backreference':
-      return {
-        id: newId,
-        type: BlockType.BACKREFERENCE,
-        settings: { ref: node.reference } as BackreferenceSettings,
-        children: [],
-        isExpanded: false
-      };
+    case 'Backreference': {
+        const backrefBlock: Block = {
+            id: newId,
+            type: BlockType.BACKREFERENCE,
+            settings: { ref: node.reference } as BackreferenceSettings,
+            children: [],
+            isExpanded: false
+        };
+        return [backrefBlock];
+    }
 
     default:
         console.warn('Неизвестный тип узла AST:', node.type, node);
-        return {
-            id: newId,
-            type: BlockType.LITERAL,
-            settings: { text: node.raw || '', isRawRegex: true } as LiteralSettings,
-            children: [], isExpanded: false
-        };
+        if (node.raw) {
+             const fallbackBlock: Block = {
+                id: newId,
+                type: BlockType.LITERAL,
+                settings: { text: node.raw, isRawRegex: true } as LiteralSettings,
+                children: [], isExpanded: false
+            };
+            return [fallbackBlock];
+        }
+        return [];
   }
 }
