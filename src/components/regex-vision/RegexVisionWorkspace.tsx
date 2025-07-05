@@ -1,10 +1,10 @@
 
 "use client";
 import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
-import type { Block, RegexMatch, GroupInfo, CharacterClassSettings, RegexStringPart } from './types'; 
+import type { Block, RegexMatch, GroupInfo, CharacterClassSettings, RegexStringPart, SavedPattern } from './types'; 
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { generateId, generateRegexStringAndGroupInfo, cloneBlockForState, breakdownPatternIntoChildren } from './utils'; 
+import { generateId, generateRegexStringAndGroupInfo, cloneBlockForState } from './utils'; 
 import { useToast } from '@/hooks/use-toast';
 import { parseRegexWithLibrary } from './regex-parser';
 
@@ -28,10 +28,20 @@ import {
 import { Layers, Edit3, Code2, Plus, FoldVertical, UnfoldVertical, Menu, Puzzle, Share2, DownloadCloud, UploadCloud, Loader2 } from 'lucide-react'; 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import AnalysisPanel from './AnalysisPanel';
+import type { FixRegexOutput } from '@/ai/flows/fix-regex-flow';
+import RegexWizardModal from './RegexWizardModal';
+import GuidedStepsPanel from './GuidedStepsPanel';
+import type { GuidedRegexStep } from '@/ai/flows/schemas';
+import { generateGuidedPlan } from '@/ai/flows/guided-regex-flow';
 
 // Lazy load panels to improve initial load time
 const CodeGenerationPanel = lazy(() => import('./CodeGenerationPanel'));
+const PerformanceAnalyzerView = lazy(() => import('./PerformanceAnalyzerView'));
+const PatternLibraryView = lazy(() => import('./PatternLibraryView'));
+const DebugView = lazy(() => import('./DebugView'));
 
+type RegexVisionMode = 'builder' | 'guided';
 
 const RegexVisionWorkspace: React.FC = () => {
   const [blocks, setBlocks] = useState<Block[]>([]);
@@ -43,6 +53,12 @@ const RegexVisionWorkspace: React.FC = () => {
   const [isParsing, setIsParsing] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [isCodeGenOpen, setIsCodeGenOpen] = useState(false);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [mode, setMode] = useState<RegexVisionMode>('builder');
+  const [guidedQuery, setGuidedQuery] = useState('');
+  const [guidedSteps, setGuidedSteps] = useState<GuidedRegexStep[]>([]);
+  const [isGuidedLoading, setIsGuidedLoading] = useState(false);
+
 
   const [testText, setTestText] = useState<string>('Быстрая коричневая лиса прыгает через ленивую собаку.');
   const [regexFlags, setRegexFlags] = useState<string>('gu');
@@ -57,20 +73,24 @@ const RegexVisionWorkspace: React.FC = () => {
     groupInfos: [],
     stringParts: [],
   });
+  const [naturalLanguageQuery, setNaturalLanguageQuery] = useState('');
   
   const { toast } = useToast();
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsReady(true), 50);
+    // This effect is to prevent a flash of unstyled content on load.
+    const timer = setTimeout(() => setIsReady(true), 50); // Small delay to ensure styles are applied
     return () => clearTimeout(timer);
   }, []);
 
+  // Effect to update regex string and matches whenever the block structure changes
   useEffect(() => {
     const { regexString: newRegex, groupInfos, stringParts } = generateRegexStringAndGroupInfo(blocks);
     setRegexOutputState({ regexString: newRegex, groupInfos, stringParts });
 
     if (newRegex && testText) {
       try {
+        // 'd' flag is for match indices, which we need. Ensure it's always there.
         const currentFlags = regexFlags.includes('d') ? regexFlags : regexFlags + (regexFlags.length ? '' : '') + 'd';
 
         const regexObj = new RegExp(newRegex, currentFlags);
@@ -173,6 +193,7 @@ const RegexVisionWorkspace: React.FC = () => {
     return { updatedBlocks, blockWasSelected };
 };
 
+
   const addChildRecursive = (currentBlocks: Block[], pId: string, newBlock: Block): Block[] => {
     return currentBlocks.map(block => {
       if (block.id === pId) {
@@ -203,6 +224,7 @@ const RegexVisionWorkspace: React.FC = () => {
       isExpanded: canBeExpanded ? true : undefined,
     };
 
+    // Special handling for quantifiers to attach them to the preceding block.
     if (type === BlockType.QUANTIFIER) {
       const targetBlockId = contextualBlockId || selectedBlockId;
       if (!targetBlockId) {
@@ -213,8 +235,10 @@ const RegexVisionWorkspace: React.FC = () => {
         for (let i = 0; i < nodes.length; i++) {
           const currentNode = nodes[i];
           if (currentNode.id === blockToQuantifyId) {
+            // Can't quantify a quantifier or a block that already has one.
             if (currentNode.type === BlockType.QUANTIFIER) return null;
             if (i + 1 < nodes.length && nodes[i+1].type === BlockType.QUANTIFIER) return null;
+            
             const newNodes = [...nodes];
             newNodes.splice(i + 1, 0, newBlock);
             return newNodes;
@@ -245,14 +269,16 @@ const RegexVisionWorkspace: React.FC = () => {
       return;
     }
 
+    // Default block addition logic
     let targetParentId = parentId;
     if (!targetParentId && selectedBlockId) {
       const selBlock = findBlockRecursive(blocks, selectedBlockId);
       if (selBlock) {
-        const isContainer = 
+         const isContainer = 
             [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(selBlock.type) ||
             (selBlock.type === BlockType.CHARACTER_CLASS && (!(selBlock.settings as CharacterClassSettings).pattern || (selBlock.children && selBlock.children.length > 0)));
 
+        // If the selected block is a container, new blocks are added inside it by default.
         if (isContainer) {
             targetParentId = selectedBlockId;
         }
@@ -262,6 +288,7 @@ const RegexVisionWorkspace: React.FC = () => {
     if (targetParentId) {
       setBlocks(prev => addChildRecursive(prev, targetParentId, newBlock));
     } else {
+      // Find the parent of the selected block to add as a sibling
       const findParentOfSelected = (nodes: Block[], sId: string, pId: string | null): string | null => {
         for(const node of nodes) {
             if (node.id === sId) return pId;
@@ -273,6 +300,7 @@ const RegexVisionWorkspace: React.FC = () => {
         return null;
       }
       const selectedParentId = selectedBlockId ? findParentOfSelected(blocks, selectedBlockId, null) : null;
+      
       if(selectedParentId) {
         setBlocks(prev => {
             const insertSibling = (bs: Block[], sId: string, newB: Block): Block[] => {
@@ -285,6 +313,7 @@ const RegexVisionWorkspace: React.FC = () => {
             return insertSibling(prev, selectedBlockId, newBlock);
         });
       } else {
+        // No parent, add to root
         setBlocks(prev => [...prev, newBlock]);
       }
     }
@@ -295,32 +324,8 @@ const RegexVisionWorkspace: React.FC = () => {
   }, [toast, blocks, selectedBlockId, contextualBlockId]);
 
   const handleUpdateBlock = useCallback((id: string, updatedBlockData: Partial<Block>) => {
-    // Check if we are updating a pattern of a character class
-    if (updatedBlockData.settings && 'pattern' in updatedBlockData.settings) {
-        const blockToUpdate = findBlockRecursive(blocks, id);
-        if (blockToUpdate && blockToUpdate.type === BlockType.CHARACTER_CLASS && (!blockToUpdate.children || blockToUpdate.children.length === 0)) {
-            setBlocks(prev => updateBlockRecursive(prev, id, {
-                settings: { ...blockToUpdate.settings, ...(updatedBlockData.settings as CharacterClassSettings) }
-            }));
-            return;
-        }
-
-        if (blockToUpdate && blockToUpdate.type === BlockType.CHARACTER_CLASS) {
-            const newPattern = (updatedBlockData.settings as CharacterClassSettings).pattern;
-            const newChildren = breakdownPatternIntoChildren(newPattern);
-            const reparsedBlock: Partial<Block> = {
-                settings: { ...(blockToUpdate.settings as CharacterClassSettings), pattern: '' },
-                children: newChildren,
-                isExpanded: true,
-            };
-            setBlocks(prev => updateBlockRecursive(prev, id, reparsedBlock));
-            return;
-        }
-    }
-
-    // Default update logic for all other cases
     setBlocks(prev => updateBlockRecursive(prev, id, updatedBlockData));
-  }, [blocks]);
+  }, []);
 
 
   const handleDeleteBlock = useCallback((id: string, deleteAttachedQuantifier: boolean = false) => {
@@ -343,6 +348,7 @@ const RegexVisionWorkspace: React.FC = () => {
         const updatedBlocks = [...currentBlocks];
         updatedBlocks.splice(i + 1, 0, newBlock);
 
+        // Also duplicate the quantifier if it exists
         if (originalBlock.type !== BlockType.QUANTIFIER && (i + 1) < currentBlocks.length && currentBlocks[i + 1].type === BlockType.QUANTIFIER) {
           const originalQuantifier = currentBlocks[i + 1];
           const newQuantifier = cloneBlockForState(originalQuantifier);
@@ -380,6 +386,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const processUngroupRecursive = (nodes: Block[], targetId: string): Block[] => {
     return nodes.flatMap(block => {
       if (block.id === targetId) {
+        // Replace the group with its children
         return block.children ? block.children.map(child => cloneBlockForState(child)) : [];
       }
       if (block.children && block.children.length > 0) {
@@ -424,6 +431,7 @@ const RegexVisionWorkspace: React.FC = () => {
                   newGroupBlock.children.push(cloneBlockForState(originalBlock));
                   const updatedNodes = [...nodes];
 
+                  // If the block has a quantifier, wrap it too.
                   if (originalBlock.type !== BlockType.QUANTIFIER && (i + 1) < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
                       newGroupBlock.children.push(cloneBlockForState(nodes[i + 1]));
                       updatedNodes.splice(i, 2, newGroupBlock);
@@ -481,19 +489,21 @@ const RegexVisionWorkspace: React.FC = () => {
       let draggedBlock: Block | null = null;
       let draggedQuantifier: Block | null = null;
 
+      // Remove the dragged block (and its quantifier) from the tree first
       const removeDraggedRecursive = (nodes: Block[], idToRemove: string): Block[] => {
         const result: Block[] = [];
         for (let i = 0; i < nodes.length; i++) {
           const node = nodes[i];
           if (node.id === idToRemove) {
             draggedBlock = cloneBlockForState(node);
+            // Check for and remove attached quantifier
             if (i + 1 < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
               draggedQuantifier = cloneBlockForState(nodes[i + 1]);
               i++; // Skip quantifier
             }
           } else {
             if (node.children) {
-              node.children = removeDraggedRecursive(node.children);
+              node.children = removeDraggedRecursive(node.children, idToRemove);
             }
             result.push(node);
           }
@@ -505,6 +515,7 @@ const RegexVisionWorkspace: React.FC = () => {
       
       if (!draggedBlock) return prevBlocks;
 
+      // Prevent dropping a block into itself or its descendants
       const isDescendant = (nodes: Block[], idToFind: string): boolean => {
         for (const node of nodes) {
           if (node.id === idToFind) return true;
@@ -521,6 +532,7 @@ const RegexVisionWorkspace: React.FC = () => {
       const blocksToAdd = [draggedBlock];
       if (draggedQuantifier) blocksToAdd.push(draggedQuantifier);
 
+      // Insert the dragged block at the new position
       const insertRecursive = (nodes: Block[]): Block[] => {
         // Case 1: Drop into a container (newParentId is the container's ID)
         if (newParentId === dropOnBlockId) {
@@ -578,6 +590,7 @@ const RegexVisionWorkspace: React.FC = () => {
   
   const selectedBlock = selectedBlockId ? findBlockRecursive(blocks, selectedBlockId) : null;
   
+  // Memoize the highlighted group index to prevent re-calculation on every render.
   const highlightedGroupIndex = React.useMemo(() => {
     if (selectedBlock && (selectedBlock.type === BlockType.GROUP)) {
       const groupInfo = regexOutputState.groupInfos.find(gi => gi.blockId === selectedBlock.id);
@@ -586,7 +599,9 @@ const RegexVisionWorkspace: React.FC = () => {
     return -1;
   }, [selectedBlock, regexOutputState.groupInfos]);
 
+
   const handleShare = () => {
+    // A more robust solution would involve encoding the state into the URL.
     navigator.clipboard.writeText(window.location.href)
       .then(() => toast({ title: "Ссылка скопирована!", description: "Ссылка для обмена скопирована в буфер обмена." }))
       .catch(() => toast({ title: "Ошибка", description: "Не удалось скопировать ссылку.", variant: "destructive" }));
@@ -664,6 +679,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const handleExpandAll = useCallback(() => toggleAllBlocksExpansion(true), [toggleAllBlocksExpansion]);
   const handleCollapseAll = useCallback(() => toggleAllBlocksExpansion(false), [toggleAllBlocksExpansion]);
 
+  // Effect for keyboard shortcuts for better accessibility and power-user experience.
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const activeElement = document.activeElement;
@@ -671,6 +687,7 @@ const RegexVisionWorkspace: React.FC = () => {
 
       if (isTyping) return;
 
+      // Delete selected block
       if (selectedBlockId && (event.key === 'Delete' || event.key === 'Backspace')) {
         event.preventDefault();
         const block = findBlockRecursive(blocks,selectedBlockId);
@@ -678,6 +695,7 @@ const RegexVisionWorkspace: React.FC = () => {
         handleDeleteBlock(selectedBlockId, deleteAttached);
       }
 
+      // Expand/Collapse All
       if (event.ctrlKey && event.shiftKey) {
         if (event.key === 'ArrowDown') {
           event.preventDefault();
@@ -688,6 +706,7 @@ const RegexVisionWorkspace: React.FC = () => {
         }
       }
 
+      // Navigate tree with arrow keys
       if (selectedBlockId) {
         const { block: currentBlock, parent, indexInParent } = findBlockAndParentRecursive(blocks, selectedBlockId);
         if (!currentBlock) return;
@@ -697,6 +716,7 @@ const RegexVisionWorkspace: React.FC = () => {
         if (event.key === 'ArrowUp') {
           event.preventDefault();
           const siblings = parent ? parent.children : blocks;
+          // Special handling for quantifiers, which aren't in the tree but are selected
           if(currentBlock.type === BlockType.QUANTIFIER && parent && parent.children.includes(currentBlock) && indexInParent > 0){
             setSelectedBlockId(siblings[indexInParent - 1].id);
           } else if (indexInParent > 0 && siblings) {
@@ -706,6 +726,7 @@ const RegexVisionWorkspace: React.FC = () => {
           event.preventDefault();
           const siblings = parent ? parent.children : blocks;
           if (siblings && indexInParent < siblings.length - 1) {
+            // Special handling to select quantifier if it exists
             if(currentBlock.type !== BlockType.QUANTIFIER && (indexInParent + 1) < siblings.length && siblings[indexInParent+1].type === BlockType.QUANTIFIER){
                  setSelectedBlockId(siblings[indexInParent + 1].id);
             } else {
@@ -751,6 +772,7 @@ const RegexVisionWorkspace: React.FC = () => {
     try {
       const parsedBlocks = parseRegexWithLibrary(regexString);
       setBlocks(parsedBlocks);
+      setNaturalLanguageQuery(''); // Clear NL query after successful parse
       toast({ title: "Выражение разобрано", description: "Структура блоков построена успешно." });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Неизвестная ошибка парсера.";
@@ -768,7 +790,65 @@ const RegexVisionWorkspace: React.FC = () => {
   const handleBlockHover = (blockId: string | null) => {
     setHoveredBlockId(blockId);
   };
+
+  const handleFixApplied = (fixResult: FixRegexOutput) => {
+      if (fixResult.parsedBlocks && fixResult.parsedBlocks.length > 0) {
+          setBlocks(fixResult.parsedBlocks);
+      } else if (fixResult.regex) {
+          handleParseRegexString(fixResult.regex);
+      }
+      setNaturalLanguageQuery(fixResult.explanation); // Show AI explanation as new 'goal'
+  };
   
+  const handleWizardQuickGenerate = (query: string, generatedBlocks: Block[], parentId: string | null, exampleText?: string, recommendedFlags?: string) => {
+    setNaturalLanguageQuery(query);
+    setBlocks(generatedBlocks);
+    if(exampleText) setTestText(exampleText);
+    if(recommendedFlags) {
+        const newFlags = new Set(regexFlags.split(''));
+        recommendedFlags.split('').forEach(f => newFlags.add(f));
+        setRegexFlags(Array.from(newFlags).join(''));
+    }
+  };
+
+  const startGuidedMode = async (query: string, exampleTestText: string) => {
+    setMode('guided');
+    setGuidedQuery(query);
+    setTestText(exampleTestText);
+    setBlocks([]);
+    setIsGuidedLoading(true);
+    try {
+        const plan = await generateGuidedPlan({ query, exampleTestText });
+        setGuidedSteps(plan.steps);
+    } catch (e) {
+        const error = e as Error;
+        toast({ title: 'Ошибка генерации плана', description: error.message, variant: 'destructive' });
+        setMode('builder'); // Revert to builder mode on failure
+    } finally {
+        setIsGuidedLoading(false);
+    }
+  };
+
+  const handleGuidedStepAdd = (block: Block, parentId: string | null) => {
+    // We pass null for contextual block ID to ensure it adds to the correct parent or root.
+    handleAddBlock(block.type, block.settings, parentId);
+  };
+  
+  const regenerateGuidedPlan = async () => {
+    if (!guidedQuery) return;
+    setIsGuidedLoading(true);
+    try {
+        const plan = await generateGuidedPlan({ query: guidedQuery, exampleTestText: testText });
+        setGuidedSteps(plan.steps);
+    } catch (e) {
+        const error = e as Error;
+        toast({ title: 'Ошибка перегенерации плана', description: error.message, variant: 'destructive' });
+    } finally {
+        setIsGuidedLoading(false);
+    }
+  };
+
+
   const renderBlockNodes = (nodes: Block[], parentId: string | null, depth: number, groupInfos: GroupInfo[]): React.ReactNode[] => {
     const nodeList: React.ReactNode[] = [];
 
@@ -777,9 +857,11 @@ const RegexVisionWorkspace: React.FC = () => {
         let quantifierToRender: Block | null = null;
 
         if (block.type === BlockType.QUANTIFIER) {
+            // Quantifiers are rendered as badges on the block they quantify, so we skip rendering them as standalone nodes.
             continue;
         }
         
+        // Check if the next block is a quantifier for the current block.
         if (i + 1 < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
             quantifierToRender = nodes[i + 1];
         }
@@ -808,12 +890,70 @@ const RegexVisionWorkspace: React.FC = () => {
           />
         );
         
+        // If we found and used a quantifier, we need to advance the loop index to skip it in the next iteration.
         if (quantifierToRender) {
             i++; 
         }
     }
     return nodeList;
   };
+
+  const mainContent = () => {
+    if (mode === 'guided') {
+        return (
+            <div className="h-full p-2">
+                <GuidedStepsPanel
+                    query={guidedQuery}
+                    steps={guidedSteps}
+                    isLoading={isGuidedLoading}
+                    onAddStep={handleGuidedStepAdd}
+                    onFinish={() => setMode('builder')}
+                    onResetAndFinish={() => { setBlocks([]); setMode('builder'); }}
+                    selectedBlockId={selectedBlockId}
+                    blocks={blocks}
+                    onRegeneratePlan={regenerateGuidedPlan}
+                />
+            </div>
+        );
+    }
+
+    return (
+        <div className="h-full flex flex-col p-2">
+            <Card className="flex-1 flex flex-col shadow-md border-primary/20 overflow-hidden">
+            <CardHeader className="py-2 px-3 border-b flex flex-row items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <Edit3 size={18} className="text-primary"/> Дерево выражения
+                </CardTitle>
+                <div className="flex items-center gap-1">
+                    <Button size="sm" variant="outline" onClick={() => setIsWizardOpen(true)}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1"><path d="M5 12V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2v8c0 1.1-.9 2-2 2h-2.5"/><path d="m10.5 17-5.5 5.5"/><path d="m17 14-3 3"/></svg>
+                        AI Помощник
+                    </Button>
+                    <Button size="sm" onClick={() => handleOpenPaletteFor(null)}>
+                        <Plus size={16} className="mr-1" /> Добавить блок
+                    </Button>
+                </div>
+            </CardHeader>
+            <CardContent className="p-1 flex-1 min-h-0">
+                <ScrollArea className="h-full pr-2">
+                {blocks.length === 0 ? (
+                    <div className="text-center text-muted-foreground py-10 flex flex-col items-center justify-center h-full">
+                    <Layers size={48} className="mb-3 opacity-50" />
+                    <p className="font-medium">Начните строить!</p>
+                    <p className="text-sm">Вставьте Regex в поле выше или добавьте блоки вручную.</p>
+                    </div>
+                ) : (
+                    <div className="space-y-1 p-1"> 
+                      {renderBlockNodes(blocks, null, 0, regexOutputState.groupInfos)}
+                    </div>
+                )}
+                </ScrollArea>
+            </CardContent>
+            </Card>
+        </div>
+    );
+  };
+
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
@@ -873,33 +1013,7 @@ const RegexVisionWorkspace: React.FC = () => {
       <main className="flex-1 min-h-0">
           <ResizablePanelGroup direction="horizontal" className="h-full">
             <ResizablePanel defaultSize={50} minSize={30}>
-                <div className="h-full flex flex-col p-2">
-                    <Card className="flex-1 flex flex-col shadow-md border-primary/20 overflow-hidden">
-                    <CardHeader className="py-2 px-3 border-b flex flex-row items-center justify-between">
-                        <CardTitle className="text-base flex items-center gap-2">
-                            <Edit3 size={18} className="text-primary"/> Дерево выражения
-                        </CardTitle>
-                        <Button size="sm" onClick={() => handleOpenPaletteFor(null)}>
-                            <Plus size={16} className="mr-1" /> Добавить блок
-                        </Button>
-                    </CardHeader>
-                    <CardContent className="p-3 flex-1 min-h-0">
-                        <ScrollArea className="h-full pr-2">
-                        {blocks.length === 0 ? (
-                            <div className="text-center text-muted-foreground py-10 flex flex-col items-center justify-center h-full">
-                            <Layers size={48} className="mb-3 opacity-50" />
-                            <p className="font-medium">Начните строить!</p>
-                            <p className="text-sm">Вставьте Regex в поле выше или добавьте блоки вручную.</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-1 p-1"> 
-                              {renderBlockNodes(blocks, null, 0, regexOutputState.groupInfos)}
-                            </div>
-                        )}
-                        </ScrollArea>
-                    </CardContent>
-                    </Card>
-                </div>
+                {mainContent()}
             </ResizablePanel>
 
             <ResizableHandle withHandle />
@@ -912,6 +1026,15 @@ const RegexVisionWorkspace: React.FC = () => {
                         matches={matches}
                         generatedRegex={regexOutputState.regexString}
                         highlightedGroupIndex={highlightedGroupIndex}
+                        regexError={regexError}
+                    />
+                    <AnalysisPanel
+                      originalQuery={naturalLanguageQuery}
+                      generatedRegex={regexOutputState.regexString}
+                      testText={testText}
+                      errorContext={regexError || undefined}
+                      isVisible={!!regexError || (matches.length === 0 && !!regexOutputState.regexString && !!testText)}
+                      onFixApplied={handleFixApplied}
                     />
                 </div>
             </ResizablePanel>
@@ -956,8 +1079,18 @@ const RegexVisionWorkspace: React.FC = () => {
         }}
         parentIdForNewBlock={parentIdForNewBlock}
       />
+
+       <RegexWizardModal 
+        isOpen={isWizardOpen}
+        onClose={() => setIsWizardOpen(false)}
+        onStartGuidedMode={startGuidedMode}
+        onCompleteQuickGen={handleWizardQuickGenerate}
+        initialParentId={selectedBlockId}
+      />
     </div>
   );
 };
 
 export default RegexVisionWorkspace;
+
+    
