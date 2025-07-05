@@ -56,7 +56,7 @@ function transformNodeToBlocks(node: any): Block[] {
             case '*': type = '*'; break;
             case '+': type = '+'; break;
             case '?': type = '?'; break;
-            case '{':
+            case 'Range': // Correctly handle quantifiers like {n}, {n,m}, {n,}
                 min = q.from;
                 max = q.to;
                 if (min !== undefined && max === undefined) type = '{n,}';
