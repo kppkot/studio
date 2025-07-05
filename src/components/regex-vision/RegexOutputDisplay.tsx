@@ -134,11 +134,7 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
          ) : (
           <div 
             className="flex items-center h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-base font-mono ring-offset-background cursor-text flex-wrap"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                 setIsEditing(true);
-              }
-            }}
+            onClick={() => setIsEditing(true)}
             role="textbox"
             tabIndex={0}
             onMouseLeave={() => onHoverPart(null)}
@@ -147,7 +143,7 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
                   <span 
                       key={`${part.blockId}-${index}`}
                       onMouseEnter={() => onHoverPart(part.blockId)}
-                      onClick={(e) => { e.stopPropagation(); onSelectBlock(part.blockId); }}
+                      onClick={() => onSelectBlock(part.blockId)}
                       className={cn(
                         "transition-all duration-100 rounded-sm px-0.5 cursor-pointer",
                         getColorForType(part.blockType),
@@ -159,7 +155,7 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
                   >
                       {part.text}
                   </span>
-              )) : <span className="text-muted-foreground text-sm">Начните строить выражение...</span>}
+              )) : <span className="text-muted-foreground text-sm" onClick={() => setIsEditing(true)}>Начните строить выражение...</span>}
           </div>
          )}
          {isParsing && !isEditing && <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}
