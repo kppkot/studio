@@ -1,3 +1,4 @@
+
 import regexpTree from 'regexp-tree';
 import type { Block, CharacterClassSettings, LiteralSettings, QuantifierSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, GroupSettings, ConditionalSettings } from './types';
 import { BlockType } from './types';
@@ -55,7 +56,41 @@ function transformNodeToBlocks(node: any): Block[] {
 
   switch (node.type) {
     case 'Alternative': {
-        return node.expressions.flatMap((expr: any) => transformNodeToBlocks(expr));
+        const rawBlocks = node.expressions.flatMap((expr: any) => transformNodeToBlocks(expr));
+        
+        // Fuse consecutive literal blocks to simplify the tree
+        const fusedBlocks: Block[] = [];
+        let currentLiteralText = '';
+
+        for (const block of rawBlocks) {
+            // Only fuse non-raw literals. Raw regex should stay as is.
+            if (block.type === BlockType.LITERAL && !(block.settings as LiteralSettings).isRawRegex) {
+                currentLiteralText += (block.settings as LiteralSettings).text;
+            } else {
+                if (currentLiteralText) {
+                    fusedBlocks.push({
+                        id: generateId(),
+                        type: BlockType.LITERAL,
+                        settings: { text: currentLiteralText, isRawRegex: false } as LiteralSettings,
+                        children: [],
+                    });
+                    currentLiteralText = '';
+                }
+                fusedBlocks.push(block);
+            }
+        }
+
+        // Add any remaining literal text at the end
+        if (currentLiteralText) {
+             fusedBlocks.push({
+                id: generateId(),
+                type: BlockType.LITERAL,
+                settings: { text: currentLiteralText, isRawRegex: false } as LiteralSettings,
+                children: [],
+            });
+        }
+        
+        return fusedBlocks;
     }
 
     case 'Repetition': {
@@ -125,11 +160,11 @@ function transformNodeToBlocks(node: any): Block[] {
         }
 
         // A simple literal character like 'a', or an escaped one like '\.'
-        // For both, `node.value` is the character itself.
+        // For both, `node.value` is the character itself. For `\\`, it's `\`.
         const literalBlock: Block = {
             id: newId,
             type: BlockType.LITERAL,
-            settings: { text: value, isRawRegex: false } as LiteralSettings,
+            settings: { text: node.value, isRawRegex: false } as LiteralSettings,
             children: [],
         };
         return [literalBlock];
@@ -183,6 +218,9 @@ function transformNodeToBlocks(node: any): Block[] {
         const alternativeBlocks = alternativesAstNodes.map(altNode => {
             if (!altNode) return null;
             const blocks = transformNodeToBlocks(altNode);
+
+            // If an alternative consists of more than one block (e.g., a literal and a quantifier), 
+            // it must be wrapped in a group to maintain correct precedence over the `|` operator.
             if (blocks.length > 1) {
                 return { 
                     id: generateId(), 
@@ -192,14 +230,15 @@ function transformNodeToBlocks(node: any): Block[] {
                     isExpanded: true 
                 };
             }
+            // If the alternative is just a single block, no wrapper group is needed.
             return blocks.length === 1 ? blocks[0] : null;
-        }).filter(Boolean);
+        }).filter((b): b is Block => b !== null);
 
         const alternationBlock: Block = {
             id: newId,
             type: BlockType.ALTERNATION,
             settings: {},
-            children: alternativeBlocks as Block[],
+            children: alternativeBlocks,
             isExpanded: true,
         };
         
