@@ -1,7 +1,7 @@
 
 "use client";
 import React, { useState, useEffect, useCallback } from 'react';
-import type { Block, RegexMatch, GroupInfo, SavedPattern, CharacterClassSettings } from './types'; 
+import type { Block, RegexMatch, GroupInfo, SavedPattern, CharacterClassSettings, RegexStringPart } from './types'; 
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
 import { generateId, generateRegexStringAndGroupInfo, cloneBlockForState, breakdownPatternIntoChildren, reconstructPatternFromChildren } from './utils'; 
@@ -45,14 +45,14 @@ const RegexVisionWorkspace: React.FC = () => {
   const [testText, setTestText] = useState<string>('Быстрая коричневая лиса прыгает через ленивую собаку.');
   const [regexFlags, setRegexFlags] = useState<string>('g');
   const [matches, setMatches] = useState<RegexMatch[]>([]);
-  const [regexOutput, setRegexOutput] = useState<{ regexString: string; groupInfos: GroupInfo[] }>({ regexString: '', groupInfos: [] });
+  const [regexOutput, setRegexOutput] = useState<{ regexString: string; groupInfos: GroupInfo[]; stringParts: RegexStringPart[] }>({ regexString: '', groupInfos: [], stringParts: [] });
   const [regexError, setRegexError] = useState<string | null>(null);
   
   const { toast } = useToast();
 
   useEffect(() => {
-    const { regexString: newRegex, groupInfos } = generateRegexStringAndGroupInfo(blocks);
-    setRegexOutput({ regexString: newRegex, groupInfos });
+    const { regexString: newRegex, groupInfos, stringParts } = generateRegexStringAndGroupInfo(blocks);
+    setRegexOutput({ regexString: newRegex, groupInfos, stringParts });
 
     if (newRegex && testText) {
       try {
@@ -868,6 +868,9 @@ const RegexVisionWorkspace: React.FC = () => {
                     onFlagsChange={setRegexFlags}
                     onParseRegexString={handleParseRegexString}
                     isParsing={isParsing}
+                    stringParts={regexOutput.stringParts}
+                    selectedBlockId={selectedBlockId}
+                    onSelectBlock={setSelectedBlockId}
                 />
               </div>
               <Tabs defaultValue="testing" className="flex-1 flex flex-col min-h-0">

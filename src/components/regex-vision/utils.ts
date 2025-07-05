@@ -1,4 +1,5 @@
-import type { Block, CharacterClassSettings, ConditionalSettings, GroupSettings, LiteralSettings, LookaroundSettings, QuantifierSettings, AnchorSettings, BackreferenceSettings, GroupInfo } from './types';
+
+import type { Block, CharacterClassSettings, ConditionalSettings, GroupSettings, LiteralSettings, LookaroundSettings, QuantifierSettings, AnchorSettings, BackreferenceSettings, GroupInfo, RegexStringPart } from './types';
 import { BlockType } from './types';
 
 export const generateId = (): string => Math.random().toString(36).substring(2, 11);
@@ -25,67 +26,66 @@ export const cloneBlockForState = (block: Block): Block => {
   return newBlock;
 };
 
-export const generateRegexStringAndGroupInfo = (blocks: Block[]): { regexString: string; groupInfos: GroupInfo[] } => {
+export const generateRegexStringAndGroupInfo = (blocks: Block[]): { 
+    regexString: string;
+    groupInfos: GroupInfo[];
+    stringParts: RegexStringPart[];
+} => {
   const groupInfos: GroupInfo[] = [];
+  const stringParts: RegexStringPart[] = [];
   let capturingGroupCount = 0;
 
-  const generateRecursiveWithGroupInfo = (block: Block): string => {
+  const generateRecursive = (block: Block) => {
     const settings = block.settings;
 
-    const processChildren = (b: Block): string => {
-      if (!b.children) return "";
+    const processChildren = (b: Block) => {
+      if (!b.children) return;
       if (b.type === BlockType.ALTERNATION) {
-        return b.children.map(child => generateRecursiveWithGroupInfo(child)).join('|');
+        b.children.forEach((child, index) => {
+          generateRecursive(child);
+          if (index < b.children.length - 1) {
+            stringParts.push({ text: '|', blockId: b.id });
+          }
+        });
+      } else {
+        b.children.forEach(generateRecursive);
       }
-      return b.children.map(child => generateRecursiveWithGroupInfo(child)).join('');
     };
 
     switch (block.type) {
       case BlockType.LITERAL:
         const litSettings = settings as LiteralSettings;
-        if (litSettings.isRawRegex) {
-          return litSettings.text || '';
-        }
-        return escapeRegexCharsForGenerator(litSettings.text || '');
+        const text = litSettings.isRawRegex ? litSettings.text || '' : escapeRegexCharsForGenerator(litSettings.text || '');
+        if (text) stringParts.push({ text, blockId: block.id });
+        break;
       case BlockType.CHARACTER_CLASS:
         const ccSettings = settings as CharacterClassSettings;
         const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];
+        let pattern;
         if (!ccSettings.negated && specialShorthands.includes(ccSettings.pattern)) {
-          return ccSettings.pattern;
+          pattern = ccSettings.pattern;
+        } else {
+          const content = block.children && block.children.length > 0 ? reconstructPatternFromChildren(block.children) : ccSettings.pattern || '';
+          pattern = `[${ccSettings.negated ? '^' : ''}${content}]`;
         }
-        if (block.children && block.children.length > 0) {
-           const content = reconstructPatternFromChildren(block.children);
-           return `[${ccSettings.negated ? '^' : ''}${content}]`;
-        }
-        return `[${ccSettings.negated ? '^' : ''}${ccSettings.pattern || ''}]`;
+        stringParts.push({ text: pattern, blockId: block.id });
+        break;
       case BlockType.QUANTIFIER: {
         const qSettings = settings as QuantifierSettings;
         let qStr = '';
-
         switch (qSettings.type) {
-            case '*':
-            case '+':
-            case '?':
-                qStr = qSettings.type;
-                break;
-            case '{n}':
-                qStr = `{${qSettings.min ?? 0}}`;
-                break;
-            case '{n,}':
-                qStr = `{${qSettings.min ?? 0},}`;
-                break;
-            case '{n,m}':
-                qStr = `{${qSettings.min ?? 0},${qSettings.max === null ? '' : qSettings.max}}`;
-                break;
-            default:
-                // This case should not be reached with the new robust parser.
-                return ''; 
+            case '*': case '+': case '?': qStr = qSettings.type; break;
+            case '{n}': qStr = `{${qSettings.min ?? 0}}`; break;
+            case '{n,}': qStr = `{${qSettings.min ?? 0},}`; break;
+            case '{n,m}': qStr = `{${qSettings.min ?? 0},${qSettings.max === null ? '' : qSettings.max}}`; break;
         }
-
-        let mode = '';
-        if (qSettings.mode === 'lazy') mode = '?';
-        else if (qSettings.mode === 'possessive') mode = '+';
-        return qStr + mode;
+        if (qStr) {
+            let mode = '';
+            if (qSettings.mode === 'lazy') mode = '?';
+            else if (qSettings.mode === 'possessive') mode = '+';
+            stringParts.push({ text: qStr + mode, blockId: block.id });
+        }
+        break;
       }
       case BlockType.GROUP:
         const gSettings = settings as GroupSettings;
@@ -103,36 +103,51 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): { regexString:
         } else if (gSettings.type === 'non-capturing') {
           groupOpen = "(?:";
         }
-        return `${groupOpen}${processChildren(block)})`;
+        stringParts.push({ text: groupOpen, blockId: block.id });
+        processChildren(block);
+        stringParts.push({ text: ')', blockId: block.id });
+        break;
       case BlockType.ANCHOR:
-        return (settings as AnchorSettings).type;
+        stringParts.push({ text: (settings as AnchorSettings).type, blockId: block.id });
+        break;
       case BlockType.ALTERNATION:
-        return processChildren(block);
+        processChildren(block);
+        break;
       case BlockType.LOOKAROUND:
         const lSettings = settings as LookaroundSettings;
         const lookaroundMap = {
-          'positive-lookahead': `(?=`,
-          'negative-lookahead': `(?!`,
-          'positive-lookbehind': `(?<=`,
-          'negative-lookbehind': `(?<!`
+          'positive-lookahead': `(?=`, 'negative-lookahead': `(?!`,
+          'positive-lookbehind': `(?<=`, 'negative-lookbehind': `(?<!`
         };
-        return `${lookaroundMap[lSettings.type]}${processChildren(block)})`;
+        stringParts.push({ text: lookaroundMap[lSettings.type], blockId: block.id });
+        processChildren(block);
+        stringParts.push({ text: ')', blockId: block.id });
+        break;
       case BlockType.BACKREFERENCE:
         const ref = (settings as BackreferenceSettings).ref;
-        return isNaN(Number(ref)) ? `\\k<${ref}>` : `\\${ref}`;
+        const backrefText = isNaN(Number(ref)) ? `\\k<${ref}>` : `\\${ref}`;
+        stringParts.push({ text: backrefText, blockId: block.id });
+        break;
       case BlockType.CONDITIONAL:
          const condSettings = settings as ConditionalSettings;
          const { condition, yesPattern, noPattern } = condSettings;
-         const yesStr = generateRecursiveWithGroupInfo(createLiteral(yesPattern, true));
-         const noStr = noPattern ? `|${generateRecursiveWithGroupInfo(createLiteral(noPattern, true))}` : '';
-         return `(?(${condition})${yesStr}${noStr})`;
+         stringParts.push({ text: `(?(${condition})`, blockId: block.id });
+         generateRecursive(createLiteral(yesPattern, true));
+         if (noPattern) {
+           stringParts.push({ text: `|`, blockId: block.id });
+           generateRecursive(createLiteral(noPattern, true));
+         }
+         stringParts.push({ text: `)`, blockId: block.id });
+         break;
       default:
-        return processChildren(block);
+        processChildren(block);
     }
   };
 
-  const regexString = blocks.map(block => generateRecursiveWithGroupInfo(block)).join('');
-  return { regexString, groupInfos };
+  blocks.forEach(generateRecursive);
+
+  const regexString = stringParts.map(part => part.text).join('');
+  return { regexString, groupInfos, stringParts };
 };
 
 export const reconstructPatternFromChildren = (children: Block[]): string => {

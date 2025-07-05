@@ -108,3 +108,8 @@ export interface SavedPattern {
   testString?: string;
   description?: string;
 }
+
+export interface RegexStringPart {
+  text: string;
+  blockId: string;
+}

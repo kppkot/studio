@@ -1,11 +1,13 @@
 
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import type { RegexStringPart } from './types';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Copy, Loader2, Wand2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 interface RegexOutputDisplayProps {
   generatedRegex: string;
@@ -13,6 +15,9 @@ interface RegexOutputDisplayProps {
   onFlagsChange: (flags: string) => void;
   onParseRegexString: (regex: string) => void;
   isParsing: boolean;
+  stringParts: RegexStringPart[];
+  selectedBlockId: string | null;
+  onSelectBlock: (id: string | null) => void;
 }
 
 const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
@@ -21,15 +26,26 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
   onFlagsChange,
   onParseRegexString,
   isParsing,
+  stringParts,
+  selectedBlockId,
+  onSelectBlock
 }) => {
   const { toast } = useToast();
   const [inputValue, setInputValue] = useState(generatedRegex);
+  const [isEditing, setIsEditing] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Этот useEffect обеспечивает синхронизацию: если блоки изменяются,
-  // поле ввода обновляется, чтобы отразить это изменение.
   useEffect(() => {
     setInputValue(generatedRegex);
   }, [generatedRegex]);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+        inputRef.current.focus();
+        inputRef.current.select();
+    }
+  }, [isEditing]);
+
 
   const handleCopyRegex = () => {
     navigator.clipboard.writeText(`/${generatedRegex}/${regexFlags}`)
@@ -47,11 +63,15 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
     if (inputValue !== generatedRegex) {
         onParseRegexString(inputValue);
     }
+    setIsEditing(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       handleParse();
+    } else if (e.key === 'Escape') {
+      setInputValue(generatedRegex); // Revert changes on escape
+      setIsEditing(false);
     }
   };
 
@@ -61,7 +81,9 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
       <div className="flex items-center gap-2">
         <span className="text-muted-foreground">/</span>
         <div className="flex-1 relative">
-           <Input
+           {isEditing ? (
+             <Input
+                ref={inputRef}
                 id="generatedRegexOutput"
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
@@ -71,7 +93,30 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
                 placeholder="Вставьте ваш Regex здесь и нажмите Enter"
                 disabled={isParsing}
             />
-            {isParsing && <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}
+           ) : (
+            <div 
+              className="flex items-center h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background cursor-text"
+              onClick={() => setIsEditing(true)}
+              role="textbox"
+              tabIndex={0}
+              onFocus={() => setIsEditing(true)}
+            >
+                {stringParts.length > 0 ? stringParts.map((part, index) => (
+                    <span 
+                        key={index}
+                        onClick={(e) => { e.stopPropagation(); onSelectBlock(part.blockId); }}
+                        className={cn(
+                            "transition-colors rounded-sm px-0.5",
+                            part.blockId === selectedBlockId ? "bg-primary/20" : "bg-transparent",
+                             "hover:bg-primary/10"
+                        )}
+                    >
+                        {part.text}
+                    </span>
+                )) : <span className="text-muted-foreground">Начните строить выражение...</span>}
+            </div>
+           )}
+           {isParsing && !isEditing && <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}
         </div>
         <span className="text-muted-foreground">/</span>
         <Input
@@ -86,10 +131,10 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
         <Button
           variant="outline"
           size="icon"
-          onClick={handleParse}
+          onClick={() => setIsEditing(true)}
           title="Разобрать выражение и построить дерево"
           className="h-10 w-10"
-          disabled={isParsing || inputValue === generatedRegex}
+          disabled={isParsing}
         >
           <Wand2 size={16} />
         </Button>
