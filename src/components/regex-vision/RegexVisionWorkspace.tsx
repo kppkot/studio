@@ -40,6 +40,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null);
+  const [hoveredPartMatches, setHoveredPartMatches] = useState<RegexMatch[]>([]);
   const [parentIdForNewBlock, setParentIdForNewBlock] = useState<string | null>(null);
   const [contextualBlockId, setContextualBlockId] = useState<string | null>(null);
   const [isPaletteVisible, setIsPaletteVisible] = useState(false);
@@ -83,14 +84,16 @@ const RegexVisionWorkspace: React.FC = () => {
     if (newRegex && testText) {
       try {
         // 'd' flag is for match indices, which we need. Ensure it's always there.
-        const currentFlags = regexFlags.includes('d') ? regexFlags : regexFlags + (regexFlags.length ? '' : '') + 'd';
+        const currentFlags = regexFlags.includes('d') ? regexFlags : regexFlags + 'd';
 
         const regexObj = new RegExp(newRegex, currentFlags);
         const foundRawMatches = [...testText.matchAll(regexObj)];
+        
         const formattedMatches: RegexMatch[] = foundRawMatches.map(rawMatch => ({
           match: rawMatch[0],
           index: rawMatch.index!,
           groups: Array.from(rawMatch).slice(1),
+          groupIndices: rawMatch.indices ? rawMatch.indices.slice(1) as [number, number][] : [],
         }));
         setMatches(formattedMatches);
         setRegexError(null);
@@ -105,6 +108,67 @@ const RegexVisionWorkspace: React.FC = () => {
        setRegexError(null);
     }
   }, [blocks, testText, regexFlags]);
+
+  // Effect to highlight parts of the text when hovering over a block
+  useEffect(() => {
+    const findBlockAndQuantifier = (nodes: Block[], id: string): { baseBlock: Block, quantifierBlock: Block | null } | null => {
+        for (let i = 0; i < nodes.length; i++) {
+            const node = nodes[i];
+
+            if (node.id === id) {
+                if (node.type === BlockType.QUANTIFIER) { // Hovered on quantifier
+                    if (i > 0) return { baseBlock: nodes[i-1], quantifierBlock: node };
+                } else { // Hovered on base block
+                    const quantifier = (i + 1 < nodes.length && nodes[i+1].type === BlockType.QUANTIFIER) ? nodes[i+1] : null;
+                    return { baseBlock: node, quantifierBlock: quantifier };
+                }
+            }
+
+            if (node.children) {
+                const found = findBlockAndQuantifier(node.children, id);
+                if (found) return found;
+            }
+        }
+        return null;
+    };
+
+    if (!hoveredBlockId) {
+        setHoveredPartMatches([]);
+        return;
+    }
+    
+    const found = findBlockAndQuantifier(blocks, hoveredBlockId);
+    if (!found) {
+        setHoveredPartMatches([]);
+        return;
+    }
+
+    const { baseBlock, quantifierBlock } = found;
+    const blocksToParse = [baseBlock];
+    if (quantifierBlock) {
+        blocksToParse.push(quantifierBlock);
+    }
+
+    const { regexString: partialRegex } = generateRegexStringAndGroupInfo(blocksToParse);
+
+    if (partialRegex) {
+        try {
+            const currentFlags = 'g' + regexFlags.replace('g', '') + (regexFlags.includes('d') ? '' : 'd');
+            const regex = new RegExp(partialRegex, currentFlags);
+            const newMatches = [...testText.matchAll(regex)].map(rawMatch => ({
+                match: rawMatch[0],
+                index: rawMatch.index!,
+                groups: Array.from(rawMatch).slice(1),
+                groupIndices: rawMatch.indices ? rawMatch.indices.slice(1) as [number, number][] : [],
+            }));
+            setHoveredPartMatches(newMatches);
+        } catch (e) {
+            setHoveredPartMatches([]);
+        }
+    } else {
+        setHoveredPartMatches([]);
+    }
+  }, [hoveredBlockId, blocks, testText, regexFlags]);
 
 
   const findBlockRecursive = (searchBlocks: Block[], id: string): Block | null => {
@@ -717,74 +781,6 @@ const RegexVisionWorkspace: React.FC = () => {
           handleCollapseAll();
         }
       }
-
-      // Navigate tree with arrow keys
-      if (selectedBlockId) {
-        const findBlockAndParentRecursive = (
-          nodes: Block[],
-          targetId: string,
-          currentParent: Block | null = null
-        ): { block: Block | null; parent: Block | null; indexInParent: number } => {
-          for (let i = 0; i < nodes.length; i++) {
-            const block = nodes[i];
-            if (block.id === targetId) {
-              return { block, parent: currentParent, indexInParent: i };
-            }
-            if (block.children) {
-              const found = findBlockAndParentRecursive(block.children, targetId, block);
-              if (found.block) return found;
-            }
-          }
-          return { block: null, parent: null, indexInParent: -1 };
-        };
-
-        const { block: currentBlock, parent, indexInParent } = findBlockAndParentRecursive(blocks, selectedBlockId);
-        if (!currentBlock) return;
-
-        const canBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL, BlockType.CHARACTER_CLASS].includes(currentBlock.type);
-
-        if (event.key === 'ArrowUp') {
-          event.preventDefault();
-          const siblings = parent ? parent.children : blocks;
-          // Special handling for quantifiers, which aren't in the tree but are selected
-          if(currentBlock.type === BlockType.QUANTIFIER && parent && parent.children.includes(currentBlock) && indexInParent > 0){
-            setSelectedBlockId(siblings[indexInParent - 1].id);
-          } else if (indexInParent > 0 && siblings) {
-            setSelectedBlockId(siblings[indexInParent - 1].id);
-          }
-        } else if (event.key === 'ArrowDown') {
-          event.preventDefault();
-          const siblings = parent ? parent.children : blocks;
-          if (siblings && indexInParent < siblings.length - 1) {
-            // Special handling to select quantifier if it exists
-            if(currentBlock.type !== BlockType.QUANTIFIER && (indexInParent + 1) < siblings.length && siblings[indexInParent+1].type === BlockType.QUANTIFIER){
-                 setSelectedBlockId(siblings[indexInParent + 1].id);
-            } else {
-                 setSelectedBlockId(siblings[indexInParent + 1].id);
-            }
-          }
-        } else if (event.key === 'ArrowRight') {
-          event.preventDefault();
-          if (canBeExpanded && !(currentBlock.isExpanded ?? (currentBlock.children && currentBlock.children.length > 0))) {
-            handleUpdateBlock(selectedBlockId, { ...currentBlock, isExpanded: true });
-          } else if (currentBlock.children && currentBlock.children.length > 0) {
-            setSelectedBlockId(currentBlock.children[0].id);
-          }
-        } else if (event.key === 'ArrowLeft') {
-          event.preventDefault();
-          if (parent && (currentBlock.isExpanded ?? (currentBlock.children && currentBlock.children.length > 0))) {
-            if (canBeExpanded && (currentBlock.isExpanded ?? false)) {
-               handleUpdateBlock(selectedBlockId, { ...currentBlock, isExpanded: false });
-            } else {
-                 setSelectedBlockId(parent.id);
-            }
-          } else if (canBeExpanded && (currentBlock.isExpanded ?? false)) {
-            handleUpdateBlock(selectedBlockId, { ...currentBlock, isExpanded: false });
-          } else if (parent) {
-            setSelectedBlockId(parent.id);
-          }
-        }
-      }
     };
 
     document.addEventListener('keydown', handleKeyDown);
@@ -875,11 +871,6 @@ const RegexVisionWorkspace: React.FC = () => {
             dropIndicator={dropIndicator}
           />
         );
-
-        // If we found and used a quantifier, we need to advance the loop index to skip it in the next iteration.
-        if (quantifierToRender) {
-            i++;
-        }
     }
     return nodeList;
   };
@@ -988,6 +979,7 @@ const RegexVisionWorkspace: React.FC = () => {
                         testText={testText}
                         onTestTextChange={setTestText}
                         matches={matches}
+                        hoveredPartMatches={hoveredPartMatches}
                         generatedRegex={regexOutputState.regexString}
                         highlightedGroupIndex={highlightedGroupIndex}
                         regexError={regexError}

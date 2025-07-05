@@ -1,4 +1,3 @@
-
 "use client";
 import React from 'react';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,39 +12,95 @@ interface TestAreaProps {
   testText: string;
   onTestTextChange: (text: string) => void;
   matches: RegexMatch[];
+  hoveredPartMatches: RegexMatch[];
   generatedRegex: string;
   highlightedGroupIndex: number; // 1-based index
+  regexError: string | null;
 }
 
-const TestArea: React.FC<TestAreaProps> = ({ testText, onTestTextChange, matches, generatedRegex, highlightedGroupIndex }) => {
-  const highlightMatches = () => {
+const TestArea: React.FC<TestAreaProps> = ({ testText, onTestTextChange, matches, hoveredPartMatches, generatedRegex, highlightedGroupIndex, regexError }) => {
+  
+  const renderHighlightedText = () => {
     if (!testText) {
        return <span className="whitespace-pre-wrap text-muted-foreground">Введите текст для тестирования...</span>;
     }
-    if (matches.length === 0) {
+
+    if (regexError) {
       return <span className="whitespace-pre-wrap">{testText}</span>;
     }
 
-    let lastIndex = 0;
-    const parts: JSX.Element[] = [];
+    type HighlightEvent = {
+        index: number;
+        type: 'start' | 'end';
+        className: string;
+    };
 
-    matches.forEach((match, i) => {
-      if (match.index > lastIndex) {
-        parts.push(<span key={`text-${i}`}>{testText.substring(lastIndex, match.index)}</span>);
-      }
-      parts.push(
-        <mark key={`match-${i}`} className="bg-accent/30 text-accent-foreground px-0.5 rounded-sm">
-          {match.match}
-        </mark>
-      );
-      lastIndex = match.index + match.match.length;
+    const events: HighlightEvent[] = [];
+
+    matches.forEach(m => {
+        events.push({ index: m.index, type: 'start', className: 'bg-accent/30' });
+        events.push({ index: m.index + m.match.length, type: 'end', className: 'bg-accent/30' });
+    });
+
+    hoveredPartMatches.forEach(m => {
+        events.push({ index: m.index, type: 'start', className: 'bg-primary/30' });
+        events.push({ index: m.index + m.match.length, type: 'end', className: 'bg-primary/30' });
+    });
+
+    if (highlightedGroupIndex > 0) {
+      matches.forEach(match => {
+        if (match.groupIndices && match.groupIndices[highlightedGroupIndex - 1]) {
+            const groupSpan = match.groupIndices[highlightedGroupIndex - 1];
+            if (groupSpan) {
+                events.push({ index: groupSpan[0], type: 'start', className: 'ring-1 ring-inset ring-primary' });
+                events.push({ index: groupSpan[1], type: 'end', className: 'ring-1 ring-inset ring-primary' });
+            }
+        }
+      });
+    }
+
+    events.sort((a, b) => {
+        if (a.index !== b.index) return a.index - b.index;
+        if (a.type === 'end' && b.type === 'start') return -1;
+        if (a.type === 'start' && b.type === 'end') return 1;
+        return 0;
+    });
+
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    const activeClasses = new Set<string>();
+
+    events.forEach((event, i) => {
+        if (event.index > lastIndex) {
+            const text = testText.substring(lastIndex, event.index);
+            if (activeClasses.size > 0) {
+                parts.push(<mark key={`part-${lastIndex}`} className={cn("rounded-sm", Array.from(activeClasses))}>{text}</mark>);
+            } else {
+                parts.push(<span key={`part-${lastIndex}`}>{text}</span>);
+            }
+        }
+        
+        if (event.type === 'start') {
+            activeClasses.add(event.className);
+        } else {
+            activeClasses.delete(event.className);
+        }
+
+        lastIndex = event.index;
     });
 
     if (lastIndex < testText.length) {
-      parts.push(<span key="text-end">{testText.substring(lastIndex)}</span>);
+        const text = testText.substring(lastIndex);
+        if (activeClasses.size > 0) {
+             parts.push(<mark key="part-end" className={cn("rounded-sm", Array.from(activeClasses))}>{text}</mark>);
+        } else {
+            parts.push(<span key="part-end">{text}</span>);
+        }
     }
+
     return <div className="whitespace-pre-wrap">{parts}</div>;
   };
+
 
   return (
     <div className="flex flex-col h-full gap-4">
@@ -67,11 +122,11 @@ const TestArea: React.FC<TestAreaProps> = ({ testText, onTestTextChange, matches
         <CardContent className="p-0 flex-1">
           <ScrollArea className="h-full">
             <div className="p-3 font-mono text-sm border-b">
-               {highlightMatches()}
+               {renderHighlightedText()}
             </div>
             
             <div className="p-3">
-                 {matches.length > 0 ? (
+                 {matches.length > 0 && !regexError ? (
                   <div className="space-y-2 text-xs">
                      <h4 className="font-semibold text-sm mb-2 text-primary">Найдено совпадений: {matches.length}</h4>
                     {matches.map((match, index) => (

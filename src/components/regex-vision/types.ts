@@ -1,4 +1,3 @@
-
 import type { LucideIcon } from 'lucide-react';
 
 export enum BlockType {
@@ -92,6 +91,7 @@ export interface RegexMatch {
   match: string;
   index: number;
   groups: (string | undefined)[];
+  groupIndices?: ([number, number] | undefined)[];
 }
 
 export interface GroupInfo {
