@@ -30,18 +30,12 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import AnalysisPanel from './AnalysisPanel';
 import type { FixRegexOutput } from '@/ai/flows/fix-regex-flow';
-import RegexWizardModal from './RegexWizardModal';
-import GuidedStepsPanel from './GuidedStepsPanel';
-import type { GuidedRegexStep } from '@/ai/flows/schemas';
-import { generateGuidedPlan } from '@/ai/flows/guided-regex-flow';
 
 // Lazy load panels to improve initial load time
 const CodeGenerationPanel = lazy(() => import('./CodeGenerationPanel'));
 const PerformanceAnalyzerView = lazy(() => import('./PerformanceAnalyzerView'));
 const PatternLibraryView = lazy(() => import('./PatternLibraryView'));
 const DebugView = lazy(() => import('./DebugView'));
-
-type RegexVisionMode = 'builder' | 'guided';
 
 const RegexVisionWorkspace: React.FC = () => {
   const [blocks, setBlocks] = useState<Block[]>([]);
@@ -53,12 +47,6 @@ const RegexVisionWorkspace: React.FC = () => {
   const [isParsing, setIsParsing] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [isCodeGenOpen, setIsCodeGenOpen] = useState(false);
-  const [isWizardOpen, setIsWizardOpen] = useState(false);
-  const [mode, setMode] = useState<RegexVisionMode>('builder');
-  const [guidedQuery, setGuidedQuery] = useState('');
-  const [guidedSteps, setGuidedSteps] = useState<GuidedRegexStep[]>([]);
-  const [isGuidedLoading, setIsGuidedLoading] = useState(false);
-
 
   const [testText, setTestText] = useState<string>('Быстрая коричневая лиса прыгает через ленивую собаку.');
   const [regexFlags, setRegexFlags] = useState<string>('gu');
@@ -466,104 +454,80 @@ const RegexVisionWorkspace: React.FC = () => {
     });
   }, [toast]);
 
-  const findBlockAndParentRecursive = (
-    nodes: Block[],
-    targetId: string,
-    currentParent: Block | null = null
-  ): { block: Block | null; parent: Block | null; indexInParent: number } => {
-    for (let i = 0; i < nodes.length; i++) {
-      const block = nodes[i];
-      if (block.id === targetId) {
-        return { block, parent: currentParent, indexInParent: i };
-      }
-      if (block.children) {
-        const found = findBlockAndParentRecursive(block.children, targetId, block);
-        if (found.block) return found;
-      }
-    }
-    return { block: null, parent: null, indexInParent: -1 };
-  };
-
   const handleReorderBlock = useCallback((draggedId: string, targetId: string, newParentId: string | null) => {
     if (draggedId === targetId) return;
 
     setBlocks(prevBlocks => {
-        const blocksCopy = cloneBlockForState({ id: 'root', type: BlockType.GROUP, settings: {}, children: prevBlocks }).children!;
-        
-        let draggedItem: { block: Block; quantifier: Block | null } | null = null;
-        function findAndRemove(nodes: Block[]): Block[] {
-            const result: Block[] = [];
-            for (let i = 0; i < nodes.length; i++) {
-                const node = nodes[i];
-                if (node.id === draggedId) {
-                    draggedItem = { block: cloneBlockForState(node), quantifier: null };
-                    if (i + 1 < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
-                        draggedItem.quantifier = cloneBlockForState(nodes[i + 1]);
-                        i++;
-                    }
-                } else {
-                    if (node.children) {
-                        node.children = findAndRemove(node.children);
-                    }
-                    result.push(node);
-                }
+      const blocksCopy = JSON.parse(JSON.stringify(prevBlocks));
+
+      let draggedItem: { block: Block; quantifier: Block | null } | null = null;
+      
+      const findAndRemove = (nodes: Block[]): Block[] => {
+        const remaining: Block[] = [];
+        for (let i = 0; i < nodes.length; i++) {
+          const node = nodes[i];
+          if (node.id === draggedId) {
+            draggedItem = { block: node, quantifier: null };
+            if (i + 1 < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
+              draggedItem.quantifier = nodes[i + 1];
+              i++;
             }
-            return result;
+          } else {
+            if (node.children) {
+              node.children = findAndRemove(node.children);
+            }
+            remaining.push(node);
+          }
         }
-        let treeWithoutDraggedItem = findAndRemove(blocksCopy);
-        
-        if (!draggedItem) return prevBlocks;
+        return remaining;
+      };
+      
+      let treeWithoutDraggedItem = findAndRemove(blocksCopy);
+      
+      if (!draggedItem) {
+        return prevBlocks;
+      }
 
-        function isDescendant(parent: Block, childId: string): boolean {
-            return parent.id === childId || (parent.children?.some(child => isDescendant(child, childId)) ?? false);
-        }
-        if (isDescendant(draggedItem.block, targetId)) {
-            toast({ title: "Недопустимое действие", description: "Нельзя переместить блок внутрь самого себя.", variant: "destructive" });
-            return prevBlocks;
-        }
+      const isDescendant = (parent: Block, childId: string): boolean => {
+        return parent.id === childId || (parent.children?.some(child => isDescendant(child, childId)) ?? false);
+      }
+      if (isDescendant(draggedItem.block, targetId)) {
+        toast({ title: "Недопустимое действие", description: "Нельзя переместить блок внутрь самого себя.", variant: "destructive" });
+        return prevBlocks;
+      }
 
-        const blocksToInsert = [draggedItem.block];
-        if (draggedItem.quantifier) blocksToInsert.push(draggedItem.quantifier);
+      const blocksToInsert = [draggedItem.block];
+      if (draggedItem.quantifier) {
+        blocksToInsert.push(draggedItem.quantifier);
+      }
 
-        const isDroppingInside = newParentId === targetId;
+      const isDroppingInside = newParentId === targetId;
 
-        function findAndInsert(nodes: Block[]): Block[] {
+      const findAndInsert = (nodes: Block[]): boolean => {
+        for (let i = 0; i < nodes.length; i++) {
+          const node = nodes[i];
+          if (node.id === targetId) {
             if (isDroppingInside) {
-                return nodes.map(node => {
-                    if (node.id === targetId) {
-                        return { ...node, children: [...(node.children || []), ...blocksToInsert], isExpanded: true };
-                    }
-                    if (node.children) {
-                        return { ...node, children: findAndInsert(node.children) };
-                    }
-                    return node;
-                });
+              node.children = [...(node.children || []), ...blocksToInsert];
+              node.isExpanded = true;
+            } else {
+              nodes.splice(i + 1, 0, ...blocksToInsert);
             }
+            return true;
+          }
+          if (node.children && findAndInsert(node.children)) {
+            return true;
+          }
+        }
+        return false;
+      };
+      
+      findAndInsert(treeWithoutDraggedItem);
 
-            return nodes.flatMap(node => {
-                if (node.id === targetId) {
-                    return [node, ...blocksToInsert];
-                }
-                if (node.children) {
-                    return [{ ...node, children: findAndInsert(node.children) }];
-                }
-                return [node];
-            });
-        }
-        
-        if (newParentId === null && !isDroppingInside) {
-             const targetIndex = treeWithoutDraggedItem.findIndex(b => b.id === targetId);
-             if (targetIndex !== -1) {
-                 treeWithoutDraggedItem.splice(targetIndex + 1, 0, ...blocksToInsert);
-             }
-        } else {
-            treeWithoutDraggedItem = findAndInsert(treeWithoutDraggedItem);
-        }
-        
-        toast({ title: "Блок перемещен" });
-        return treeWithoutDraggedItem;
+      toast({ title: "Блок перемещен" });
+      return treeWithoutDraggedItem;
     });
-}, [toast]);
+  }, [toast]);
 
   const handleOpenPaletteFor = (pId: string | null, ctxId: string | null = null) => {
     setParentIdForNewBlock(pId);
@@ -691,6 +655,24 @@ const RegexVisionWorkspace: React.FC = () => {
 
       // Navigate tree with arrow keys
       if (selectedBlockId) {
+        const findBlockAndParentRecursive = (
+          nodes: Block[],
+          targetId: string,
+          currentParent: Block | null = null
+        ): { block: Block | null; parent: Block | null; indexInParent: number } => {
+          for (let i = 0; i < nodes.length; i++) {
+            const block = nodes[i];
+            if (block.id === targetId) {
+              return { block, parent: currentParent, indexInParent: i };
+            }
+            if (block.children) {
+              const found = findBlockAndParentRecursive(block.children, targetId, block);
+              if (found.block) return found;
+            }
+          }
+          return { block: null, parent: null, indexInParent: -1 };
+        };
+
         const { block: currentBlock, parent, indexInParent } = findBlockAndParentRecursive(blocks, selectedBlockId);
         if (!currentBlock) return;
 
@@ -782,55 +764,6 @@ const RegexVisionWorkspace: React.FC = () => {
       }
       setNaturalLanguageQuery(fixResult.explanation); // Show AI explanation as new 'goal'
   };
-  
-  const handleWizardQuickGenerate = (query: string, generatedBlocks: Block[], parentId: string | null, exampleText?: string, recommendedFlags?: string) => {
-    setNaturalLanguageQuery(query);
-    setBlocks(generatedBlocks);
-    if(exampleText) setTestText(exampleText);
-    if(recommendedFlags) {
-        const newFlags = new Set(regexFlags.split(''));
-        recommendedFlags.split('').forEach(f => newFlags.add(f));
-        setRegexFlags(Array.from(newFlags).join(''));
-    }
-  };
-
-  const startGuidedMode = async (query: string, exampleTestText: string) => {
-    setMode('guided');
-    setGuidedQuery(query);
-    setTestText(exampleTestText);
-    setBlocks([]);
-    setIsGuidedLoading(true);
-    try {
-        const plan = await generateGuidedPlan({ query, exampleTestText });
-        setGuidedSteps(plan.steps);
-    } catch (e) {
-        const error = e as Error;
-        toast({ title: 'Ошибка генерации плана', description: error.message, variant: 'destructive' });
-        setMode('builder'); // Revert to builder mode on failure
-    } finally {
-        setIsGuidedLoading(false);
-    }
-  };
-
-  const handleGuidedStepAdd = (block: Block, parentId: string | null) => {
-    // We pass null for contextual block ID to ensure it adds to the correct parent or root.
-    handleAddBlock(block.type, block.settings, parentId);
-  };
-  
-  const regenerateGuidedPlan = async () => {
-    if (!guidedQuery) return;
-    setIsGuidedLoading(true);
-    try {
-        const plan = await generateGuidedPlan({ query: guidedQuery, exampleTestText: testText });
-        setGuidedSteps(plan.steps);
-    } catch (e) {
-        const error = e as Error;
-        toast({ title: 'Ошибка перегенерации плана', description: error.message, variant: 'destructive' });
-    } finally {
-        setIsGuidedLoading(false);
-    }
-  };
-
 
   const renderBlockNodes = (nodes: Block[], parentId: string | null, depth: number, groupInfos: GroupInfo[]): React.ReactNode[] => {
     const nodeList: React.ReactNode[] = [];
@@ -882,24 +815,6 @@ const RegexVisionWorkspace: React.FC = () => {
   };
 
   const mainContent = () => {
-    if (mode === 'guided') {
-        return (
-            <div className="h-full p-2">
-                <GuidedStepsPanel
-                    query={guidedQuery}
-                    steps={guidedSteps}
-                    isLoading={isGuidedLoading}
-                    onAddStep={handleGuidedStepAdd}
-                    onFinish={() => setMode('builder')}
-                    onResetAndFinish={() => { setBlocks([]); setMode('builder'); }}
-                    selectedBlockId={selectedBlockId}
-                    blocks={blocks}
-                    onRegeneratePlan={regenerateGuidedPlan}
-                />
-            </div>
-        );
-    }
-
     return (
         <div className="h-full flex flex-col p-2">
             <Card className="flex-1 flex flex-col shadow-md border-primary/20 overflow-hidden">
@@ -908,10 +823,6 @@ const RegexVisionWorkspace: React.FC = () => {
                     <Edit3 size={18} className="text-primary"/> Дерево выражения
                 </CardTitle>
                 <div className="flex items-center gap-1">
-                    <Button size="sm" variant="outline" onClick={() => setIsWizardOpen(true)}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1"><path d="M5 12V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2v8c0 1.1-.9 2-2 2h-2.5"/><path d="m10.5 17-5.5 5.5"/><path d="m17 14-3 3"/></svg>
-                        AI Помощник
-                    </Button>
                     <Button size="sm" onClick={() => handleOpenPaletteFor(null)}>
                         <Plus size={16} className="mr-1" /> Добавить блок
                     </Button>
@@ -1061,14 +972,6 @@ const RegexVisionWorkspace: React.FC = () => {
           setContextualBlockId(null);
         }}
         parentIdForNewBlock={parentIdForNewBlock}
-      />
-
-       <RegexWizardModal 
-        isOpen={isWizardOpen}
-        onClose={() => setIsWizardOpen(false)}
-        onStartGuidedMode={startGuidedMode}
-        onCompleteQuickGen={handleWizardQuickGenerate}
-        initialParentId={selectedBlockId}
       />
     </div>
   );
