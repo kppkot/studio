@@ -10,7 +10,7 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
     const ast = regexpTree.parse(`/${regexString}/u`, { allowGroupNameDuplicates: true });
     
     if (ast.body) {
-      // The root is often an Alternative (sequence). The new transformer handles this correctly.
+      // The root is often an Alternative (sequence of blocks).
       return transformNodeToBlocks(ast.body);
     }
     return [];
@@ -41,13 +41,15 @@ function charToString(charNode: any): string {
 }
 
 // Returns an array of blocks. A simple node returns a single-element array.
-// A quantified node returns [subject, quantifier]. An Alternative returns a flat list.
+// A quantified node returns [subject, quantifier]. An Alternative returns a flat list of its children's blocks.
 function transformNodeToBlocks(node: any): Block[] {
   if (!node) return [];
 
-  // Handle quantifiers first. They modify the result of their subject.
+  // Handle quantifiers first. They modify the result of their subject expression.
   if (node.quantifier) {
+    // Call transform on the node *without* the quantifier to get the subject block(s).
     const subjectBlocks = transformNodeToBlocks({ ...node, quantifier: null });
+    
     // This should not happen for valid regex, but as a safeguard:
     if (subjectBlocks.length === 0) return [];
 
@@ -76,30 +78,51 @@ function transformNodeToBlocks(node: any): Block[] {
         isExpanded: false,
     };
     
+    // The result is the subject's blocks followed by the new quantifier block.
     return [...subjectBlocks, quantifierBlock];
   }
 
-  // --- Base cases (no quantifier) ---
+  // --- Base cases (without a quantifier) ---
   const newId = generateId();
 
   switch (node.type) {
     case 'Alternative': {
-        // Use flatMap to flatten the results of all child expressions into a single array
+        // An Alternative is a sequence of expressions. We process each one and flatten the results.
         return node.expressions.flatMap((expr: any) => transformNodeToBlocks(expr));
     }
     
     case 'Disjunction': {
+        // A Disjunction is an "OR" statement (e.g., a|b|c). We represent this with a single ALTERNATION block.
         const children: Block[] = [];
-        // Recursively collect all parts of a disjunction tree (e.g., a|b|c) into a flat list of children for the Alternation block.
+        
+        // Recursively collect all parts of a disjunction tree into a flat list.
         const collectAlternatives = (disjunctionNode: any) => {
             if (disjunctionNode.type === 'Disjunction') {
                 collectAlternatives(disjunctionNode.left);
                 collectAlternatives(disjunctionNode.right);
             } else {
-                children.push(...transformNodeToBlocks(disjunctionNode));
+                // Each alternative (like 'yahoo' or 'hotmail') is a complete expression.
+                // We transform it into its own set of blocks.
+                // If the alternative is a sequence (e.g., 'yahoo'), it should be grouped.
+                const alternativeBlocks = transformNodeToBlocks(disjunctionNode);
+
+                if (alternativeBlocks.length > 1) {
+                    // This alternative is a sequence, wrap it in a LITERAL block using its raw text
+                    // to keep it as a single unit in the alternation.
+                     children.push({
+                        id: generateId(),
+                        type: BlockType.LITERAL,
+                        settings: { text: disjunctionNode.raw, isRawRegex: true } as LiteralSettings,
+                        children: [],
+                    });
+                } else {
+                    children.push(...alternativeBlocks);
+                }
             }
         };
+
         collectAlternatives(node);
+
         const alternationBlock: Block = {
             id: newId,
             type: BlockType.ALTERNATION,
@@ -112,9 +135,11 @@ function transformNodeToBlocks(node: any): Block[] {
 
     case 'CharacterClass': {
         let patternContent;
+        // A 'meta' kind is a shorthand like \d, \w, etc.
         if (node.kind === 'meta' && !node.expressions) {
             patternContent = node.raw;
         } else {
+            // Otherwise, it's a class like [abc-f]
             patternContent = (node.expressions || []).map((expr: any) => {
                 if (expr.type === 'ClassRange') return `${charToString(expr.from)}-${charToString(expr.to)}`;
                 return charToString(expr);
@@ -133,6 +158,7 @@ function transformNodeToBlocks(node: any): Block[] {
         const literalBlock: Block = {
             id: newId,
             type: BlockType.LITERAL,
+            // Use 'raw' to preserve escaping, critical for characters like '.' -> '\.'
             settings: { text: node.raw, isRawRegex: true } as LiteralSettings,
             children: [], isExpanded: false
         };
@@ -155,6 +181,7 @@ function transformNodeToBlocks(node: any): Block[] {
     }
 
     case 'Assertion': {
+        // Assertions can be Lookarounds or Anchors.
         if (node.kind === 'Lookahead' || node.kind === 'Lookbehind') {
             const lookaroundType: LookaroundSettings['type'] = `${node.negative ? 'negative' : 'positive'}-${node.kind.toLowerCase()}` as any;
             const assertionChild = node.assertion ? transformNodeToBlocks(node.assertion) : [];
@@ -166,7 +193,7 @@ function transformNodeToBlocks(node: any): Block[] {
                 isExpanded: true
             };
             return [lookaroundBlock];
-        } else { // Anchor
+        } else { // It's an anchor like ^, $, \b
             const anchorType = (node.kind === 'b' || node.kind === 'B') ? `\\${node.kind}` : node.kind;
             const anchorBlock: Block = {
                 id: newId,
@@ -191,7 +218,8 @@ function transformNodeToBlocks(node: any): Block[] {
     }
 
     default:
-        console.warn('Неизвестный тип узла AST:', node.type, node);
+        console.warn('Unknown AST node type:', node.type, node);
+        // Fallback for unknown nodes: if they have a raw representation, treat as a literal.
         if (node.raw) {
              const fallbackBlock: Block = {
                 id: newId,
