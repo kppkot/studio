@@ -180,15 +180,16 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
       case BlockType.ANCHOR:
         const aSettings = settings as AnchorSettings;
-        const anchorMap: {[key: string]: {title: string, regex: string}} = {
-            '^': {title: 'Начало строки/текста', regex: '^'},
-            '$': {title: 'Конец строки/текста', regex: '$'},
-            '\\b': {title: 'Граница слова', regex: '\\b'},
-            '\\B': {title: 'Не граница слова', regex: '\\B'},
+        const anchorMap: {[key: string]: {title: string, details: string, regex: string}} = {
+            '^': {title: 'Начало строки/текста', details: 'Совпадение в начале строки', regex: '^'},
+            '$': {title: 'Конец строки/текста', details: 'Совпадение в конце строки', regex: '$'},
+            '\\b': {title: 'Граница слова', details: 'На границе целого слова', regex: '\\b'},
+            '\\B': {title: 'Не граница слова', details: 'Не на границе слова', regex: '\\B'},
         };
-        title = anchorMap[aSettings.type]?.title || 'Якорь';
-        details = 'Указывает на позицию в тексте';
-        regexFragment = anchorMap[aSettings.type]?.regex || aSettings.type;
+        const anchorInfo = anchorMap[aSettings.type];
+        title = anchorInfo?.title || 'Якорь';
+        details = anchorInfo?.details || 'Указывает на позицию в тексте';
+        regexFragment = anchorInfo?.regex || aSettings.type;
         break;
 
       case BlockType.LOOKAROUND:

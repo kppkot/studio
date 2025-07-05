@@ -404,24 +404,61 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
 
       case BlockType.ANCHOR:
         const anchorSettings = settings as AnchorSettings;
+        const anchorExplanations: Record<AnchorSettings['type'], { title: string, description: string, example: string }> = {
+          '^': {
+            title: "Якорь 'Начало строки/текста' (^)",
+            description: "Этот якорь проверяет, что совпадение находится в самом начале строки. Если включен многострочный режим (флаг `m`), он сработает в начале каждой новой строки.",
+            example: "Пример: `^Код` найдет слово 'Код' в строке 'Код: 123', но не в 'Ошибка. Код: 123'."
+          },
+          '$': {
+            title: "Якорь 'Конец строки/текста' ($)",
+            description: "Этот якорь проверяет, что совпадение находится в самом конце строки. В многострочном режиме (флаг `m`) сработает в конце каждой строки.",
+            example: "Пример: `готово$` найдет 'готово' в строке 'Статус: готово', но не в 'готово к отправке'."
+          },
+          '\\b': {
+            title: "Якорь 'Граница слова' (\\b)",
+            description: "Этот якорь соответствует позиции между 'словесным' символом (буква, цифра, `_`) и 'несловесным' (пробел, точка, начало/конец строки). Он не потребляет символов.",
+            example: "Пример: `\\bкот\\b` найдет 'кот' как отдельное слово, но не найдет его в 'котенок'."
+          },
+          '\\B': {
+            title: "Якорь 'Не граница слова' (\\B)",
+            description: "Противоположность `\\b`. Соответствует любой позиции, которая НЕ является границей слова.",
+            example: "Пример: `\\Bкот\\B` найдет 'кот' в слове 'мякоть', но не как отдельное слово 'кот'."
+          }
+        };
+
+        const currentAnchorExplanation = anchorExplanations[anchorSettings.type];
+        
         return (
-          <div>
-            <Label htmlFor="anchorType" className="text-sm font-medium">Тип якоря</Label>
-            <Select value={anchorSettings.type || '^'} onValueChange={(value) => handleSettingChange('type', value)}>
-              <SelectTrigger id="anchorType" className="mt-1">
-                <SelectValue placeholder="Выберите тип якоря" />
-              </SelectTrigger>
-              <SelectContent>
-                {config.types?.map(type => (
-                  <SelectItem key={type} value={type}>
-                    {type === '^' ? 'Начало строки (^)' :
-                     type === '$' ? 'Конец строки ($)' :
-                     type === '\\b' ? 'Граница слова (\\b)' : 'Не граница слова (\\B)'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <>
+            <div>
+              <Label htmlFor="anchorType" className="text-sm font-medium">Тип якоря</Label>
+              <Select value={anchorSettings.type || '^'} onValueChange={(value) => handleSettingChange('type', value)}>
+                <SelectTrigger id="anchorType" className="mt-1">
+                  <SelectValue placeholder="Выберите тип якоря" />
+                </SelectTrigger>
+                <SelectContent>
+                  {config.types?.map(type => (
+                    <SelectItem key={type} value={type}>
+                      {type === '^' ? 'Начало строки (^)' :
+                       type === '$' ? 'Конец строки ($)' :
+                       type === '\\b' ? 'Граница слова (\\b)' : 'Не граница слова (\\B)'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {currentAnchorExplanation && (
+               <Alert className="mt-4">
+                  <Lightbulb className="h-4 w-4" />
+                  <AlertTitle className="font-semibold">{currentAnchorExplanation.title}</AlertTitle>
+                  <AlertDescription className="flex flex-col gap-2 mt-2">
+                      <p>{currentAnchorExplanation.description}</p>
+                      <p className="italic text-muted-foreground">{currentAnchorExplanation.example}</p>
+                  </AlertDescription>
+              </Alert>
+            )}
+          </>
         );
       
       case BlockType.LOOKAROUND:
