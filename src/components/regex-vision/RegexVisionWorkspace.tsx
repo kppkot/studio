@@ -234,7 +234,6 @@ const RegexVisionWorkspace: React.FC = () => {
     if (!targetParentId && selectedBlockId) {
       const selBlock = findBlockRecursive(blocks, selectedBlockId);
       // Only these types should automatically become parents for new blocks.
-      // CharacterClass is intentionally excluded to prevent unexpected nesting.
       if (selBlock && [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(selBlock.type)) {
         targetParentId = selectedBlockId;
       }

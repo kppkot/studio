@@ -8,17 +8,17 @@ import { Label } from '@/components/ui/label';
 import { Copy, Loader2, Wand2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { BLOCK_CONFIGS } from './constants';
+import { FlagsControl } from './FlagsControl';
 
 const colorMap: Record<string, string> = {
-  ANCHOR: 'bg-blue-200 dark:bg-blue-800/40 text-blue-900 dark:text-blue-200',
-  QUANTIFIER: 'bg-sky-200 dark:bg-sky-800/40 text-sky-900 dark:text-sky-200',
-  CHARACTER_CLASS: 'bg-orange-200 dark:bg-orange-800/40 text-orange-900 dark:text-orange-200',
-  GROUP: 'bg-green-200 dark:bg-green-800/40 text-green-900 dark:text-green-200',
-  LOOKAROUND: 'bg-green-200 dark:bg-green-800/40 text-green-900 dark:text-green-200',
-  ALTERNATION: 'bg-green-200 dark:bg-green-800/40 text-green-900 dark:text-green-200',
-  BACKREFERENCE: 'bg-pink-200 dark:bg-pink-800/40 text-pink-900 dark:text-pink-200',
-  CONDITIONAL: 'bg-fuchsia-200 dark:bg-fuchsia-800/40 text-fuchsia-900 dark:text-fuchsia-200',
+  ANCHOR: 'bg-blue-200/70 dark:bg-blue-800/40 text-blue-900 dark:text-blue-200',
+  QUANTIFIER: 'bg-sky-200/70 dark:bg-sky-800/40 text-sky-900 dark:text-sky-200',
+  CHARACTER_CLASS: 'bg-orange-200/70 dark:bg-orange-800/40 text-orange-900 dark:text-orange-200',
+  GROUP: 'bg-green-200/70 dark:bg-green-800/40 text-green-900 dark:text-green-200',
+  LOOKAROUND: 'bg-green-200/70 dark:bg-green-800/40 text-green-900 dark:text-green-200',
+  ALTERNATION: 'bg-green-200/70 dark:bg-green-800/40 text-green-900 dark:text-green-200',
+  BACKREFERENCE: 'bg-pink-200/70 dark:bg-pink-800/40 text-pink-900 dark:text-pink-200',
+  CONDITIONAL: 'bg-fuchsia-200/70 dark:bg-fuchsia-800/40 text-fuchsia-900 dark:text-fuchsia-200',
   LITERAL: 'text-foreground',
 };
 
@@ -152,15 +152,7 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
            {isParsing && !isEditing && <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}
         </div>
         <span className="text-muted-foreground">/</span>
-        <Input
-          id="regexFlags"
-          type="text"
-          value={regexFlags}
-          onChange={(e) => onFlagsChange(e.target.value.replace(/[^gimsuy]/g, ''))}
-          className="w-20 font-mono text-center h-10"
-          placeholder="флаги"
-          aria-label="Флаги Regex"
-        />
+        <FlagsControl flags={regexFlags} onFlagsChange={onFlagsChange} />
         <Button
           variant="outline"
           size="icon"
