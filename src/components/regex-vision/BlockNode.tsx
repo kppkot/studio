@@ -154,17 +154,28 @@ const BlockNode: React.FC<BlockNodeProps> = ({
       case BlockType.GROUP:
         const gSettings = settings as GroupSettings;
         const groupInfo = groupInfos.find(gi => gi.blockId === block.id);
-        if (gSettings.type === 'capturing' && groupInfo) {
-          title = `Группа (захват №${groupInfo.groupIndex})`;
-          regexFragment = `(...)`;
-        } else if (gSettings.type === 'non-capturing') {
-          title = `Группа (незахватывающая)`;
-          regexFragment = `(?:...)`;
-        } else if (gSettings.type === 'named' && groupInfo) {
-          title = `Группа (имя: ${gSettings.name || '...'})`;
-          regexFragment = `(?<${gSettings.name || '...'}>...)`;
+        
+        switch(gSettings.type) {
+          case 'capturing':
+            title = groupInfo ? `Группа (захват №${groupInfo.groupIndex})` : 'Группа (захватывающая)';
+            regexFragment = `(...)`;
+            details = 'Сохраняет найденный текст в группу.';
+            break;
+          case 'non-capturing':
+            title = `Группа (незахватывающая)`;
+            regexFragment = `(?:...)`;
+            details = 'Объединяет блоки, но не сохраняет результат.';
+            break;
+          case 'named':
+            title = `Группа (имя: ${gSettings.name || '...'})`;
+            regexFragment = `(?<${gSettings.name || '...'}>...)`;
+            details = 'Сохраняет результат в именованную группу.';
+            break;
+          default:
+            title = "Группа";
+            details = 'Контейнер для других блоков';
+            regexFragment = `(...)`;
         }
-        details = 'Контейнер для других блоков';
         break;
 
       case BlockType.ANCHOR:

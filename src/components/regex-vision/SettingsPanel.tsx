@@ -359,14 +359,46 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
               </div>
             )}
             
-            <Alert className="mt-4 text-xs">
-              <Lightbulb className="h-4 w-4" />
-              <AlertDescription>
-                {gSettings.type === 'capturing' && "Сохраняет найденный текст в отдельную пронумерованную группу (например, №1). Полезно для извлечения конкретной части совпадения. Результат виден на вкладке 'Тестирование'."}
-                {gSettings.type === 'non-capturing' && "Используется для объединения блоков (например, чтобы применить к ним квантификатор `(?:a|b)+`), но не сохраняет результат. Экономит ресурсы и не засоряет вывод."}
-                {gSettings.type === 'named' && "Работает как захватывающая группа, но дает ей понятное имя вместо номера. Это делает Regex более читаемым и упрощает извлечение данных в коде (например, `(?<year>\\d{4})`)."}
-              </AlertDescription>
-            </Alert>
+            {gSettings.type === 'capturing' && (
+              <Alert className="mt-4">
+                <Lightbulb className="h-4 w-4" />
+                <AlertTitle>Захватывающая группа</AlertTitle>
+                <AlertDescription className="flex flex-col gap-2 mt-2">
+                    <p>Сохраняет найденный текст в отдельную пронумерованную группу (например, №1), которую можно использовать для обратных ссылок или извлечения данных.</p>
+                    <p className="text-xs text-muted-foreground">Результаты захвата видны на вкладке "Тестирование".</p>
+                </AlertDescription>
+              </Alert>
+            )}
+            {gSettings.type === 'non-capturing' && (
+              <Alert className="mt-4">
+                <Lightbulb className="h-4 w-4" />
+                <AlertTitle>Незахватывающая группа (?:...)</AlertTitle>
+                <AlertDescription className="flex flex-col gap-2 mt-2">
+                    <p>Эта группа объединяет несколько блоков, но **не сохраняет** найденный текст.</p>
+                    <p className="font-semibold text-xs">Зачем это нужно?</p>
+                    <p className="text-xs">Идеально, когда нужно применить квантификатор (например, `*`, `+`) к целой последовательности, а не к одному символу.</p>
+                    <div>
+                        <p className="text-xs font-semibold">Пример:</p>
+                        <p className="text-xs italic text-muted-foreground">Чтобы найти слово "ha" повторяющееся один или более раз (в "hahaha"), вы используете `(?:ha)+`. Без этой группы, выражение `ha+` искало бы "haaaa...".</p>
+                    </div>
+                </AlertDescription>
+              </Alert>
+            )}
+            {gSettings.type === 'named' && (
+              <Alert className="mt-4">
+                <Lightbulb className="h-4 w-4" />
+                <AlertTitle>Именованная группа (?&lt;имя&gt;...)</AlertTitle>
+                <AlertDescription className="flex flex-col gap-2 mt-2">
+                    <p>Работает как захватывающая группа, но дает результату понятное имя вместо номера.</p>
+                    <p className="font-semibold text-xs">Зачем это нужно?</p>
+                    <p className="text-xs">Делает Regex более читаемым и упрощает извлечение данных в коде.</p>
+                    <div>
+                        <p className="text-xs font-semibold">Пример:</p>
+                        <p className="text-xs italic text-muted-foreground">В выражении `(?&lt;year&gt;\d{4})` вы можете получить найденный год по имени "year", а не по номеру группы.</p>
+                    </div>
+                </AlertDescription>
+              </Alert>
+            )}
           </>
         );
 
