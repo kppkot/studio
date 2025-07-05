@@ -9,6 +9,7 @@ import { Copy, Loader2, Wand2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { FlagsControl } from './FlagsControl';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const colorMap: Record<string, string> = {
   ANCHOR: 'bg-blue-200/70 dark:bg-blue-800/40 text-blue-900 dark:text-blue-200',
@@ -39,6 +40,7 @@ interface RegexOutputDisplayProps {
   onSelectBlock: (id: string | null) => void;
   hoveredBlockId: string | null;
   onHoverPart: (blockId: string | null) => void;
+  isReady: boolean;
 }
 
 const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
@@ -51,7 +53,8 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
   selectedBlockId,
   onSelectBlock,
   hoveredBlockId,
-  onHoverPart
+  onHoverPart,
+  isReady,
 }) => {
   const { toast } = useToast();
   const [inputValue, setInputValue] = useState(generatedRegex);
@@ -99,6 +102,22 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
       setIsEditing(false);
     }
   };
+
+  if (!isReady) {
+    return (
+      <div className="space-y-2">
+        <Label htmlFor="generatedRegexOutput" className="text-sm font-medium">Ваше регулярное выражение</Label>
+        <div className="flex items-center gap-2">
+            <span className="text-muted-foreground">/</span>
+            <Skeleton className="h-10 flex-1" />
+            <span className="text-muted-foreground">/</span>
+            <Skeleton className="h-10 w-24" />
+            <Skeleton className="h-10 w-10" />
+            <Skeleton className="h-10 w-10" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">

@@ -41,6 +41,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const [contextualBlockId, setContextualBlockId] = useState<string | null>(null);
   const [isPaletteVisible, setIsPaletteVisible] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
+  const [isReady, setIsReady] = useState(false);
 
   const [testText, setTestText] = useState<string>('Быстрая коричневая лиса прыгает через ленивую собаку.');
   const [regexFlags, setRegexFlags] = useState<string>('gu');
@@ -49,6 +50,12 @@ const RegexVisionWorkspace: React.FC = () => {
   const [regexError, setRegexError] = useState<string | null>(null);
   
   const { toast } = useToast();
+
+  useEffect(() => {
+    // This effect runs once on the client after hydration,
+    // indicating that the component is ready for interaction.
+    setIsReady(true);
+  }, []);
 
   useEffect(() => {
     const { regexString: newRegex, groupInfos, stringParts } = generateRegexStringAndGroupInfo(blocks);
@@ -887,6 +894,7 @@ const RegexVisionWorkspace: React.FC = () => {
                     onSelectBlock={setSelectedBlockId}
                     hoveredBlockId={hoveredBlockId}
                     onHoverPart={handleBlockHover}
+                    isReady={isReady}
                 />
               </div>
               <Tabs defaultValue="testing" className="flex-1 flex flex-col min-h-0">
