@@ -42,30 +42,6 @@ function transformNodeToBlocks(node: any): Block[] {
 
   switch (node.type) {
     case 'Alternative': {
-        // A smarter parser for a common but naive HTML tag pattern.
-        // It checks if the whole expression is exactly <[^>]+>
-        if (
-            node.expressions.length === 3 &&
-            node.expressions[0].type === 'Char' && node.expressions[0].value === '<' &&
-            node.expressions[2].type === 'Char' && node.expressions[2].value === '>' &&
-            node.expressions[1].type === 'Repetition' && node.expressions[1].quantifier.kind === '+' &&
-            node.expressions[1].expression.type === 'CharacterClass' &&
-            node.expressions[1].expression.negative === true &&
-            node.expressions[1].expression.expressions.length === 1 &&
-            node.expressions[1].expression.expressions[0].value === '>'
-        ) {
-            // This is the <[^>]+> pattern. Let's upgrade it to something safer and more intentional.
-            const tagContentPattern = 'a-zA-Z0-9_\\s/\\-="\'#.'; // More specific characters allowed in a tag
-            const blocks: Block[] = [
-                { id: generateId(), type: BlockType.LITERAL, settings: { text: '<' } as LiteralSettings, children: [], isExpanded: false },
-                { id: generateId(), type: BlockType.CHARACTER_CLASS, settings: { pattern: tagContentPattern, negated: false } as CharacterClassSettings, children: [], isExpanded: false },
-                { id: generateId(), type: BlockType.QUANTIFIER, settings: { type: '+', mode: 'greedy' } as QuantifierSettings, children: [], isExpanded: false },
-                { id: generateId(), type: BlockType.LITERAL, settings: { text: '>' } as LiteralSettings, children: [], isExpanded: false },
-            ];
-            return blocks;
-        }
-
-        // Default behavior for other alternatives
         return node.expressions.flatMap((expr: any) => transformNodeToBlocks(expr));
     }
 
@@ -112,7 +88,17 @@ function transformNodeToBlocks(node: any): Block[] {
     case 'Char': {
         const value = node.value;
         // A meta character like '.', '\d', '\w', '\s'
-        if (node.kind === 'meta') { 
+        if (node.kind === 'meta') {
+            // This handles escaped characters like '\.' correctly, mapping them to literals.
+            if (value.length > 1 && value.startsWith('\\')) {
+                 const literalBlock: Block = {
+                    id: newId,
+                    type: BlockType.LITERAL,
+                    settings: { text: value.slice(1), isRawRegex: false } as LiteralSettings,
+                    children: [],
+                };
+                return [literalBlock];
+            }
             const charClassBlock: Block = {
                 id: newId,
                 type: BlockType.CHARACTER_CLASS,
