@@ -40,16 +40,7 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
 
     const processChildren = (b: Block) => {
       if (!b.children) return;
-      if (b.type === BlockType.ALTERNATION) {
-        b.children.forEach((child, index) => {
-          generateRecursive(child);
-          if (index < b.children.length - 1) {
-            stringParts.push({ text: '|', blockId: b.id, blockType: b.type });
-          }
-        });
-      } else {
-        b.children.forEach(generateRecursive);
-      }
+      b.children.forEach(generateRecursive);
     };
 
     switch (block.type) {
@@ -116,7 +107,21 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
         stringParts.push({ text: (settings as AnchorSettings).type, blockId: block.id, blockType: block.type });
         break;
       case BlockType.ALTERNATION:
-        processChildren(block);
+        block.children.forEach((child, index) => {
+          const childIsRedundantGroup =
+            child.type === BlockType.GROUP &&
+            (child.settings as GroupSettings).type === 'non-capturing';
+
+          if (childIsRedundantGroup) {
+            child.children?.forEach(generateRecursive);
+          } else {
+            generateRecursive(child);
+          }
+
+          if (index < block.children.length - 1) {
+            stringParts.push({ text: '|', blockId: block.id, blockType: block.type });
+          }
+        });
         break;
       case BlockType.LOOKAROUND:
         const lSettings = settings as LookaroundSettings;
