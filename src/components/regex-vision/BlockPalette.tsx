@@ -39,7 +39,7 @@ const WIZARD_CATEGORIES: WizardCategory[] = [
     actions: [
       { label: "Обычный текст", type: BlockType.LITERAL, description: "Найти точное совпадение с введенным текстом." },
       { label: "Любая цифра", type: BlockType.CHARACTER_CLASS, settings: { pattern: '\\d', negated: false }, description: "Эквивалент [0-9]." },
-      { label: "Любая буква", type: BlockType.CHARACTER_CLASS, settings: { pattern: '\\p{L}', negated: false }, description: "Буквы любых языков, требует флаг 'u'." },
+      { label: "Любая буква", type: BlockType.CHARACTER_CLASS, settings: { pattern: '\\p{L}', negated: false }, description: "Находит одну букву любого языка (кириллица, латиница и др.)." },
       { label: "Любой символ слова", type: BlockType.CHARACTER_CLASS, settings: { pattern: '\\w', negated: false }, description: "Буква, цифра или знак подчеркивания." },
       { label: "Пробельный символ", type: BlockType.CHARACTER_CLASS, settings: { pattern: '\\s', negated: false }, description: "Пробел, таб, перенос строки и т.д." },
       { label: "Любой символ", type: BlockType.CHARACTER_CLASS, settings: { pattern: '.', negated: false }, description: "Соответствует любому символу, кроме новой строки." },

@@ -43,7 +43,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const [isParsing, setIsParsing] = useState(false);
 
   const [testText, setTestText] = useState<string>('Быстрая коричневая лиса прыгает через ленивую собаку.');
-  const [regexFlags, setRegexFlags] = useState<string>('g');
+  const [regexFlags, setRegexFlags] = useState<string>('gu');
   const [matches, setMatches] = useState<RegexMatch[]>([]);
   const [regexOutput, setRegexOutput] = useState<{ regexString: string; groupInfos: GroupInfo[]; stringParts: RegexStringPart[] }>({ regexString: '', groupInfos: [], stringParts: [] });
   const [regexError, setRegexError] = useState<string | null>(null);
@@ -233,7 +233,9 @@ const RegexVisionWorkspace: React.FC = () => {
     let targetParentId = parentId;
     if (!targetParentId && selectedBlockId) {
       const selBlock = findBlockRecursive(blocks, selectedBlockId);
-      if (selBlock && [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL, BlockType.CHARACTER_CLASS].includes(selBlock.type)) {
+      // Only these types should automatically become parents for new blocks.
+      // CharacterClass is intentionally excluded to prevent unexpected nesting.
+      if (selBlock && [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(selBlock.type)) {
         targetParentId = selectedBlockId;
       }
     }
@@ -255,20 +257,25 @@ const RegexVisionWorkspace: React.FC = () => {
         const blockToUpdate = findBlockRecursive(blocks, id);
 
         if (blockToUpdate && blockToUpdate.type === BlockType.CHARACTER_CLASS) {
-            const newPattern = (updatedBlockData.settings as CharacterClassSettings).pattern;
-
-            // Only re-parse into children IF the block is already a composite container.
-            if (blockToUpdate.children && blockToUpdate.children.length > 0) {
-                const newChildren = breakdownPatternIntoChildren(newPattern);
-                const reparsedBlock: Partial<Block> = {
-                    settings: { ...(blockToUpdate.settings as CharacterClassSettings), pattern: '' }, // Clear pattern
-                    children: newChildren,
-                    isExpanded: true,
-                };
-                setBlocks(prev => updateBlockRecursive(prev, id, reparsedBlock));
-                return;
+            // If the block is NOT a composite container (i.e. has no children),
+            // just update its pattern property and do not attempt to parse it.
+            if (!blockToUpdate.children || blockToUpdate.children.length === 0) {
+                 setBlocks(prev => updateBlockRecursive(prev, id, {
+                    settings: { ...blockToUpdate.settings, ...(updatedBlockData.settings as CharacterClassSettings) }
+                 }));
+                 return;
             }
-            // If it's a simple block (no children), fall through to default update logic.
+
+            // If the block IS a composite container, re-parse the pattern into children.
+            const newPattern = (updatedBlockData.settings as CharacterClassSettings).pattern;
+            const newChildren = breakdownPatternIntoChildren(newPattern);
+            const reparsedBlock: Partial<Block> = {
+                settings: { ...(blockToUpdate.settings as CharacterClassSettings), pattern: '' }, // Clear pattern
+                children: newChildren,
+                isExpanded: true,
+            };
+            setBlocks(prev => updateBlockRecursive(prev, id, reparsedBlock));
+            return;
         }
     }
 

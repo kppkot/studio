@@ -159,7 +159,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           '\\s': { title: 'Пробельный символ', details: 'Пробел, таб, новая строка...' },
           '\\S': { title: 'Не пробельный символ', details: 'Кроме \\s' },
           '.': { title: 'Любой символ', details: 'Кроме новой строки' },
-          '\\p{L}': { title: 'Любая буква (Unicode)', details: 'Буквы всех языков (требует флаг \'u\')' },
+          '\\p{L}': { title: 'Любая буква', details: 'Находит одну букву любого алфавита' },
         };
 
         if (shorthandInfo[pattern]) {
@@ -289,8 +289,8 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           "bg-sky-100 text-sky-800 border-sky-300 border",
           "dark:bg-sky-900/50 dark:text-sky-300 dark:border-sky-700/50",
           "px-2 py-1 rounded-full text-xs font-semibold shadow-sm hover:shadow-md transition-all flex items-center gap-1.5",
-          (hoveredId === quantifierToRender.id) && "ring-2 ring-accent bg-accent/20 brightness-110",
-          (selectedId === quantifierToRender.id) && "ring-2 ring-primary bg-primary/20 brightness-110"
+          (hoveredId === quantifierToRender.id) && !isQuantifierSelected && "ring-2 ring-accent bg-accent/20 brightness-110",
+          isQuantifierSelected && "ring-2 ring-primary bg-primary/20 brightness-110"
         )}
         title={`${modeMap[qSettings.mode]} квантификатор`}
       >
