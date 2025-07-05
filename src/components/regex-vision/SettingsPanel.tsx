@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { X, Lightbulb, Settings } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface SettingsPanelProps {
   block: Block | null;
@@ -45,11 +45,31 @@ const getDynamicTitle = (block: Block): string => {
 };
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose }) => {
+  // Hooks must be called at the top level, before any conditional returns.
+  const [localPattern, setLocalPattern] = useState('');
+
+  useEffect(() => {
+    if (block?.type === BlockType.CHARACTER_CLASS) {
+      if (block.children && block.children.length > 0) {
+        setLocalPattern(reconstructPatternFromChildren(block.children));
+      } else {
+        setLocalPattern((block.settings as CharacterClassSettings).pattern || '');
+      }
+    } else if (!block) {
+      // Clear local state when no block is selected
+      setLocalPattern('');
+    }
+  }, [block]);
+
+
+  // Conditional return is fine after all hooks have been called.
   if (!block) {
     return (
         <Card className="h-full flex flex-col shadow-md border-primary/20 overflow-hidden">
-            <CardHeader className="items-center">
-                <CardTitle className="text-lg">Настройки</CardTitle>
+            <CardHeader className="py-3 px-4 border-b">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <Settings size={18} className="text-primary"/> Настройки
+                </CardTitle>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-center gap-4 p-4">
                 <Settings size={48} className="opacity-50" />
@@ -61,21 +81,22 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
 
   const config: BlockConfig | undefined = BLOCK_CONFIGS[block.type];
   
-  const [localPattern, setLocalPattern] = useState('');
-
-  useEffect(() => {
-    if (block?.type === BlockType.CHARACTER_CLASS) {
-      if (block.children && block.children.length > 0) {
-        setLocalPattern(reconstructPatternFromChildren(block.children));
-      } else {
-        setLocalPattern((block.settings as CharacterClassSettings).pattern || '');
-      }
-    }
-  }, [block]);
-
-
   if (!config) {
-    return <div className="p-4 text-destructive">Ошибка: Неизвестный тип блока для настроек.</div>;
+     return (
+        <Card className="h-full flex flex-col shadow-md border-primary/20 overflow-hidden">
+            <CardHeader className="py-3 px-4 border-b">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <Settings size={18} className="text-primary"/> Ошибка
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4">
+                <Alert variant="destructive">
+                    <AlertTitle>Ошибка</AlertTitle>
+                    <AlertDescription>Неизвестный тип блока для настроек.</AlertDescription>
+                </Alert>
+            </CardContent>
+        </Card>
+    );
   }
 
   const handleSettingChange = (key: string, value: any) => {
@@ -413,7 +434,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
   return (
     <Card className="h-full flex flex-col shadow-md border-primary/20 overflow-hidden">
       <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b">
-        <CardTitle className="text-base truncate">Настройки: {getDynamicTitle(block)}</CardTitle>
+        <CardTitle className="text-base truncate flex items-center gap-2">
+            <Settings size={18} className="text-primary"/> Настройки: {getDynamicTitle(block)}
+        </CardTitle>
       </CardHeader>
       <CardContent className="p-4 flex-1 min-h-0">
         <ScrollArea className="h-full pr-3">
@@ -427,3 +450,5 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
 };
 
 export default SettingsPanel;
+
+    
