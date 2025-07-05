@@ -156,31 +156,17 @@ function transformNodeToBlocks(node: any): Block[] {
         name = node.name;
       }
       
-      const isAlternation = node.expression && node.expression.type === 'Disjunction';
-      const type = isAlternation ? BlockType.ALTERNATION : BlockType.GROUP;
-      
-      const settings = type === BlockType.GROUP ? { type: groupType, name } : {};
-
-      const collectAlternationChildren = (disNode: any): Block[] => {
-          if (disNode.type !== 'Disjunction') return transformNodeToBlocks(disNode);
-          return [
-              ...collectAlternationChildren(disNode.left),
-              ...collectAlternationChildren(disNode.right)
-          ];
-      };
-
-      let children: Block[];
-      if(isAlternation) {
-        children = collectAlternationChildren(node.expression);
-      } else {
-        children = transformNodeToBlocks(node.expression);
-      }
+      // A Group node from the AST must always be represented as a GROUP block
+      // to preserve the parentheses and group type (capturing, etc.).
+      // The content of the group (node.expression) is transformed into child blocks.
+      // If the content is an alternation (Disjunction), the recursive call will
+      // correctly create an ALTERNATION block inside this GROUP block.
       
       const groupBlock: Block = {
         id: newId,
-        type: type,
-        settings: settings,
-        children: children,
+        type: BlockType.GROUP,
+        settings: { type: groupType, name } as GroupSettings,
+        children: transformNodeToBlocks(node.expression),
         isExpanded: true,
       };
       
