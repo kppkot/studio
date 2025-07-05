@@ -22,6 +22,36 @@ interface RegexOutputDisplayProps {
   onHoverPart: (blockId: string | null) => void;
 }
 
+const COLORS = [
+  'bg-red-100 dark:bg-red-900/40 text-red-900 dark:text-red-200',
+  'bg-orange-100 dark:bg-orange-900/40 text-orange-900 dark:text-orange-200',
+  'bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200',
+  'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-900 dark:text-yellow-200',
+  'bg-lime-100 dark:bg-lime-900/40 text-lime-900 dark:text-lime-200',
+  'bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-200',
+  'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-900 dark:text-emerald-200',
+  'bg-teal-100 dark:bg-teal-900/40 text-teal-900 dark:text-teal-200',
+  'bg-cyan-100 dark:bg-cyan-900/40 text-cyan-900 dark:text-cyan-200',
+  'bg-sky-100 dark:bg-sky-900/40 text-sky-900 dark:text-sky-200',
+  'bg-blue-100 dark:bg-blue-900/40 text-blue-900 dark:text-blue-200',
+  'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-900 dark:text-indigo-200',
+  'bg-violet-100 dark:bg-violet-900/40 text-violet-900 dark:text-violet-200',
+  'bg-purple-100 dark:bg-purple-900/40 text-purple-900 dark:text-purple-200',
+  'bg-fuchsia-100 dark:bg-fuchsia-900/40 text-fuchsia-900 dark:text-fuchsia-200',
+  'bg-pink-100 dark:bg-pink-900/40 text-pink-900 dark:text-pink-200',
+  'bg-rose-100 dark:bg-rose-900/40 text-rose-900 dark:text-rose-200',
+];
+
+const getColorForId = (id: string) => {
+  if (!id) return COLORS[0];
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = id.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return COLORS[Math.abs(hash) % COLORS.length];
+};
+
+
 const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
   generatedRegex,
   regexFlags,
@@ -110,13 +140,14 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
             >
                 {stringParts.length > 0 ? stringParts.map((part, index) => (
                     <span 
-                        key={index}
+                        key={`${part.blockId}-${index}`}
                         onMouseEnter={() => onHoverPart(part.blockId)}
                         onClick={(e) => { e.stopPropagation(); onSelectBlock(part.blockId); }}
                         className={cn(
-                            "transition-colors rounded-sm px-0.5 cursor-pointer",
-                            part.blockId === selectedBlockId ? "bg-primary/20" : 
-                            part.blockId === hoveredBlockId ? "bg-accent/20" : "bg-transparent"
+                            "transition-all duration-100 rounded-sm px-1 cursor-pointer",
+                            part.blockId ? getColorForId(part.blockId) : "text-foreground",
+                            part.blockId === selectedBlockId ? "ring-2 ring-primary scale-105 shadow-lg z-10 relative font-bold" : 
+                            part.blockId === hoveredBlockId ? "ring-1 ring-primary brightness-110" : ""
                         )}
                     >
                         {part.text}

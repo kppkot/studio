@@ -30,42 +30,6 @@ interface BlockNodeProps {
   groupInfos: GroupInfo[];
 }
 
-const QuantifierBadge: React.FC<{
-  block: Block;
-  onSelect: (e: React.MouseEvent, id: string) => void;
-  isSelected: boolean;
-}> = ({ block, onSelect, isSelected }) => {
-  const qSettings = block.settings as QuantifierSettings;
-  let details = '';
-  switch (qSettings.type) {
-    case '*': details = '0+'; break;
-    case '+': details = '1+'; break;
-    case '?': details = '0-1'; break;
-    case '{n}': details = `{${qSettings.min ?? 0}}`; break;
-    case '{n,}': details = `min ${qSettings.min ?? 0}`; break;
-    case '{n,m}': details = `${qSettings.min ?? 0}-${qSettings.max ?? '∞'}`; break;
-  }
-  const modeMap: {[key in QuantifierSettings['mode']]: string} = {'greedy': 'Жадный', 'lazy': 'Ленивый', 'possessive': 'Ревнивый'};
-  
-  return (
-    <div
-      onClick={(e) => onSelect(e, block.id)}
-      className={cn(
-        "absolute top-1/2 -translate-y-1/2 right-14 z-10 cursor-pointer",
-        "bg-orange-100 text-orange-800 border-orange-300 border",
-        "dark:bg-orange-900/50 dark:text-orange-300 dark:border-orange-700/50",
-        "px-2 py-1 rounded-full text-xs font-semibold shadow-sm hover:shadow-md transition-all flex items-center gap-1.5",
-        isSelected && "ring-2 ring-primary"
-      )}
-      title={`${modeMap[qSettings.mode]} квантификатор`}
-    >
-      <Repeat size={12} />
-      <span>{details}</span>
-    </div>
-  );
-};
-
-
 const BlockNode: React.FC<BlockNodeProps> = ({
   block,
   quantifierToRender,
@@ -102,7 +66,8 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   const isEmptyContainer = isContainerBlock && !hasChildren;
 
   const isBlockSelected = selectedId === block.id;
-  const isBlockHovered = (hoveredId === block.id || (quantifierToRender && hoveredId === quantifierToRender.id)) && !isBlockSelected;
+  const isQuantifierSelected = quantifierToRender && selectedId === quantifierToRender.id;
+  const isBlockHovered = (hoveredId === block.id || (quantifierToRender && hoveredId === quantifierToRender.id)) && !isBlockSelected && !isQuantifierSelected;
   
   const handleToggleExpand = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -292,6 +257,41 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
   const { icon, title, details, regexFragment } = getBlockVisuals();
   
+  const renderQuantifierBadge = () => {
+    if (!quantifierToRender) return null;
+
+    const qSettings = quantifierToRender.settings as QuantifierSettings;
+    let badgeDetails = '';
+    switch (qSettings.type) {
+      case '*': badgeDetails = '0+'; break;
+      case '+': badgeDetails = '1+'; break;
+      case '?': badgeDetails = '0-1'; break;
+      case '{n}': badgeDetails = `{${qSettings.min ?? 0}}`; break;
+      case '{n,}': badgeDetails = `min ${qSettings.min ?? 0}`; break;
+      case '{n,m}': badgeDetails = `${qSettings.min ?? 0}-${qSettings.max ?? '∞'}`; break;
+    }
+    const modeMap: {[key in QuantifierSettings['mode']]: string} = {'greedy': 'Жадный', 'lazy': 'Ленивый', 'possessive': 'Ревнивый'};
+    
+    return (
+      <div
+        onClick={(e) => handleSelectBlock(e, quantifierToRender!.id)}
+        onMouseEnter={() => onBlockHover(quantifierToRender!.id)}
+        className={cn(
+          "absolute top-1/2 -translate-y-1/2 right-14 z-10 cursor-pointer",
+          "bg-orange-100 text-orange-800 border-orange-300 border",
+          "dark:bg-orange-900/50 dark:text-orange-300 dark:border-orange-700/50",
+          "px-2 py-1 rounded-full text-xs font-semibold shadow-sm hover:shadow-md transition-all flex items-center gap-1.5",
+          isQuantifierSelected && "ring-2 ring-primary"
+        )}
+        title={`${modeMap[qSettings.mode]} квантификатор`}
+      >
+        <Repeat size={12} />
+        <span>{badgeDetails}</span>
+      </div>
+    );
+  };
+
+
   return (
     <div className="relative">
       <div
@@ -313,7 +313,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           className={cn(
             "block-main-content border rounded-md relative transition-all",
             "bg-card",
-            isBlockSelected && "ring-2 ring-primary shadow-lg",
+            (isBlockSelected || isQuantifierSelected) && "ring-2 ring-primary shadow-lg",
             isBlockHovered && "bg-accent/10 ring-1 ring-accent"
           )}
         >
@@ -373,13 +373,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                 )}
             </div>
           </div>
-          {quantifierToRender && (
-              <QuantifierBadge
-                  block={quantifierToRender}
-                  onSelect={handleSelectBlock}
-                  isSelected={selectedId === quantifierToRender.id}
-              />
-          )}
+          {renderQuantifierBadge()}
         </div>
         
         {isContainerBlock && isCurrentlyExpanded && (
