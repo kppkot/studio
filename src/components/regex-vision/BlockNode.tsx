@@ -135,7 +135,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
     switch (block.type) {
       case BlockType.LITERAL:
         const litSettings = settings as LiteralSettings;
-        title = 'Текст (литерал)';
+        title = 'Текст';
         if (litSettings.isRawRegex) {
           details = 'Необработанный фрагмент Regex';
         } else {
@@ -200,7 +200,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
       case BlockType.ANCHOR:
         const aSettings = settings as AnchorSettings;
-        title = 'Якорь (позиция)';
+        title = 'Якорь';
         const anchorMap: {[key: string]: string} = {
             '^': 'Начало строки/текста',
             '$': 'Конец строки/текста',

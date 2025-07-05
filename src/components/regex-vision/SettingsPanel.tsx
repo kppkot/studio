@@ -160,7 +160,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
                     />
                </div>
                <p className="text-xs text-muted-foreground mt-1.5 px-1">
-                 Введите символы или диапазоны (например, a-z). Для специальных классов (типа `\d`) используйте палитру, чтобы добавить их как отдельные блоки.
+                 Введите символы или диапазоны (например, a-z). Для специальных классов (типа `\\d`) используйте палитру, чтобы добавить их как отдельные блоки.
               </p>
             </div>
             
@@ -176,7 +176,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
              <Alert className="mt-4 text-xs">
                 <Lightbulb className="h-4 w-4" />
                 <AlertDescription>
-                    Для поиска букв на любом языке (включая кириллицу), используйте шаблон <strong>`\p{'{'}L{'}'}`</strong> и убедитесь, что включен флаг 'u' (Unicode).
+                    Для поиска букв на любом языке (включая кириллицу), используйте блок **"Любая буква (Unicode)"** из палитры и убедитесь, что включен флаг 'u' (Unicode).
                 </AlertDescription>
             </Alert>
           </>

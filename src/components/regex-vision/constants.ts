@@ -33,7 +33,7 @@ export const BLOCK_CONFIGS: BlockConfigs = {
     ],
   },
   [BlockType.LITERAL]: {
-    name: 'Литерал',
+    name: 'Текст',
     icon: React.createElement(CaseSensitive, { size: 18 }),
     defaultSettings: { text: '' },
   },
