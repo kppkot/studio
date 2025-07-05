@@ -812,12 +812,8 @@ const RegexVisionWorkspace: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
-      <ResizablePanelGroup direction="horizontal" className="flex-1 overflow-hidden">
-        
-        {/* --- LEFT PANEL: CONSTRUCTOR --- */}
-        <ResizablePanel defaultSize={45} minSize={30}>
-          <div className="h-full flex flex-col p-2">
-            <div className="mb-4">
+      <header className="flex items-center gap-4 p-3 border-b bg-card shadow-sm z-10">
+          <div className="flex-1">
               <RegexOutputDisplay 
                 generatedRegex={regexOutput.regexString} 
                 regexFlags={regexFlags} 
@@ -831,82 +827,82 @@ const RegexVisionWorkspace: React.FC = () => {
                 onHoverPart={handleBlockHover}
                 isReady={isReady}
               />
-            </div>
-            <Card className="flex-1 flex flex-col shadow-md border-primary/20 overflow-hidden">
-              <CardHeader className="py-2 px-3 border-b">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Edit3 size={18} className="text-primary"/> Дерево выражения
-                  </CardTitle>
-                  <div className="flex items-center gap-1">
-                    <Button variant="outline" size="iconSm" onClick={() => setIsCodeGenOpen(true)} title="Сгенерировать код">
-                      <Code2 size={14} />
-                    </Button>
-                    <Button variant="outline" size="iconSm" onClick={handleExpandAll} title="Развернуть всё (Ctrl+Shift+Вниз)">
-                      <UnfoldVertical size={14} />
-                    </Button>
-                    <Button variant="outline" size="iconSm" onClick={handleCollapseAll} title="Свернуть всё (Ctrl+Shift+Вверх)">
-                      <FoldVertical size={14} />
-                    </Button>
-                    <Button size="sm" onClick={() => handleOpenPaletteFor(null)}>
-                      <Plus size={16} className="mr-1" /> Добавить блок
-                    </Button>
-                    
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <Menu size={16} />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel className="flex items-center gap-2 font-semibold">
-                            <Puzzle size={16} />
-                            RegexVision
-                        </DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={handleShare}>
-                          <Share2 className="mr-2 h-4 w-4" />
-                          <span>Поделиться</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={handleExport}>
-                          <DownloadCloud className="mr-2 h-4 w-4" />
-                          <span>Экспорт</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={handleImport}>
-                          <UploadCloud className="mr-2 h-4 w-4" />
-                          <span>Импорт</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="p-3 flex-1 min-h-0">
-                <ScrollArea className="h-full pr-2">
-                  {blocks.length === 0 ? (
-                    <div className="text-center text-muted-foreground py-10 flex flex-col items-center justify-center h-full">
-                      <Layers size={48} className="mb-3 opacity-50" />
-                      <p className="font-medium">Начните строить!</p>
-                      <p className="text-sm">Вставьте Regex в поле выше или добавьте блоки вручную.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-1"> 
-                      {renderBlockNodes(blocks, null, 0, regexOutput.groupInfos)}
-                    </div>
-                  )}
-                </ScrollArea>
-              </CardContent>
-            </Card>
           </div>
-        </ResizablePanel>
+          <Button variant="outline" size="icon" onClick={() => setIsCodeGenOpen(true)} title="Сгенерировать код">
+              <Code2 size={16} />
+          </Button>
+          <Button variant="outline" size="icon" onClick={handleExpandAll} title="Развернуть всё (Ctrl+Shift+Вниз)">
+            <UnfoldVertical size={16} />
+          </Button>
+          <Button variant="outline" size="icon" onClick={handleCollapseAll} title="Свернуть всё (Ctrl+Shift+Вверх)">
+            <FoldVertical size={16} />
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <Menu size={16} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel className="flex items-center gap-2 font-semibold">
+                  <Puzzle size={16} />
+                  RegexVision
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleShare}>
+                <Share2 className="mr-2 h-4 w-4" />
+                <span>Поделиться</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExport}>
+                <DownloadCloud className="mr-2 h-4 w-4" />
+                <span>Экспорт</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleImport}>
+                <UploadCloud className="mr-2 h-4 w-4" />
+                <span>Импорт</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+      </header>
 
-        <ResizableHandle withHandle />
+      <main className="flex-1 min-h-0">
+          <ResizablePanelGroup direction="horizontal" className="h-full">
+            <ResizablePanel defaultSize={30} minSize={25}>
+                <div className="h-full flex flex-col p-2">
+                    <Card className="flex-1 flex flex-col shadow-md border-primary/20 overflow-hidden">
+                    <CardHeader className="py-2 px-3 border-b">
+                        <div className="flex items-center justify-between">
+                        <CardTitle className="text-base flex items-center gap-2">
+                            <Edit3 size={18} className="text-primary"/> Дерево выражения
+                        </CardTitle>
+                        <Button size="sm" onClick={() => handleOpenPaletteFor(null)}>
+                            <Plus size={16} className="mr-1" /> Добавить блок
+                        </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-3 flex-1 min-h-0">
+                        <ScrollArea className="h-full pr-2">
+                        {blocks.length === 0 ? (
+                            <div className="text-center text-muted-foreground py-10 flex flex-col items-center justify-center h-full">
+                            <Layers size={48} className="mb-3 opacity-50" />
+                            <p className="font-medium">Начните строить!</p>
+                            <p className="text-sm">Вставьте Regex в поле выше или добавьте блоки вручную.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-1"> 
+                            {renderBlockNodes(blocks, null, 0, regexOutput.groupInfos)}
+                            </div>
+                        )}
+                        </ScrollArea>
+                    </CardContent>
+                    </Card>
+                </div>
+            </ResizablePanel>
 
-        {/* --- CENTER+RIGHT GROUP --- */}
-        <ResizablePanel defaultSize={55} minSize={40}>
-           <ResizablePanelGroup direction="horizontal">
-              <ResizablePanel defaultSize={selectedBlockId ? 55 : 100} minSize={50}>
-                 <div className="h-full p-2 pl-0">
+            <ResizableHandle withHandle />
+
+            <ResizablePanel defaultSize={45} minSize={30}>
+                <div className="h-full p-2">
                     <TestArea
                         testText={testText}
                         onTestTextChange={setTestText}
@@ -914,27 +910,22 @@ const RegexVisionWorkspace: React.FC = () => {
                         generatedRegex={regexOutput.regexString}
                         highlightedGroupIndex={highlightedGroupIndex}
                     />
-                 </div>
-              </ResizablePanel>
-              {selectedBlockId && (
-                <>
-                  <ResizableHandle withHandle />
-                  <ResizablePanel defaultSize={45} minSize={30} maxSize={50}>
-                     <div className="h-full p-2 pl-0">
-                       <div className="h-full shadow-md border-primary/20 rounded-lg overflow-hidden bg-card">
-                          <SettingsPanel
-                              block={selectedBlock}
-                              onUpdate={handleUpdateBlock}
-                              onClose={() => setSelectedBlockId(null)}
-                          />
-                       </div>
-                    </div>
-                  </ResizablePanel>
-                </>
-              )}
-           </ResizablePanelGroup>
-        </ResizablePanel>
-      </ResizablePanelGroup>
+                </div>
+            </ResizablePanel>
+
+            <ResizableHandle withHandle />
+
+            <ResizablePanel defaultSize={25} minSize={20}>
+                 <div className="h-full">
+                    <SettingsPanel
+                        block={selectedBlock}
+                        onUpdate={handleUpdateBlock}
+                        onClose={() => setSelectedBlockId(null)}
+                    />
+                </div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
+      </main>
 
       <Sheet open={isCodeGenOpen} onOpenChange={setIsCodeGenOpen}>
         <SheetContent className="w-[600px] sm:max-w-2xl">

@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { X, Lightbulb } from 'lucide-react';
+import { X, Lightbulb, Settings } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface SettingsPanelProps {
@@ -45,7 +45,19 @@ const getDynamicTitle = (block: Block): string => {
 };
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose }) => {
-  if (!block) return null;
+  if (!block) {
+    return (
+        <Card className="h-full shadow-none border-0 rounded-none flex flex-col items-center justify-center text-center p-4 bg-card">
+            <CardHeader>
+                <CardTitle className="text-lg">Настройки</CardTitle>
+            </CardHeader>
+            <CardContent className="text-muted-foreground flex flex-col items-center gap-4">
+                <Settings size={48} className="opacity-50" />
+                <p>Выберите блок из дерева слева, чтобы увидеть его настройки.</p>
+            </CardContent>
+        </Card>
+    );
+  }
 
   const config: BlockConfig | undefined = BLOCK_CONFIGS[block.type];
   
@@ -129,7 +141,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
             '\\s': 'Этот блок соответствует любому пробельному символу: пробелу, табуляции, переносу строки и т.д.',
             '\\S': 'Этот блок соответствует любому символу, КРОМЕ пробельного.',
             '.': 'Этот блок соответствует абсолютно любому символу, кроме переноса строки.',
-            '\\p{L}': "Этот блок находит одну букву любого алфавита: кириллицы, латиницы и других. Он лучше всего работает, когда включен флаг 'u' (Unicode), который в этом приложении включен по умолчанию.",
+            '\\p{L}': "Этот блок находит одну букву любого алфавита: кириллицы, латиницы и других. Для корректной работы убедитесь, что в поле флагов включена буква 'u' (обычно она там по умолчанию).",
           };
           return (
              <Alert>
@@ -399,12 +411,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
   };
 
   return (
-    <Card className="h-full shadow-none border-0 border-l rounded-none flex flex-col">
+    <Card className="h-full shadow-none border-0 rounded-none bg-card flex flex-col">
       <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b">
-        <CardTitle className="text-lg">Настройки: {getDynamicTitle(block)}</CardTitle>
-        <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
-          <X size={18} />
-        </Button>
+        <CardTitle className="text-base truncate">Настройки: {getDynamicTitle(block)}</CardTitle>
       </CardHeader>
       <CardContent className="p-4 flex-1 min-h-0">
         <ScrollArea className="h-full pr-3">

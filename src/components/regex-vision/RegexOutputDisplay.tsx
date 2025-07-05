@@ -4,7 +4,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { RegexStringPart, BlockType } from './types';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { Copy, Loader2, Wand2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -105,94 +104,88 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
 
   if (!isReady) {
     return (
-      <div className="space-y-2">
-        <Label htmlFor="generatedRegexOutput" className="text-sm font-medium">Ваше регулярное выражение</Label>
-        <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">/</span>
-            <Skeleton className="h-10 flex-1" />
-            <span className="text-muted-foreground">/</span>
-            <Skeleton className="h-10 w-24" />
-            <Skeleton className="h-10 w-10" />
-            <Skeleton className="h-10 w-10" />
-        </div>
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground text-lg">/</span>
+        <Skeleton className="h-10 flex-1" />
+        <span className="text-muted-foreground text-lg">/</span>
+        <Skeleton className="h-10 w-24" />
+        <Skeleton className="h-10 w-10" />
+        <Skeleton className="h-10 w-10" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-2">
-      <Label htmlFor="generatedRegexOutput" className="text-sm font-medium">Ваше регулярное выражение</Label>
-      <div className="flex items-center gap-2">
-        <span className="text-muted-foreground">/</span>
-        <div className="flex-1 relative">
-           {isEditing ? (
-             <Input
-                ref={inputRef}
-                id="generatedRegexOutput"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onBlur={handleParse}
-                onKeyDown={handleKeyDown}
-                className="flex-1 font-mono text-sm h-10 pr-8"
-                placeholder="Вставьте ваш Regex здесь и нажмите Enter"
-                disabled={isParsing}
-            />
-           ) : (
-            <div 
-              className="flex items-center h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background cursor-text flex-wrap"
-              onClick={(e) => {
-                if (e.target === e.currentTarget) {
-                   setIsEditing(true);
-                }
-              }}
-              role="textbox"
-              tabIndex={0}
-              onMouseLeave={() => onHoverPart(null)}
-            >
-                {stringParts.length > 0 ? stringParts.map((part, index) => (
-                    <span 
-                        key={`${part.blockId}-${index}`}
-                        onMouseEnter={() => onHoverPart(part.blockId)}
-                        onClick={(e) => { e.stopPropagation(); onSelectBlock(part.blockId); }}
-                        className={cn(
-                          "transition-all duration-100 rounded-sm px-0.5 cursor-pointer",
-                          getColorForType(part.blockType),
-                          {
-                            "ring-2 ring-primary scale-105 shadow-lg z-10 relative font-bold brightness-110": part.blockId === selectedBlockId,
-                            "ring-1 ring-primary brightness-110": part.blockId === hoveredBlockId && part.blockId !== selectedBlockId,
-                          }
-                        )}
-                    >
-                        {part.text}
-                    </span>
-                )) : <span className="text-muted-foreground">Начните строить выражение...</span>}
-            </div>
-           )}
-           {isParsing && !isEditing && <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}
-        </div>
-        <span className="text-muted-foreground">/</span>
-        <FlagsControl flags={regexFlags} onFlagsChange={onFlagsChange} />
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => setIsEditing(true)}
-          title="Разобрать выражение и построить дерево"
-          className="h-10 w-10"
-          disabled={isParsing}
-        >
-          <Wand2 size={16} />
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={handleCopyRegex}
-          title="Копировать Regex"
-          className="h-10 w-10"
-          disabled={!generatedRegex}
-        >
-          <Copy size={16} />
-        </Button>
+    <div className="flex items-center gap-2">
+      <span className="text-muted-foreground text-lg">/</span>
+      <div className="flex-1 relative">
+         {isEditing ? (
+           <Input
+              ref={inputRef}
+              id="generatedRegexOutput"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onBlur={handleParse}
+              onKeyDown={handleKeyDown}
+              className="flex-1 font-mono text-base h-10 pr-8 bg-card"
+              placeholder="Вставьте ваш Regex здесь и нажмите Enter"
+              disabled={isParsing}
+          />
+         ) : (
+          <div 
+            className="flex items-center h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-base font-mono ring-offset-background cursor-text flex-wrap"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                 setIsEditing(true);
+              }
+            }}
+            role="textbox"
+            tabIndex={0}
+            onMouseLeave={() => onHoverPart(null)}
+          >
+              {stringParts.length > 0 ? stringParts.map((part, index) => (
+                  <span 
+                      key={`${part.blockId}-${index}`}
+                      onMouseEnter={() => onHoverPart(part.blockId)}
+                      onClick={(e) => { e.stopPropagation(); onSelectBlock(part.blockId); }}
+                      className={cn(
+                        "transition-all duration-100 rounded-sm px-0.5 cursor-pointer",
+                        getColorForType(part.blockType),
+                        {
+                          "ring-2 ring-primary scale-105 shadow-lg z-10 relative font-bold brightness-110": part.blockId === selectedBlockId,
+                          "ring-1 ring-primary brightness-110": part.blockId === hoveredBlockId && part.blockId !== selectedBlockId,
+                        }
+                      )}
+                  >
+                      {part.text}
+                  </span>
+              )) : <span className="text-muted-foreground text-sm">Начните строить выражение...</span>}
+          </div>
+         )}
+         {isParsing && !isEditing && <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}
       </div>
+      <span className="text-muted-foreground text-lg">/</span>
+      <FlagsControl flags={regexFlags} onFlagsChange={onFlagsChange} />
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => setIsEditing(true)}
+        title="Разобрать выражение и построить дерево"
+        className="h-10 w-10"
+        disabled={isParsing}
+      >
+        <Wand2 size={16} />
+      </Button>
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={handleCopyRegex}
+        title="Копировать Regex"
+        className="h-10 w-10"
+        disabled={!generatedRegex}
+      >
+        <Copy size={16} />
+      </Button>
     </div>
   );
 };
