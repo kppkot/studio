@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import type { Block, RegexMatch, GroupInfo, CharacterClassSettings, RegexStringPart } from './types'; 
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { generateId, generateRegexStringAndGroupInfo, cloneBlockForState, breakdownPatternIntoChildren, reconstructPatternFromChildren } from './utils'; 
+import { generateId, generateRegexStringAndGroupInfo, cloneBlockForState, breakdownPatternIntoChildren } from './utils'; 
 import { useToast } from '@/hooks/use-toast';
 import { parseRegexWithLibrary } from './regex-parser';
 
@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Layers, Edit3, Code2, Plus, FoldVertical, UnfoldVertical, Menu, Puzzle, Share2, DownloadCloud, UploadCloud, Loader2 } from 'lucide-react'; 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 
 // Lazy load panels to improve initial load time
 const CodeGenerationPanel = lazy(() => import('./CodeGenerationPanel'));
@@ -48,7 +48,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const [regexFlags, setRegexFlags] = useState<string>('gu');
   const [matches, setMatches] = useState<RegexMatch[]>([]);
   const [regexError, setRegexError] = useState<string | null>(null);
-  const [regexOutput, setRegexOutput] = useState<{
+  const [regexOutputState, setRegexOutputState] = useState<{
     regexString: string;
     groupInfos: GroupInfo[];
     stringParts: RegexStringPart[];
@@ -67,7 +67,7 @@ const RegexVisionWorkspace: React.FC = () => {
 
   useEffect(() => {
     const { regexString: newRegex, groupInfos, stringParts } = generateRegexStringAndGroupInfo(blocks);
-    setRegexOutput({ regexString: newRegex, groupInfos, stringParts });
+    setRegexOutputState({ regexString: newRegex, groupInfos, stringParts });
 
     if (newRegex && testText) {
       try {
@@ -248,8 +248,14 @@ const RegexVisionWorkspace: React.FC = () => {
     let targetParentId = parentId;
     if (!targetParentId && selectedBlockId) {
       const selBlock = findBlockRecursive(blocks, selectedBlockId);
-      if (selBlock && [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL, BlockType.CHARACTER_CLASS].includes(selBlock.type)) {
-        targetParentId = selectedBlockId;
+      if (selBlock) {
+        const isContainer = 
+            [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(selBlock.type) ||
+            (selBlock.type === BlockType.CHARACTER_CLASS && (!(selBlock.settings as CharacterClassSettings).pattern || (selBlock.children && selBlock.children.length > 0)));
+
+        if (isContainer) {
+            targetParentId = selectedBlockId;
+        }
       }
     }
 
@@ -574,11 +580,11 @@ const RegexVisionWorkspace: React.FC = () => {
   
   const highlightedGroupIndex = React.useMemo(() => {
     if (selectedBlock && (selectedBlock.type === BlockType.GROUP)) {
-      const groupInfo = regexOutput.groupInfos.find(gi => gi.blockId === selectedBlock.id);
+      const groupInfo = regexOutputState.groupInfos.find(gi => gi.blockId === selectedBlock.id);
       return groupInfo ? groupInfo.groupIndex : -1;
     }
     return -1;
-  }, [selectedBlock, regexOutput.groupInfos]);
+  }, [selectedBlock, regexOutputState.groupInfos]);
 
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href)
@@ -814,12 +820,12 @@ const RegexVisionWorkspace: React.FC = () => {
       <header className="flex items-center gap-4 p-3 border-b bg-card shadow-sm z-10">
           <div className="flex-1">
               <RegexOutputDisplay 
-                generatedRegex={regexOutput.regexString} 
+                generatedRegex={regexOutputState.regexString} 
                 regexFlags={regexFlags} 
                 onFlagsChange={setRegexFlags}
                 onParseRegexString={handleParseRegexString}
                 isParsing={isParsing}
-                stringParts={regexOutput.stringParts}
+                stringParts={regexOutputState.stringParts}
                 selectedBlockId={selectedBlockId}
                 onSelectBlock={setSelectedBlockId}
                 hoveredBlockId={hoveredBlockId}
@@ -866,18 +872,16 @@ const RegexVisionWorkspace: React.FC = () => {
 
       <main className="flex-1 min-h-0">
           <ResizablePanelGroup direction="horizontal" className="h-full">
-            <ResizablePanel defaultSize={50} minSize={25}>
+            <ResizablePanel defaultSize={50} minSize={30}>
                 <div className="h-full flex flex-col p-2">
                     <Card className="flex-1 flex flex-col shadow-md border-primary/20 overflow-hidden">
-                    <CardHeader className="py-2 px-3 border-b">
-                        <div className="flex items-center justify-between">
+                    <CardHeader className="py-2 px-3 border-b flex flex-row items-center justify-between">
                         <CardTitle className="text-base flex items-center gap-2">
                             <Edit3 size={18} className="text-primary"/> Дерево выражения
                         </CardTitle>
                         <Button size="sm" onClick={() => handleOpenPaletteFor(null)}>
                             <Plus size={16} className="mr-1" /> Добавить блок
                         </Button>
-                        </div>
                     </CardHeader>
                     <CardContent className="p-3 flex-1 min-h-0">
                         <ScrollArea className="h-full pr-2">
@@ -888,8 +892,8 @@ const RegexVisionWorkspace: React.FC = () => {
                             <p className="text-sm">Вставьте Regex в поле выше или добавьте блоки вручную.</p>
                             </div>
                         ) : (
-                            <div className="space-y-1"> 
-                            {renderBlockNodes(blocks, null, 0, regexOutput.groupInfos)}
+                            <div className="space-y-1 p-1"> 
+                              {renderBlockNodes(blocks, null, 0, regexOutputState.groupInfos)}
                             </div>
                         )}
                         </ScrollArea>
@@ -906,7 +910,7 @@ const RegexVisionWorkspace: React.FC = () => {
                         testText={testText}
                         onTestTextChange={setTestText}
                         matches={matches}
-                        generatedRegex={regexOutput.regexString}
+                        generatedRegex={regexOutputState.regexString}
                         highlightedGroupIndex={highlightedGroupIndex}
                     />
                 </div>
@@ -930,10 +934,13 @@ const RegexVisionWorkspace: React.FC = () => {
         <SheetContent className="w-[600px] sm:max-w-2xl">
             <SheetHeader>
                 <SheetTitle className="flex items-center gap-2"><Code2 size={20}/> Генерация кода</SheetTitle>
+                 <SheetDescription>
+                    Скопируйте готовый фрагмент кода для использования в вашем проекте.
+                 </SheetDescription>
             </SheetHeader>
-            <div className="py-4 h-[calc(100%-4rem)]">
+            <div className="py-4 h-[calc(100%-6rem)]">
                 <Suspense fallback={<div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Загрузка...</div>}>
-                    <CodeGenerationPanel generatedRegex={regexOutput.regexString} regexFlags={regexFlags} testText={testText} />
+                    <CodeGenerationPanel generatedRegex={regexOutputState.regexString} regexFlags={regexFlags} testText={testText} />
                 </Suspense>
             </div>
         </SheetContent>
