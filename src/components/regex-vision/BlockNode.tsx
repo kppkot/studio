@@ -159,6 +159,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           '\\s': { title: 'Пробельный символ', details: 'Пробел, таб, новая строка...' },
           '\\S': { title: 'Не пробельный символ', details: 'Кроме \\s' },
           '.': { title: 'Любой символ', details: 'Кроме новой строки' },
+          '\\p{L}': { title: 'Любая буква (Unicode)', details: 'Буквы всех языков (требует флаг \'u\')' },
         };
 
         if (shorthandInfo[pattern]) {
@@ -173,7 +174,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           }
         }
         
-        const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'];
+        const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.', '\\p{L}'];
         if (!ccSettings.negated && specialShorthands.includes(pattern)) {
           regexFragment = pattern;
         } else {
@@ -282,6 +283,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
       <div
         onClick={(e) => handleSelectBlock(e, quantifierToRender!.id)}
         onMouseEnter={() => onBlockHover(quantifierToRender!.id)}
+        onMouseLeave={() => onBlockHover(null)}
         className={cn(
           "absolute top-1/2 -translate-y-1/2 right-14 z-10 cursor-pointer",
           "bg-sky-100 text-sky-800 border-sky-300 border",

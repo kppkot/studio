@@ -34,6 +34,7 @@ const getDynamicTitle = (block: Block): string => {
           '\\s': 'Пробельный символ',
           '\\S': 'Не пробельный символ',
           '.': 'Любой символ',
+          '\\p{L}': 'Любая буква (Unicode)',
         };
         if (pattern && shorthandTitles[pattern]) {
             return shorthandTitles[pattern];
@@ -116,7 +117,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
         const ccSettings = settings as CharacterClassSettings;
         
         const isPresetShorthand = [
-          '\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.'
+          '\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '.', '\\p{L}'
         ].includes(ccSettings.pattern);
 
         if (isPresetShorthand) {
@@ -128,6 +129,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ block, onUpdate, onClose 
             '\\s': 'Этот блок соответствует любому пробельному символу: пробелу, табуляции, переносу строки и т.д.',
             '\\S': 'Этот блок соответствует любому символу, КРОМЕ пробельного.',
             '.': 'Этот блок соответствует абсолютно любому символу, кроме переноса строки.',
+            '\\p{L}': 'Этот блок соответствует любой букве из любого языка (например, \'a\', \'Z\', \'а\', \'Я\', \'ü\', \'é\'). Требует, чтобы был включен флаг \'u\' (Unicode) для корректной работы.',
           };
           return (
              <Alert>
