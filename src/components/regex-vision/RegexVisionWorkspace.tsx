@@ -872,6 +872,12 @@ const RegexVisionWorkspace: React.FC = () => {
                     <Button size="sm" onClick={() => handleOpenPaletteFor(null)}>
                         <Plus size={16} className="mr-1" /> Добавить блок
                     </Button>
+                    <Button variant="outline" size="icon" className="h-9 w-9" onClick={handleExpandAll} title="Развернуть всё">
+                        <UnfoldVertical size={16} />
+                    </Button>
+                    <Button variant="outline" size="icon" className="h-9 w-9" onClick={handleCollapseAll} title="Свернуть всё">
+                        <FoldVertical size={16} />
+                    </Button>
                 </div>
             </CardHeader>
             <CardContent className="p-1 flex-1 min-h-0">
@@ -915,12 +921,6 @@ const RegexVisionWorkspace: React.FC = () => {
           </div>
           <Button variant="outline" size="icon" onClick={() => setIsCodeGenOpen(true)} title="Сгенерировать код">
               <Code2 size={16} />
-          </Button>
-          <Button variant="outline" size="icon" onClick={handleExpandAll} title="Развернуть всё (Ctrl+Shift+Вниз)">
-            <UnfoldVertical size={16} />
-          </Button>
-          <Button variant="outline" size="icon" onClick={handleCollapseAll} title="Свернуть всё (Ctrl+Shift+Вверх)">
-            <FoldVertical size={16} />
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

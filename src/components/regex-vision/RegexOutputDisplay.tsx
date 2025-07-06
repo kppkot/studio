@@ -1,7 +1,8 @@
+
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
 import type { RegexStringPart, BlockType } from './types';
-import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Copy, Loader2, Wand2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -57,7 +58,7 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
   const { toast } = useToast();
   const [inputValue, setInputValue] = useState(generatedRegex);
   const [isEditing, setIsEditing] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     // Only update from parent if not currently editing
@@ -92,8 +93,9 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
     setIsEditing(false);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
       handleParse();
     } else if (e.key === 'Escape') {
       setInputValue(generatedRegex); // Revert changes on escape
@@ -119,20 +121,21 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
       <span className="text-muted-foreground text-lg">/</span>
       <div className="flex-1 relative">
          {isEditing ? (
-           <Input
+           <Textarea
               ref={inputRef}
               id="generatedRegexOutput"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onBlur={handleParse}
               onKeyDown={handleKeyDown}
-              className="flex-1 font-mono text-base h-10 pr-8 bg-card"
+              className="flex-1 font-mono text-base min-h-10 h-auto leading-snug py-2 resize-none pr-8 bg-card"
               placeholder="Вставьте ваш Regex здесь и нажмите Enter"
               disabled={isParsing}
+              rows={1}
           />
          ) : (
           <div
-            className="flex flex-wrap items-baseline gap-y-1 min-h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-base font-mono ring-offset-background cursor-text"
+            className="flex flex-wrap items-baseline gap-y-1 min-h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-base font-mono ring-offset-background cursor-text leading-snug"
             onClick={() => setIsEditing(true)}
             role="textbox"
             tabIndex={0}
