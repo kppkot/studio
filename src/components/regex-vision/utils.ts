@@ -5,7 +5,8 @@ import { BlockType } from './types';
 export const generateId = (): string => Math.random().toString(36).substring(2, 11);
 
 const escapeRegexCharsForGenerator = (text: string): string => {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Added forward slash to the list of characters to escape.
+  return text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 }
 
 export const createLiteral = (text: string, isRawRegex = false): Block => ({
