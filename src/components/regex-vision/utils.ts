@@ -109,16 +109,7 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
         break;
       case BlockType.ALTERNATION:
         block.children.forEach((child, index) => {
-          const childIsRedundantGroup =
-            child.type === BlockType.GROUP &&
-            (child.settings as GroupSettings).type === 'non-capturing';
-
-          if (childIsRedundantGroup) {
-            child.children?.forEach(generateRecursive);
-          } else {
-            generateRecursive(child);
-          }
-
+          generateRecursive(child);
           if (index < block.children.length - 1) {
             stringParts.push({ text: '|', blockId: block.id, blockType: block.type });
           }
@@ -282,4 +273,25 @@ export const isRegexValid = (regex: string): boolean => {
   } catch (e) {
     return false;
   }
+};
+
+// This function is currently not used but can be useful for debugging or advanced features.
+// It tries to find a block by its ID and returns the block and its parent.
+export const findBlockAndParent = (
+  nodes: Block[],
+  id: string,
+  parent: Block | null = null
+): { block: Block | null; parent: Block | null } => {
+  for (const node of nodes) {
+    if (node.id === id) {
+      return { block: node, parent: parent };
+    }
+    if (node.children) {
+      const found = findBlockAndParent(node.children, id, node);
+      if (found.block) {
+        return found;
+      }
+    }
+  }
+  return { block: null, parent: null };
 };
