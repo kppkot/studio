@@ -37,6 +37,32 @@ const PerformanceAnalyzerView = lazy(() => import('./PerformanceAnalyzerView'));
 const PatternLibraryView = lazy(() => import('./PatternLibraryView'));
 const DebugView = lazy(() => import('./DebugView'));
 
+// Moved helper functions outside the component for stability and to prevent re-declaration
+const findBlockRecursive = (searchBlocks: Block[], id: string): Block | null => {
+  for (const block of searchBlocks) {
+    if (block.id === id) return block;
+    if (block.children) {
+      const found = findBlockRecursive(block.children, id);
+      if (found) return found;
+    }
+  }
+  return null;
+};
+
+const findParentRecursive = (nodes: Block[], childId: string): Block | null => {
+  for (const node of nodes) {
+      if (node.children?.some(c => c.id === childId)) {
+          return node;
+      }
+      if (node.children) {
+          const result = findParentRecursive(node.children, childId);
+          if (result) return result;
+      }
+  }
+  return null;
+};
+
+
 const RegexVisionWorkspace: React.FC = () => {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
@@ -49,7 +75,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const [isCodeGenOpen, setIsCodeGenOpen] = useState(false);
 
   const [testText, setTestText] = useState<string>('');
-  const [regexFlags, setRegexFlags] = useState<string>('gmu');
+  const [regexFlags, setRegexFlags] = useState<string>('gu');
   const [matches, setMatches] = useState<RegexMatch[]>([]);
   const [regexError, setRegexError] = useState<string | null>(null);
   const [regexOutputState, setRegexOutputState] = useState<{
@@ -108,17 +134,6 @@ const RegexVisionWorkspace: React.FC = () => {
        setRegexError(null);
     }
   }, [blocks, testText, regexFlags]);
-
-  const findBlockRecursive = (searchBlocks: Block[], id: string): Block | null => {
-    for (const block of searchBlocks) {
-      if (block.id === id) return block;
-      if (block.children) {
-        const found = findBlockRecursive(block.children, id);
-        if (found) return found;
-      }
-    }
-    return null;
-  };
 
   const updateBlockRecursive = (currentBlocks: Block[], targetId: string, updatedBlockData: Partial<Block>): Block[] => {
     return currentBlocks.map(block => {
@@ -604,21 +619,6 @@ const RegexVisionWorkspace: React.FC = () => {
 
   const selectedBlock = selectedBlockId ? findBlockRecursive(blocks, selectedBlockId) : null;
 
-  // Memoize the highlighted group index to prevent re-calculation on every render.
-  const highlightedGroupIndex = React.useMemo(() => {
-    if (selectedBlock && (selectedBlock.type === BlockType.GROUP || selectedBlock.type === BlockType.ALTERNATION)) {
-        let blockToCheck = selectedBlock;
-        const parent = findParentRecursive(blocks, selectedBlock.id);
-        if (selectedBlock.type === BlockType.ALTERNATION && parent) {
-           blockToCheck = parent;
-        }
-      const groupInfo = regexOutputState.groupInfos.find(gi => gi.blockId === blockToCheck.id);
-      return groupInfo ? groupInfo.groupIndex : -1;
-    }
-    return -1;
-  }, [selectedBlock, blocks, regexOutputState.groupInfos]);
-
-
   const handleShare = () => {
     // A more robust solution would involve encoding the state into the URL.
     navigator.clipboard.writeText(window.location.href)
@@ -762,36 +762,26 @@ const RegexVisionWorkspace: React.FC = () => {
     }
   }, [toast]);
 
-
-  const findParentRecursive = (nodes: Block[], childId: string): Block | null => {
-    for (const node of nodes) {
-        if (node.children?.some(c => c.id === childId)) {
-            return node;
+  // Memoize the highlighted group index to prevent re-calculation on every render.
+  const highlightedGroupIndex = React.useMemo(() => {
+    if (selectedBlock && (selectedBlock.type === BlockType.GROUP || selectedBlock.type === BlockType.ALTERNATION)) {
+        let blockToCheck = selectedBlock;
+        const parent = findParentRecursive(blocks, selectedBlock.id);
+        if (selectedBlock.type === BlockType.ALTERNATION && parent) {
+           blockToCheck = parent;
         }
-        if (node.children) {
-            const result = findParentRecursive(node.children, childId);
-            if (result) return result;
-        }
+      const groupInfo = regexOutputState.groupInfos.find(gi => gi.blockId === blockToCheck.id);
+      return groupInfo ? groupInfo.groupIndex : -1;
     }
-    return null;
-  }
+    return -1;
+  }, [selectedBlock, blocks, regexOutputState.groupInfos]);
   
   const getIdsToHighlight = (id: string | null): string[] => {
       if (!id) return [];
       const block = findBlockRecursive(blocks, id);
       if (!block) return [id];
 
-      // If an alternation is selected, also highlight its parent group
-      if (block.type === BlockType.ALTERNATION) {
-          const parent = findParentRecursive(blocks, id);
-          if (parent) return [id, parent.id];
-      }
-      
       // If a group is selected, also highlight its alternation child
-      if (block.type === BlockType.GROUP && block.children?.length > 0 && block.children.every(c => c.type === BlockType.ALTERNATION)) {
-          return [id, ...block.children.map(c => c.id)];
-      }
-
       if (block.type === BlockType.GROUP && block.children?.length === 1 && block.children[0].type === BlockType.ALTERNATION) {
           return [id, block.children[0].id];
       }
