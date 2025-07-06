@@ -49,7 +49,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const [isCodeGenOpen, setIsCodeGenOpen] = useState(false);
 
   const [testText, setTestText] = useState<string>('');
-  const [regexFlags, setRegexFlags] = useState<string>('gu');
+  const [regexFlags, setRegexFlags] = useState<string>('gmu');
   const [matches, setMatches] = useState<RegexMatch[]>([]);
   const [regexError, setRegexError] = useState<string | null>(null);
   const [regexOutputState, setRegexOutputState] = useState<{
@@ -608,9 +608,9 @@ const RegexVisionWorkspace: React.FC = () => {
   const highlightedGroupIndex = React.useMemo(() => {
     if (selectedBlock && (selectedBlock.type === BlockType.GROUP || selectedBlock.type === BlockType.ALTERNATION)) {
         let blockToCheck = selectedBlock;
-        if (selectedBlock.type === BlockType.ALTERNATION) {
-            const parent = findParentRecursive(blocks, selectedBlock.id);
-            if(parent) blockToCheck = parent;
+        const parent = findParentRecursive(blocks, selectedBlock.id);
+        if (selectedBlock.type === BlockType.ALTERNATION && parent) {
+           blockToCheck = parent;
         }
       const groupInfo = regexOutputState.groupInfos.find(gi => gi.blockId === blockToCheck.id);
       return groupInfo ? groupInfo.groupIndex : -1;
@@ -788,6 +788,10 @@ const RegexVisionWorkspace: React.FC = () => {
       }
       
       // If a group is selected, also highlight its alternation child
+      if (block.type === BlockType.GROUP && block.children?.length > 0 && block.children.every(c => c.type === BlockType.ALTERNATION)) {
+          return [id, ...block.children.map(c => c.id)];
+      }
+
       if (block.type === BlockType.GROUP && block.children?.length === 1 && block.children[0].type === BlockType.ALTERNATION) {
           return [id, block.children[0].id];
       }
