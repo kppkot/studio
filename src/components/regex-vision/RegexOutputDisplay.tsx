@@ -132,8 +132,8 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
               disabled={isParsing}
           />
          ) : (
-          <div 
-            className="flex items-center h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-base font-mono ring-offset-background cursor-text flex-wrap"
+          <div
+            className="flex items-center h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-base font-mono ring-offset-background cursor-text overflow-x-auto whitespace-nowrap"
             onClick={() => setIsEditing(true)}
             role="textbox"
             tabIndex={0}
