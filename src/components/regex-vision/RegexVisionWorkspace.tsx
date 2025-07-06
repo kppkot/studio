@@ -684,10 +684,17 @@ const RegexVisionWorkspace: React.FC = () => {
   const toggleAllBlocksExpansion = useCallback((expand: boolean) => {
     const toggleRecursively = (currentBlocks: Block[]): Block[] => {
       return currentBlocks.map(b => {
-        const canBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL, BlockType.CHARACTER_CLASS].includes(b.type);
+        const hasChildren = b.children && b.children.length > 0;
+        const isContainer =
+          b.type === BlockType.GROUP ||
+          b.type === BlockType.LOOKAROUND ||
+          b.type === BlockType.ALTERNATION ||
+          b.type === BlockType.CONDITIONAL ||
+          (b.type === BlockType.CHARACTER_CLASS && hasChildren);
+
         return {
           ...b,
-          isExpanded: canBeExpanded ? expand : b.isExpanded,
+          isExpanded: isContainer ? expand : b.isExpanded,
           children: b.children ? toggleRecursively(b.children) : [],
         };
       });

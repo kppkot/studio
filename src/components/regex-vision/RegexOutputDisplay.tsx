@@ -1,4 +1,3 @@
-
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
 import type { RegexStringPart, BlockType } from './types';
@@ -133,7 +132,7 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
           />
          ) : (
           <div
-            className="flex items-center h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-base font-mono ring-offset-background cursor-text overflow-x-auto whitespace-nowrap"
+            className="flex flex-wrap items-baseline gap-y-1 min-h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-base font-mono ring-offset-background cursor-text"
             onClick={() => setIsEditing(true)}
             role="textbox"
             tabIndex={0}
