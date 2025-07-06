@@ -7,9 +7,18 @@ import { generateId } from './utils';
 // Main exported function
 export function parseRegexWithLibrary(regexString: string): Block[] {
   try {
-    // Escape forward slashes in the regex string so they don't conflict with
-    // the delimiters of the regex literal we are constructing for the parser.
-    const escapedRegexString = regexString.replace(/\//g, '\\/');
+    // To pass the regex string to the parser (which expects a `/.../` literal),
+    // we must escape any `/` characters within the string itself.
+    // The logic is:
+    // 1. Temporarily replace already escaped slashes `\/` with a placeholder.
+    // 2. Escape all remaining, unescaped slashes `/`.
+    // 3. Restore the original escaped slashes from the placeholder.
+    // This prevents turning `\/` into an invalid `\\/`.
+    const placeholder = '\uE000'; // A character from the Private Use Area
+    const escapedRegexString = regexString
+      .replace(/\\\//g, placeholder)
+      .replace(/\//g, '\\/')
+      .replace(new RegExp(placeholder, 'g'), '\\/');
 
     // The `u` flag is important for regexp-tree to correctly parse complex patterns like unicode properties `\p{L}`
     const ast = regexpTree.parse(`/${escapedRegexString}/u`, { allowGroupNameDuplicates: true });
