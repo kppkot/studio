@@ -75,7 +75,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const [isCodeGenOpen, setIsCodeGenOpen] = useState(false);
 
   const [testText, setTestText] = useState<string>('');
-  const [regexFlags, setRegexFlags] = useState<string>('gu');
+  const [regexFlags, setRegexFlags] = useState<string>('gmu');
   const [matches, setMatches] = useState<RegexMatch[]>([]);
   const [regexError, setRegexError] = useState<string | null>(null);
   const [regexOutputState, setRegexOutputState] = useState<{
@@ -475,6 +475,29 @@ const RegexVisionWorkspace: React.FC = () => {
     });
   }, [toast]);
 
+  // --- Scroll into View Logic ---
+  const scrollBlockIntoView = useCallback((blockId: string) => {
+    const element = document.getElementById(`block-node-${blockId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, []);
+
+  const handleSelectBlock = useCallback((id: string | null) => {
+    setSelectedBlockId(id);
+    if (id) {
+      scrollBlockIntoView(id);
+    }
+  }, [scrollBlockIntoView]);
+
+  const handleBlockHover = useCallback((blockId: string | null) => {
+    setHoveredBlockId(blockId);
+    if (blockId) {
+      scrollBlockIntoView(blockId);
+    }
+  }, [scrollBlockIntoView]);
+
+
   // --- Drag and Drop Handlers ---
 
   const handleDragStart = (e: React.DragEvent, blockId: string) => {
@@ -792,10 +815,6 @@ const RegexVisionWorkspace: React.FC = () => {
   const idsToHighlight = useMemo(() => getIdsToHighlight(selectedBlockId), [selectedBlockId, blocks]);
   const idsToHover = useMemo(() => getIdsToHighlight(hoveredBlockId), [hoveredBlockId, blocks]);
 
-  const handleBlockHover = (blockId: string | null) => {
-    setHoveredBlockId(blockId);
-  };
-
   const handleFixApplied = (fixResult: FixRegexOutput) => {
       if (fixResult.parsedBlocks && fixResult.parsedBlocks.length > 0) {
           setBlocks(fixResult.parsedBlocks);
@@ -835,7 +854,7 @@ const RegexVisionWorkspace: React.FC = () => {
             onUngroup={handleUngroupBlock}
             onWrapBlock={handleWrapBlock}
             selectedId={selectedBlockId}
-            onSelect={setSelectedBlockId}
+            onSelect={handleSelectBlock}
             parentId={parentId}
             depth={depth}
             hoveredId={hoveredBlockId}
@@ -907,7 +926,7 @@ const RegexVisionWorkspace: React.FC = () => {
                 isParsing={isParsing}
                 stringParts={regexOutputState.stringParts}
                 highlightedIds={idsToHighlight}
-                onSelectBlock={setSelectedBlockId}
+                onSelectBlock={handleSelectBlock}
                 hoveredIds={idsToHover}
                 onHoverPart={handleBlockHover}
                 isReady={isReady}

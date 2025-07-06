@@ -19,7 +19,7 @@ interface BlockNodeProps {
   onUngroup: (id: string) => void;
   onWrapBlock: (id: string) => void;
   selectedId: string | null;
-  onSelect: (id: string) => void;
+  onSelect: (id: string | null) => void;
   parentId: string | null;
   depth?: number;
   hoveredId: string | null;
@@ -274,6 +274,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
   return (
     <div
+      id={`block-node-${block.id}`}
       className="relative"
       onDragOver={(e) => onDragOver(e, block.id)}
       onDragLeave={onDragLeave}
