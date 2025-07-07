@@ -257,31 +257,43 @@ function transformNodeToBlocks(node: any): Block[] {
     case 'Assertion': {
       let blockType: BlockType | null = null;
       let settings: any = {};
+      let children: Block[] = [];
+      let isExpanded = false;
 
-      if (node.kind === 'Lookahead' || node.kind === 'Lookbehind') {
-        blockType = BlockType.LOOKAROUND;
-        let prefix = node.negative ? 'negative' : 'positive';
-        settings.type = `${prefix}-${node.kind.toLowerCase()}`;
-      } else {
-        blockType = BlockType.ANCHOR;
-        switch(node.kind) {
-            case '^':
-            case 'Start':
-            case 'StartOfLine':
-                settings.type = '^';
-                break;
-            case '$':
-            case 'End':
-            case 'EndOfLine':
-                settings.type = '$';
-                break;
-            case 'WordBoundary':
-                settings.type = node.negative ? '\\B' : '\\b';
-                break;
-            default:
-                // If we don't know the anchor type, we can't create a block for it.
-                return []; 
-        }
+      // Refactored from if/else to a single switch for clarity and robustness
+      switch(node.kind) {
+        case 'Lookahead':
+        case 'Lookbehind':
+          blockType = BlockType.LOOKAROUND;
+          const prefix = node.negative ? 'negative' : 'positive';
+          settings.type = `${prefix}-${node.kind.toLowerCase()}`;
+          children = node.assertion ? transformNodeToBlocks(node.assertion) : [];
+          isExpanded = true;
+          break;
+
+        case '^':
+        case 'Start':
+        case 'StartOfLine':
+          blockType = BlockType.ANCHOR;
+          settings.type = '^';
+          break;
+
+        case '$':
+        case 'End':
+        case 'EndOfLine':
+          blockType = BlockType.ANCHOR;
+          settings.type = '$';
+          break;
+
+        case 'WordBoundary':
+          blockType = BlockType.ANCHOR;
+          // Make the check for 'negative' more robust against undefined values
+          settings.type = node.negative === true ? '\\B' : '\\b';
+          break;
+
+        default:
+          // If we don't know the assertion type, we can't create a block for it.
+          return []; 
       }
 
       if (blockType) {
@@ -289,8 +301,8 @@ function transformNodeToBlocks(node: any): Block[] {
           id: newId,
           type: blockType,
           settings: settings,
-          children: node.assertion ? transformNodeToBlocks(node.assertion) : [],
-          isExpanded: blockType === BlockType.LOOKAROUND,
+          children: children,
+          isExpanded: isExpanded,
         };
         return [assertionBlock];
       }
