@@ -492,10 +492,7 @@ const RegexVisionWorkspace: React.FC = () => {
 
   const handleBlockHover = useCallback((blockId: string | null) => {
     setHoveredBlockId(blockId);
-    if (blockId) {
-      scrollBlockIntoView(blockId);
-    }
-  }, [scrollBlockIntoView]);
+  }, []);
 
 
   // --- Drag and Drop Handlers ---
@@ -767,12 +764,38 @@ const RegexVisionWorkspace: React.FC = () => {
       setBlocks([]);
       return;
     }
+
+    let processedRegex = regexString;
+    const inlineFlagMatch = regexString.match(/^\(\?([imsuy]+)\)/);
+    let extractedFlags = '';
+
+    if (inlineFlagMatch) {
+      extractedFlags = inlineFlagMatch[1];
+      setRegexFlags(currentFlags => {
+        const flagSet = new Set(currentFlags.split(''));
+        for (const flag of extractedFlags) {
+          flagSet.add(flag);
+        }
+        return ['g', 'i', 'm', 's', 'u', 'y'].filter(f => flagSet.has(f as any)).join('');
+      });
+      processedRegex = regexString.substring(inlineFlagMatch[0].length);
+    }
+
     setIsParsing(true);
     try {
-      const parsedBlocks = parseRegexWithLibrary(regexString);
+      const parsedBlocks = parseRegexWithLibrary(processedRegex);
       setBlocks(parsedBlocks);
-      setNaturalLanguageQuery(''); // Clear NL query after successful parse
-      toast({ title: "Выражение разобрано", description: "Структура блоков построена успешно." });
+      setNaturalLanguageQuery('');
+
+      if (extractedFlags) {
+        toast({
+          title: "Выражение разобрано",
+          description: `Встроенный флаг '${extractedFlags}' был автоматически активирован.`,
+        });
+      } else {
+        toast({ title: "Выражение разобрано", description: "Структура блоков построена успешно." });
+      }
+
     } catch (error) {
       const message = error instanceof Error ? error.message : "Неизвестная ошибка парсера.";
       toast({
@@ -859,7 +882,7 @@ const RegexVisionWorkspace: React.FC = () => {
             depth={depth}
             hoveredId={hoveredBlockId}
             onBlockHover={handleBlockHover}
-            renderChildNodes={(childNodes, pId, nextDepth, gInfos) => renderBlockNodes(childNodes, pId, nextDepth, gInfos)}
+            renderChildNodes={(childNodes, pId, nextDepth, gInfos) => renderChildNodes(childNodes, pId, nextDepth, gInfos)}
             groupInfos={groupInfos}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
