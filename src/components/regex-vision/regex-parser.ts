@@ -287,7 +287,7 @@ function transformNodeToBlocks(node: any): Block[] {
 
         case 'WordBoundary':
           blockType = BlockType.ANCHOR;
-          // The string MUST be '\\b' to represent the two characters \ and b, not the backspace control character.
+          // The string MUST be '\\b' or '\\B' to represent the two characters, not the backspace control character.
           settings.type = node.negative === true ? '\\B' : '\\b';
           break;
 
