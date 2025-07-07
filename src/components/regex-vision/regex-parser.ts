@@ -6,8 +6,6 @@ import { generateId } from './utils';
 
 // Main exported function
 export function parseRegexWithLibrary(regexString: string): Block[] {
-  console.log('--- DEBUG: STEP 1: Input to parseRegexWithLibrary ---');
-  console.log('Regex String:', regexString);
   try {
     // To pass the regex string to the parser (which expects a /.../ literal),
     // we must escape any / characters within the string itself.
@@ -24,13 +22,9 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
 
     // The `u` flag is important for regexp-tree to correctly parse complex patterns like unicode properties `\p{L}`
     const ast = regexpTree.parse(`/${escapedRegexString}/u`, { allowGroupNameDuplicates: true });
-    console.log('--- DEBUG: STEP 2: Parsed AST from regexp-tree ---');
-    console.log(JSON.stringify(ast, null, 2));
     
     if (ast.body) {
       const resultBlocks = transformNodeToBlocks(ast.body);
-      console.log('--- DEBUG: STEP 4: Final blocks returned from parser ---');
-      console.log(JSON.stringify(resultBlocks, null, 2));
       return resultBlocks;
     }
     return [];
@@ -267,7 +261,6 @@ function transformNodeToBlocks(node: any): Block[] {
       let children: Block[] = [];
       let isExpanded = false;
 
-      // Refactored from if/else to a single switch for clarity and robustness
       switch(node.kind) {
         case 'Lookahead':
         case 'Lookbehind':
@@ -292,17 +285,17 @@ function transformNodeToBlocks(node: any): Block[] {
           settings.type = '$';
           break;
 
-        case 'WordBoundary':
-          console.log('--- DEBUG: STEP 3: Processing WordBoundary Assertion ---');
-          console.log('Original AST Node:', JSON.stringify(node, null, 2));
+        case '\\b':
           blockType = BlockType.ANCHOR;
-          // The string MUST be '\\b' or '\\B' to represent the two characters, not the backspace control character.
-          settings.type = node.negative === true ? '\\B' : '\\b';
-          console.log('Assigned settings.type:', settings.type);
+          settings.type = '\\b';
           break;
-
+        
+        case '\\B':
+          blockType = BlockType.ANCHOR;
+          settings.type = '\\B';
+          break;
+          
         default:
-          // If we don't know the assertion type, we can't create a block for it.
           return []; 
       }
 
@@ -342,5 +335,3 @@ function transformNodeToBlocks(node: any): Block[] {
         return [];
   }
 }
-
-    
