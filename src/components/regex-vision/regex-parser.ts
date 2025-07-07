@@ -287,7 +287,6 @@ function transformNodeToBlocks(node: any): Block[] {
 
         case 'WordBoundary':
           blockType = BlockType.ANCHOR;
-          // Make the check for 'negative' more robust against undefined values
           // The string MUST be '\\b' to represent the two characters \ and b, not the backspace control character.
           settings.type = node.negative === true ? '\\B' : '\\b';
           break;
