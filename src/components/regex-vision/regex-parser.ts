@@ -6,6 +6,8 @@ import { generateId } from './utils';
 
 // Main exported function
 export function parseRegexWithLibrary(regexString: string): Block[] {
+  console.log('--- DEBUG: STEP 1: Input to parseRegexWithLibrary ---');
+  console.log('Regex String:', regexString);
   try {
     // To pass the regex string to the parser (which expects a /.../ literal),
     // we must escape any / characters within the string itself.
@@ -22,9 +24,14 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
 
     // The `u` flag is important for regexp-tree to correctly parse complex patterns like unicode properties `\p{L}`
     const ast = regexpTree.parse(`/${escapedRegexString}/u`, { allowGroupNameDuplicates: true });
+    console.log('--- DEBUG: STEP 2: Parsed AST from regexp-tree ---');
+    console.log(JSON.stringify(ast, null, 2));
     
     if (ast.body) {
-      return transformNodeToBlocks(ast.body);
+      const resultBlocks = transformNodeToBlocks(ast.body);
+      console.log('--- DEBUG: STEP 4: Final blocks returned from parser ---');
+      console.log(JSON.stringify(resultBlocks, null, 2));
+      return resultBlocks;
     }
     return [];
   } catch (error) {
@@ -286,9 +293,12 @@ function transformNodeToBlocks(node: any): Block[] {
           break;
 
         case 'WordBoundary':
+          console.log('--- DEBUG: STEP 3: Processing WordBoundary Assertion ---');
+          console.log('Original AST Node:', JSON.stringify(node, null, 2));
           blockType = BlockType.ANCHOR;
           // The string MUST be '\\b' or '\\B' to represent the two characters, not the backspace control character.
           settings.type = node.negative === true ? '\\B' : '\\b';
+          console.log('Assigned settings.type:', settings.type);
           break;
 
         default:
@@ -332,3 +342,5 @@ function transformNodeToBlocks(node: any): Block[] {
         return [];
   }
 }
+
+    
