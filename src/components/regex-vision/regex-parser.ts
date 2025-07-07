@@ -260,43 +260,28 @@ function transformNodeToBlocks(node: any): Block[] {
       let settings: any = {};
       let children: Block[] = [];
       let isExpanded = false;
-
-      switch(node.kind) {
-        case 'Lookahead':
-        case 'Lookbehind':
+      const kind = node.kind;
+      
+      if (kind === 'Lookahead' || kind === 'Lookbehind') {
           blockType = BlockType.LOOKAROUND;
           const prefix = node.negative ? 'negative' : 'positive';
-          settings.type = `${prefix}-${node.kind.toLowerCase()}`;
+          settings.type = `${prefix}-${kind.toLowerCase()}`;
           children = node.assertion ? transformNodeToBlocks(node.assertion) : [];
           isExpanded = true;
-          break;
-
-        case '^':
-        case 'Start':
-        case 'StartOfLine':
+      } else if (kind === '^' || kind === 'Start' || kind === 'StartOfLine') {
           blockType = BlockType.ANCHOR;
           settings.type = '^';
-          break;
-
-        case '$':
-        case 'End':
-        case 'EndOfLine':
+      } else if (kind === '$' || kind === 'End' || kind === 'EndOfLine') {
           blockType = BlockType.ANCHOR;
           settings.type = '$';
-          break;
-
-        case '\\b':
+      } else if (kind === '\\b') {
           blockType = BlockType.ANCHOR;
           settings.type = '\\b';
-          break;
-        
-        case '\\B':
+      } else if (kind === '\\B') {
           blockType = BlockType.ANCHOR;
           settings.type = '\\B';
-          break;
-          
-        default:
-          return []; 
+      } else {
+          return []; // Unknown assertion type
       }
 
       if (blockType) {

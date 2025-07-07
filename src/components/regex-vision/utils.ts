@@ -105,8 +105,6 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
         stringParts.push({ text: ')', blockId: block.id, blockType: block.type });
         break;
       case BlockType.ANCHOR:
-        console.log('--- DEBUG: STEP 5: Generating string from ANCHOR block ---');
-        console.log('Anchor settings:', settings);
         stringParts.push({ text: (settings as AnchorSettings).type, blockId: block.id, blockType: block.type });
         break;
       case BlockType.ALTERNATION:
@@ -297,5 +295,3 @@ export const findBlockAndParent = (
   }
   return { block: null, parent: null };
 };
-
-    
