@@ -5,7 +5,6 @@ import { BlockType } from './types';
 export const generateId = (): string => Math.random().toString(36).substring(2, 11);
 
 const escapeRegexCharsForGenerator = (text: string): string => {
-  // Added forward slash to the list of characters to escape.
   return text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 }
 
@@ -53,7 +52,6 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
       case BlockType.CHARACTER_CLASS:
         const ccSettings = settings as CharacterClassSettings;
         const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '\\p{L}'];
-        // Critical fix: '.' is a special meta-character that should NOT be wrapped in brackets.
         if (ccSettings.pattern === '.') {
             stringParts.push({ text: '.', blockId: block.id, blockType: block.type });
             break;
@@ -105,6 +103,10 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
         stringParts.push({ text: ')', blockId: block.id, blockType: block.type });
         break;
       case BlockType.ANCHOR:
+        // --- DEBUG ---
+        console.log('--- DEBUG: STEP 5: Generating string from ANCHOR block ---');
+        console.log('Anchor settings:', settings);
+        // --- END DEBUG ---
         stringParts.push({ text: (settings as AnchorSettings).type, blockId: block.id, blockType: block.type });
         break;
       case BlockType.ALTERNATION:
@@ -172,8 +174,6 @@ export const breakdownPatternIntoChildren = (pattern: string): Block[] => {
   const predefinedRanges: { [key: string]: string } = { 'a-z': 'a-z', 'A-Z': 'A-Z', '0-9': '0-9' };
   let remainingPattern = pattern;
 
-  // This is a simplified breakdown. A more robust solution might need a more complex parser.
-  // Extract predefined ranges first
   Object.keys(predefinedRanges).forEach(rangeKey => {
     if (remainingPattern.includes(rangeKey)) {
       components.push({ id: generateId(), type: BlockType.CHARACTER_CLASS, settings: { pattern: rangeKey, negated: false } as CharacterClassSettings, children: [], isExpanded: false });
@@ -181,7 +181,6 @@ export const breakdownPatternIntoChildren = (pattern: string): Block[] => {
     }
   });
   
-  // Handle special shorthands
   const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S'];
   specialShorthands.forEach(shorthand => {
     const escapedShorthand = shorthand.replace('\\', '\\\\');
@@ -191,7 +190,6 @@ export const breakdownPatternIntoChildren = (pattern: string): Block[] => {
     }
   });
 
-  // Treat remaining characters as individual literals
   if (remainingPattern.length > 0) {
      for (const char of remainingPattern) {
        components.push({ id: generateId(), type: BlockType.LITERAL, settings: { text: char } as LiteralSettings, children: [], isExpanded: false });
@@ -205,7 +203,6 @@ export const processAiBlocks = (aiBlocks: any[]): Block[] => {
     return [];
   }
 
-  // Filter for blocks that are objects and have a valid BlockType.
   const validAiBlocks = aiBlocks.filter(b => b && typeof b === 'object' && Object.values(BlockType).includes(b.type));
 
   return validAiBlocks.map((aiBlock: any): Block => {
@@ -226,7 +223,7 @@ export const processAiBlocks = (aiBlocks: any[]): Block[] => {
       BlockType.LOOKAROUND,
       BlockType.ALTERNATION,
       BlockType.CONDITIONAL,
-      BlockType.CHARACTER_CLASS, // Character class can also be a container
+      BlockType.CHARACTER_CLASS,
     ];
     if (containerTypes.includes(newBlock.type!)) {
       newBlock.isExpanded = true;
@@ -275,8 +272,6 @@ export const isRegexValid = (regex: string): boolean => {
   }
 };
 
-// This function is currently not used but can be useful for debugging or advanced features.
-// It tries to find a block by its ID and returns the block and its parent.
 export const findBlockAndParent = (
   nodes: Block[],
   id: string,

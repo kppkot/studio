@@ -7,30 +7,34 @@ import { generateId } from './utils';
 // Main exported function
 export function parseRegexWithLibrary(regexString: string): Block[] {
   try {
-    // To pass the regex string to the parser (which expects a /.../ literal),
-    // we must escape any / characters within the string itself.
-    // The logic is:
-    // 1. Temporarily replace already escaped slashes \/ with a placeholder.
-    // 2. Escape all remaining, unescaped slashes /.
-    // 3. Restore the original escaped slashes from the placeholder.
-    // This prevents turning \/ into an invalid \\/.
-    const placeholder = '\uE000'; // A character from the Private Use Area
+    // --- DEBUG ---
+    console.log('--- DEBUG: STEP 1: Input to parseRegexWithLibrary ---');
+    console.log('Regex String:', regexString);
+    // --- END DEBUG ---
+    const placeholder = '\uE000'; 
     const escapedRegexString = regexString
       .replace(/\\\//g, placeholder)
       .replace(/\//g, '\\/')
       .replace(new RegExp(placeholder, 'g'), '\\/');
 
-    // The `u` flag is important for regexp-tree to correctly parse complex patterns like unicode properties `\p{L}`
     const ast = regexpTree.parse(`/${escapedRegexString}/u`, { allowGroupNameDuplicates: true });
+    
+    // --- DEBUG ---
+    console.log('--- DEBUG: STEP 2: Parsed AST from regexp-tree ---');
+    console.log(JSON.stringify(ast, null, 2));
+    // --- END DEBUG ---
     
     if (ast.body) {
       const resultBlocks = transformNodeToBlocks(ast.body);
+       // --- DEBUG ---
+      console.log('--- DEBUG: STEP 4: Final blocks returned from parser ---');
+      console.log(JSON.stringify(resultBlocks, null, 2));
+      // --- END DEBUG ---
       return resultBlocks;
     }
     return [];
   } catch (error) {
     if (error instanceof Error) {
-      // Provide more specific, user-friendly error messages.
       if (error.message.includes('Unexpected quantifier')) {
         throw new Error('Синтаксическая ошибка: квантификатор (например, *, +, ?) оказался в неожиданном месте, ему нечего повторять.');
       }
@@ -49,16 +53,12 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
       if (error.message.includes('Trailing backslash')) {
         throw new Error('Синтаксическая ошибка: выражение не может заканчиваться одиночным обратным слэшем `\\`.');
       }
-      // Fallback for other syntax errors from regexp-tree
       throw new Error(`Ошибка синтаксиса в выражении. ${error.message}`);
     }
-    // Fallback for non-Error objects thrown
     throw new Error('Произошла неизвестная ошибка при разборе выражения.');
   }
 }
 
-// Returns an array of blocks. A simple node returns a single-element array.
-// A repetition node returns [subject, quantifier]. An Alternative returns a flat list of its children's blocks.
 function transformNodeToBlocks(node: any): Block[] {
   if (!node) return [];
 
@@ -68,12 +68,10 @@ function transformNodeToBlocks(node: any): Block[] {
     case 'Alternative': {
         const rawBlocks = node.expressions.flatMap((expr: any) => transformNodeToBlocks(expr));
         
-        // Fuse consecutive literal blocks to simplify the tree
         const fusedBlocks: Block[] = [];
         let currentLiteralText = '';
 
         for (const block of rawBlocks) {
-            // Only fuse non-raw literals. Raw regex should stay as is.
             if (block.type === BlockType.LITERAL && !(block.settings as LiteralSettings).isRawRegex) {
                 currentLiteralText += (block.settings as LiteralSettings).text;
             } else {
@@ -90,7 +88,6 @@ function transformNodeToBlocks(node: any): Block[] {
             }
         }
 
-        // Add any remaining literal text at the end
         if (currentLiteralText) {
              fusedBlocks.push({
                 id: generateId(),
@@ -113,7 +110,7 @@ function transformNodeToBlocks(node: any): Block[] {
             case '*': type = '*'; break;
             case '+': type = '+'; break;
             case '?': type = '?'; break;
-            case 'Range': // Correctly handle quantifiers like {n}, {n,m}, {n,}
+            case 'Range':
                 min = q.from;
                 max = q.to === Infinity ? null : q.to;
                 if (min !== undefined && max === undefined) type = '{n,}';
@@ -123,7 +120,6 @@ function transformNodeToBlocks(node: any): Block[] {
         }
 
         if (type === null) {
-            // If quantifier is unknown, don't create a block for it, return only the subject.
             return subjectBlocks;
         }
 
@@ -146,7 +142,6 @@ function transformNodeToBlocks(node: any): Block[] {
     case 'Char': {
         const value = node.value;
 
-        // Meta characters like '.', '\d', '\w', '\s'
         if (node.kind === 'meta') {
             const charClassBlock: Block = {
                 id: newId,
@@ -157,20 +152,16 @@ function transformNodeToBlocks(node: any): Block[] {
             return [charClassBlock];
         }
 
-        // Unicode property escapes like \p{L}
         if (node.kind === 'unicode-property') {
             const charClassBlock: Block = {
                 id: newId,
                 type: BlockType.CHARACTER_CLASS,
-                // node.raw will be something like `\p{L}`
                 settings: { pattern: node.raw, negated: false } as CharacterClassSettings,
                 children: [],
             };
             return [charClassBlock];
         }
 
-        // A simple literal character like 'a', or an escaped one like '\.'
-        // For both, `node.value` is the character itself. For `\\`, it's `\`.
         const literalBlock: Block = {
             id: newId,
             type: BlockType.LITERAL,
@@ -229,8 +220,6 @@ function transformNodeToBlocks(node: any): Block[] {
             if (!altNode) return null;
             const blocks = transformNodeToBlocks(altNode);
 
-            // If an alternative consists of more than one block (e.g., a literal and a quantifier), 
-            // it must be wrapped in a group to maintain correct precedence over the `|` operator.
             if (blocks.length > 1) {
                 return { 
                     id: generateId(), 
@@ -240,7 +229,6 @@ function transformNodeToBlocks(node: any): Block[] {
                     isExpanded: true 
                 };
             }
-            // If the alternative is just a single block, no wrapper group is needed.
             return blocks.length === 1 ? blocks[0] : null;
         }).filter((b): b is Block => b !== null);
 
@@ -256,6 +244,9 @@ function transformNodeToBlocks(node: any): Block[] {
     }
 
     case 'Assertion': {
+      // --- DEBUG ---
+      console.log('--- DEBUG: STEP 3: Processing Assertion node ---', { kind: node.kind, negative: node.negative });
+      // --- END DEBUG ---
       let blockType: BlockType | null = null;
       let settings: any = {};
       let children: Block[] = [];
@@ -281,7 +272,7 @@ function transformNodeToBlocks(node: any): Block[] {
           blockType = BlockType.ANCHOR;
           settings.type = '\\B';
       } else {
-          return []; // Unknown assertion type
+          return [];
       }
 
       if (blockType) {
