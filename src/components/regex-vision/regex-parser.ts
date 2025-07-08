@@ -7,7 +7,10 @@ import { generateId, createLiteral } from './utils';
 // Main exported function
 export function parseRegexWithLibrary(regexString: string): Block[] {
   try {
-    const placeholder = '\uE000'; 
+    console.log('--- DEBUG: STEP 1: Input to parseRegexWithLibrary ---');
+    console.log('Regex String:', regexString);
+
+    const placeholder = '\uE000';
     const escapedRegexString = regexString
       .replace(/\\\//g, placeholder)
       .replace(/\//g, '\\/')
@@ -15,8 +18,13 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
 
     const ast = regexpTree.parse(`/${escapedRegexString}/u`, { allowGroupNameDuplicates: true });
     
+    console.log('--- DEBUG: STEP 2: Parsed AST from regexp-tree ---');
+    console.log(JSON.parse(JSON.stringify(ast.body)));
+
     if (ast.body) {
       const resultBlocks = transformNodeToBlocks(ast.body);
+      console.log('--- DEBUG: STEP 4: Final blocks returned from parser ---');
+      console.log(JSON.parse(JSON.stringify(resultBlocks)));
       return resultBlocks;
     }
     return [];
@@ -54,6 +62,8 @@ function transformNodeToBlocks(node: any): Block[] {
   switch (node.type) {
     case 'Alternative': {
         const expressions = node.expressions;
+        console.log('--- DEBUG: ALTERNATIVE: Processing expressions:', JSON.parse(JSON.stringify(expressions)));
+        
         const fusedBlocks: Block[] = [];
         let currentLiteralText = '';
 
@@ -73,20 +83,10 @@ function transformNodeToBlocks(node: any): Block[] {
             }
         }
         pushLiteral();
+        
+        console.log('--- DEBUG: ALTERNATIVE: Produced blocks:', JSON.parse(JSON.stringify(fusedBlocks)));
 
-        // **THE FIX**: If an alternative results in a sequence of multiple blocks,
-        // it must be wrapped in a non-capturing group to be treated as a single unit.
-        if (fusedBlocks.length > 1) {
-            const wrapperGroup: Block = {
-                id: generateId(),
-                type: BlockType.GROUP,
-                settings: { type: 'non-capturing' } as GroupSettings,
-                children: fusedBlocks,
-                isExpanded: true
-            };
-            return [wrapperGroup];
-        }
-
+        // Previous broken logic was here. Now it's just returning the blocks.
         return fusedBlocks;
     }
 
@@ -130,8 +130,6 @@ function transformNodeToBlocks(node: any): Block[] {
     }
 
     case 'Char': {
-        // This case now primarily handles escaped characters and meta-sequences
-        // as the 'Alternative' handler fuses simple, unescaped characters.
         const value = node.value;
 
         if (node.kind === 'meta') {
@@ -165,7 +163,6 @@ function transformNodeToBlocks(node: any): Block[] {
 
     case 'CharacterClass': {
       const pattern = node.expressions.map((expr: any) => {
-        // Use raw value for ranges to preserve them, otherwise generate from AST
         if(expr.type === 'ClassRange') return expr.raw;
         return regexpTree.generate(expr);
       }).join('');
@@ -211,11 +208,31 @@ function transformNodeToBlocks(node: any): Block[] {
         };
         
         const alternativesAstNodes = collectAlternatives(node);
+        console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', JSON.parse(JSON.stringify(alternativesAstNodes)));
         
-        const children = alternativesAstNodes.flatMap(altNode => {
+        const childrenBlockArrays = alternativesAstNodes.map(altNode => {
             if (!altNode) return [];
             return transformNodeToBlocks(altNode);
         });
+
+        console.log('--- DEBUG: DISJUNCTION: Processed alternatives into block arrays:', JSON.parse(JSON.stringify(childrenBlockArrays)));
+
+        const children = childrenBlockArrays.map(blockArray => {
+            if (blockArray.length > 1) {
+                const wrapperGroup: Block = {
+                    id: generateId(),
+                    type: BlockType.GROUP,
+                    settings: { type: 'non-capturing' } as GroupSettings,
+                    children: blockArray,
+                    isExpanded: true
+                };
+                console.log('--- DEBUG: DISJUNCTION: Wrapping multi-block alternative in a group:', JSON.parse(JSON.stringify(wrapperGroup)));
+                return wrapperGroup;
+            }
+            return blockArray[0];
+        }).filter(Boolean);
+
+        console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.parse(JSON.stringify(children)));
 
         const alternationBlock: Block = {
             id: newId,
@@ -229,6 +246,18 @@ function transformNodeToBlocks(node: any): Block[] {
     }
 
     case 'Assertion': {
+        console.log('--- DEBUG: STEP 3: Processing Assertion node ---', { kind: node.kind, negative: node.negative });
+        if (node.kind === '\\b' || node.kind === '\\B') {
+            const anchorBlock: Block = {
+                id: newId,
+                type: BlockType.ANCHOR,
+                settings: { type: node.kind } as AnchorSettings,
+                children: [],
+                isExpanded: false
+            };
+            return [anchorBlock];
+        }
+
         let blockType: BlockType | null = null;
         let settings: any = {};
         let children: Block[] = [];

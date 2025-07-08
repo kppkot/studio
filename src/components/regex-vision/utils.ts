@@ -103,10 +103,8 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
         stringParts.push({ text: ')', blockId: block.id, blockType: block.type });
         break;
       case BlockType.ANCHOR:
-        // --- DEBUG ---
         console.log('--- DEBUG: STEP 5: Generating string from ANCHOR block ---');
         console.log('Anchor settings:', settings);
-        // --- END DEBUG ---
         stringParts.push({ text: (settings as AnchorSettings).type, blockId: block.id, blockType: block.type });
         break;
       case BlockType.ALTERNATION:
