@@ -65,6 +65,7 @@ function transformNodeToBlocks(node: any): Block[] {
   switch (node.type) {
     case 'Alternative': {
         const expressions = node.expressions;
+        console.log('--- DEBUG: ALTERNATIVE: Processing expressions:', JSON.stringify(expressions));
         const fusedBlocks: Block[] = [];
         let currentLiteralText = '';
 
@@ -88,6 +89,7 @@ function transformNodeToBlocks(node: any): Block[] {
         if (currentLiteralText) {
             fusedBlocks.push(createLiteral(currentLiteralText));
         }
+        console.log('--- DEBUG: ALTERNATIVE: Produced blocks:', JSON.stringify(fusedBlocks));
         return fusedBlocks;
     }
 
@@ -206,11 +208,14 @@ function transformNodeToBlocks(node: any): Block[] {
         };
         
         const alternativesAstNodes = collectAlternatives(node);
+        console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', JSON.stringify(alternativesAstNodes));
         
         const alternativeBlocks = alternativesAstNodes.map(altNode => {
             if (!altNode) return null;
             return transformNodeToBlocks(altNode);
         }).filter((b): b is Block[] => b !== null && b.length > 0);
+        console.log('--- DEBUG: DISJUNCTION: Processed alternatives into block arrays:', JSON.stringify(alternativeBlocks));
+
 
         const finalChildren = alternativeBlocks.map(blocks => {
             if (blocks.length === 1) {
@@ -218,14 +223,17 @@ function transformNodeToBlocks(node: any): Block[] {
             }
             // If an alternative consists of multiple blocks, wrap it in a non-capturing group
             // to treat it as a single unit within the alternation.
-            return {
+            const wrapperGroup: Block = {
                 id: generateId(),
                 type: BlockType.GROUP,
                 settings: { type: 'non-capturing' } as GroupSettings,
                 children: blocks,
                 isExpanded: true
             };
+            console.log('--- DEBUG: DISJUNCTION: Wrapping multi-block alternative in a group:', JSON.stringify(wrapperGroup));
+            return wrapperGroup;
         });
+        console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.stringify(finalChildren));
 
         const alternationBlock: Block = {
             id: newId,
