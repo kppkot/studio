@@ -2,7 +2,7 @@
 import regexpTree from 'regexp-tree';
 import type { Block, CharacterClassSettings, LiteralSettings, QuantifierSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, GroupSettings, ConditionalSettings } from './types';
 import { BlockType } from './types';
-import { generateId } from './utils';
+import { generateId, createLiteral } from './utils';
 
 // Main exported function
 export function parseRegexWithLibrary(regexString: string): Block[] {
@@ -76,12 +76,7 @@ function transformNodeToBlocks(node: any): Block[] {
                 // ...otherwise, it's a complex node (like Repetition, Group, etc.)
                 // First, push any accumulated literal string as a block.
                 if (currentLiteralText) {
-                    fusedBlocks.push({
-                        id: generateId(),
-                        type: BlockType.LITERAL,
-                        settings: { text: currentLiteralText, isRawRegex: false } as LiteralSettings,
-                        children: [],
-                    });
+                    fusedBlocks.push(createLiteral(currentLiteralText));
                     currentLiteralText = '';
                 }
                 // Then, process the complex expression and add its blocks.
@@ -91,12 +86,7 @@ function transformNodeToBlocks(node: any): Block[] {
 
         // After the loop, push any remaining accumulated literal.
         if (currentLiteralText) {
-            fusedBlocks.push({
-                id: generateId(),
-                type: BlockType.LITERAL,
-                settings: { text: currentLiteralText, isRawRegex: false } as LiteralSettings,
-                children: [],
-            });
+            fusedBlocks.push(createLiteral(currentLiteralText));
         }
         return fusedBlocks;
     }
@@ -219,27 +209,29 @@ function transformNodeToBlocks(node: any): Block[] {
         
         const alternativeBlocks = alternativesAstNodes.map(altNode => {
             if (!altNode) return null;
-            const blocks = transformNodeToBlocks(altNode);
-            
-            // If an alternative consists of multiple blocks, it must be represented as a single block (a group)
-            // to be a child of an ALTERNATION block.
-            if (blocks.length > 1) {
-                return { 
-                    id: generateId(), 
-                    type: BlockType.GROUP, 
-                    settings: { type: 'non-capturing' } as GroupSettings, 
-                    children: blocks, 
-                    isExpanded: true 
-                };
+            return transformNodeToBlocks(altNode);
+        }).filter((b): b is Block[] => b !== null && b.length > 0);
+
+        const finalChildren = alternativeBlocks.map(blocks => {
+            if (blocks.length === 1) {
+                return blocks[0];
             }
-            return blocks.length === 1 ? blocks[0] : null;
-        }).filter((b): b is Block => b !== null);
+            // If an alternative consists of multiple blocks, wrap it in a non-capturing group
+            // to treat it as a single unit within the alternation.
+            return {
+                id: generateId(),
+                type: BlockType.GROUP,
+                settings: { type: 'non-capturing' } as GroupSettings,
+                children: blocks,
+                isExpanded: true
+            };
+        });
 
         const alternationBlock: Block = {
             id: newId,
             type: BlockType.ALTERNATION,
             settings: {},
-            children: alternativeBlocks,
+            children: finalChildren,
             isExpanded: true,
         };
         
@@ -247,7 +239,9 @@ function transformNodeToBlocks(node: any): Block[] {
     }
 
     case 'Assertion': {
+        // --- DEBUG ---
         console.log('--- DEBUG: STEP 3: Processing Assertion node ---', { kind: node.kind, negative: node.negative });
+        // --- END DEBUG ---
         let blockType: BlockType | null = null;
         let settings: any = {};
         let children: Block[] = [];
@@ -259,18 +253,9 @@ function transformNodeToBlocks(node: any): Block[] {
             settings.type = `${prefix}-${node.kind.toLowerCase()}`;
             children = node.assertion ? transformNodeToBlocks(node.assertion) : [];
             isExpanded = true;
-        } else if (node.kind === '^') {
+        } else if (node.kind === '^' || node.kind === '$' || node.kind === '\\b' || node.kind === '\\B') {
             blockType = BlockType.ANCHOR;
-            settings.type = '^';
-        } else if (node.kind === '$') {
-            blockType = BlockType.ANCHOR;
-            settings.type = '$';
-        } else if (node.kind === '\\b') {
-            blockType = BlockType.ANCHOR;
-            settings.type = '\\b';
-        } else if (node.kind === '\\B') {
-            blockType = BlockType.ANCHOR;
-            settings.type = '\\B';
+            settings.type = node.kind;
         } else {
             return [];
         }
