@@ -10,7 +10,6 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
     // --- DEBUG ---
     console.log('--- DEBUG: STEP 1: Input to parseRegexWithLibrary ---');
     console.log('Regex String:', regexString);
-    // --- END DEBUG ---
     const placeholder = '\uE000'; 
     const escapedRegexString = regexString
       .replace(/\\\//g, placeholder)
@@ -22,7 +21,6 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
     // --- DEBUG ---
     console.log('--- DEBUG: STEP 2: Parsed AST from regexp-tree ---');
     console.log(JSON.stringify(ast, null, 2));
-    // --- END DEBUG ---
     
     if (ast.body) {
       const resultBlocks = transformNodeToBlocks(ast.body);
@@ -66,15 +64,17 @@ function transformNodeToBlocks(node: any): Block[] {
 
   switch (node.type) {
     case 'Alternative': {
-        const rawBlocks = node.expressions.flatMap((expr: any) => transformNodeToBlocks(expr));
-        
+        const expressions = node.expressions;
         const fusedBlocks: Block[] = [];
         let currentLiteralText = '';
 
-        for (const block of rawBlocks) {
-            if (block.type === BlockType.LITERAL && !(block.settings as LiteralSettings).isRawRegex) {
-                currentLiteralText += (block.settings as LiteralSettings).text;
+        for (const expr of expressions) {
+            // If the current expression is a simple character...
+            if (expr.type === 'Char' && expr.kind === 'simple') {
+                currentLiteralText += expr.value;
             } else {
+                // ...otherwise, it's a complex node (like Repetition, Group, etc.)
+                // First, push any accumulated literal string as a block.
                 if (currentLiteralText) {
                     fusedBlocks.push({
                         id: generateId(),
@@ -84,19 +84,20 @@ function transformNodeToBlocks(node: any): Block[] {
                     });
                     currentLiteralText = '';
                 }
-                fusedBlocks.push(block);
+                // Then, process the complex expression and add its blocks.
+                fusedBlocks.push(...transformNodeToBlocks(expr));
             }
         }
 
+        // After the loop, push any remaining accumulated literal.
         if (currentLiteralText) {
-             fusedBlocks.push({
+            fusedBlocks.push({
                 id: generateId(),
                 type: BlockType.LITERAL,
                 settings: { text: currentLiteralText, isRawRegex: false } as LiteralSettings,
                 children: [],
             });
         }
-        
         return fusedBlocks;
     }
 
@@ -219,7 +220,9 @@ function transformNodeToBlocks(node: any): Block[] {
         const alternativeBlocks = alternativesAstNodes.map(altNode => {
             if (!altNode) return null;
             const blocks = transformNodeToBlocks(altNode);
-
+            
+            // If an alternative consists of multiple blocks, it must be represented as a single block (a group)
+            // to be a child of an ALTERNATION block.
             if (blocks.length > 1) {
                 return { 
                     id: generateId(), 
@@ -244,48 +247,45 @@ function transformNodeToBlocks(node: any): Block[] {
     }
 
     case 'Assertion': {
-      // --- DEBUG ---
-      console.log('--- DEBUG: STEP 3: Processing Assertion node ---', { kind: node.kind, negative: node.negative });
-      // --- END DEBUG ---
-      let blockType: BlockType | null = null;
-      let settings: any = {};
-      let children: Block[] = [];
-      let isExpanded = false;
-      const kind = node.kind;
-      
-      if (kind === 'Lookahead' || kind === 'Lookbehind') {
-          blockType = BlockType.LOOKAROUND;
-          const prefix = node.negative ? 'negative' : 'positive';
-          settings.type = `${prefix}-${kind.toLowerCase()}`;
-          children = node.assertion ? transformNodeToBlocks(node.assertion) : [];
-          isExpanded = true;
-      } else if (kind === '^' || kind === 'Start' || kind === 'StartOfLine') {
-          blockType = BlockType.ANCHOR;
-          settings.type = '^';
-      } else if (kind === '$' || kind === 'End' || kind === 'EndOfLine') {
-          blockType = BlockType.ANCHOR;
-          settings.type = '$';
-      } else if (kind === '\\b') {
-          blockType = BlockType.ANCHOR;
-          settings.type = '\\b';
-      } else if (kind === '\\B') {
-          blockType = BlockType.ANCHOR;
-          settings.type = '\\B';
-      } else {
-          return [];
-      }
+        console.log('--- DEBUG: STEP 3: Processing Assertion node ---', { kind: node.kind, negative: node.negative });
+        let blockType: BlockType | null = null;
+        let settings: any = {};
+        let children: Block[] = [];
+        let isExpanded = false;
+        
+        if (node.kind === 'Lookahead' || node.kind === 'Lookbehind') {
+            blockType = BlockType.LOOKAROUND;
+            const prefix = node.negative ? 'negative' : 'positive';
+            settings.type = `${prefix}-${node.kind.toLowerCase()}`;
+            children = node.assertion ? transformNodeToBlocks(node.assertion) : [];
+            isExpanded = true;
+        } else if (node.kind === '^') {
+            blockType = BlockType.ANCHOR;
+            settings.type = '^';
+        } else if (node.kind === '$') {
+            blockType = BlockType.ANCHOR;
+            settings.type = '$';
+        } else if (node.kind === '\\b') {
+            blockType = BlockType.ANCHOR;
+            settings.type = '\\b';
+        } else if (node.kind === '\\B') {
+            blockType = BlockType.ANCHOR;
+            settings.type = '\\B';
+        } else {
+            return [];
+        }
 
-      if (blockType) {
-        const assertionBlock: Block = {
-          id: newId,
-          type: blockType,
-          settings: settings,
-          children: children,
-          isExpanded: isExpanded,
-        };
-        return [assertionBlock];
-      }
-      return [];
+        if (blockType) {
+            const assertionBlock: Block = {
+                id: newId,
+                type: blockType,
+                settings: settings,
+                children: children,
+                isExpanded: isExpanded,
+            };
+            return [assertionBlock];
+        }
+        return [];
     }
 
     case 'Backreference': {

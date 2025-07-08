@@ -997,7 +997,7 @@ const RegexVisionWorkspace: React.FC = () => {
 
             <ResizableHandle withHandle />
 
-            <ResizablePanel defaultSize={25} minSize={20}>
+            <ResizablePanel defaultSize={25} minSize={25}>
                 <div className="h-full p-2">
                     <TestArea
                         testText={testText}
@@ -1020,7 +1020,7 @@ const RegexVisionWorkspace: React.FC = () => {
 
             <ResizableHandle withHandle />
 
-            <ResizablePanel defaultSize={25} minSize={20}>
+            <ResizablePanel defaultSize={25} minSize={25}>
                  <div className="h-full p-2">
                     <SettingsPanel
                         block={selectedBlock}
