@@ -1,4 +1,3 @@
-
 import regexpTree from 'regexp-tree';
 import type { Block, CharacterClassSettings, LiteralSettings, QuantifierSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, GroupSettings, ConditionalSettings } from './types';
 import { BlockType } from './types';
@@ -10,6 +9,7 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
     console.log('--- DEBUG: STEP 1: Input to parseRegexWithLibrary ---');
     console.log(`Regex String: ${regexString}`);
 
+    // Workaround for regexp-tree not handling escaped slashes well.
     const placeholder = '\uE000';
     const escapedRegexString = regexString
       .replace(/\\\//g, placeholder)
@@ -21,14 +21,7 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
     console.log('--- DEBUG: STEP 2: Parsed AST from regexp-tree ---');
     console.log(JSON.stringify(ast.body, null, 2));
 
-    let resultBlocks: Block[] = [];
-    if (ast.body) {
-      if (ast.body.type === 'Alternative') {
-        resultBlocks = transformNodeListToBlocks((ast.body as any).expressions);
-      } else {
-        resultBlocks = transformNodeToBlocks(ast.body);
-      }
-    }
+    const resultBlocks = transformNodeToBlocks(ast.body);
     
     console.log('--- DEBUG: STEP 4: Final blocks returned from parser ---');
     console.log(JSON.stringify(resultBlocks, null, 2));
@@ -95,19 +88,7 @@ function transformNodeToBlocks(node: any): Block[] {
   switch (node.type) {
     case 'Alternative': {
         const expressions = node.expressions || [];
-        const blocks = transformNodeListToBlocks(expressions);
-
-        if (blocks.length > 1) {
-             const wrapperGroup: Block = {
-                id: generateId(),
-                type: BlockType.GROUP,
-                settings: { type: 'non-capturing' } as GroupSettings,
-                children: blocks,
-                isExpanded: true
-            };
-            return [wrapperGroup];
-        }
-        return blocks;
+        return transformNodeListToBlocks(expressions);
     }
 
     case 'Repetition': {
@@ -220,42 +201,36 @@ function transformNodeToBlocks(node: any): Block[] {
     }
 
     case 'Disjunction': {
-        const collectAlternatives = (n: any): any[] => {
-            if (n && n.type === 'Disjunction') {
-                return [...collectAlternatives(n.left), ...collectAlternatives(n.right)];
-            }
-            return [n];
-        };
+        console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', JSON.stringify([node.left, node.right], null, 2));
+
+        const leftBlocks = transformNodeToBlocks(node.left);
+        const rightBlocks = transformNodeToBlocks(node.right);
         
-        const alternativesAstNodes = collectAlternatives(node);
-        console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', JSON.stringify(alternativesAstNodes, null, 2));
-        
-        const children = alternativesAstNodes.map(altNode => {
-            if (!altNode) return null;
-            const blocks = transformNodeToBlocks(altNode);
-            // If an alternative consists of multiple blocks, it should be represented as a single group.
+        const processAlternative = (blocks: Block[]): Block[] => {
             if (blocks.length > 1) {
-                const groupWrapper: Block = {
+                return [{
                     id: generateId(),
                     type: BlockType.GROUP,
                     settings: { type: 'non-capturing' } as GroupSettings,
                     children: blocks,
                     isExpanded: true
-                };
-                return groupWrapper;
+                }];
             }
-            return blocks[0];
-        }).filter((b): b is Block => b !== null);
+            return blocks;
+        };
 
-        console.log(`--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:`, JSON.stringify(children, null, 2));
-        
         const alternationBlock: Block = {
             id: newId,
             type: BlockType.ALTERNATION,
             settings: {},
-            children: children,
+            children: [
+                ...processAlternative(leftBlocks),
+                ...processAlternative(rightBlocks)
+            ],
             isExpanded: true,
         };
+
+        console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.stringify(alternationBlock.children, null, 2));
         
         return [alternationBlock];
     }
