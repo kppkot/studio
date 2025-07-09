@@ -21,18 +21,19 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
     console.log('--- DEBUG: STEP 2: Parsed AST from regexp-tree ---');
     console.log(JSON.stringify(ast.body, null, 2));
 
+    let resultBlocks: Block[] = [];
     if (ast.body) {
-      // The top-level `ast.body` is almost always an 'Alternative'.
-      // We pass its expressions directly to `transformNodeListToBlocks` which is designed
-      // to handle an array of expression nodes. This prevents the top-level
-      // from being wrapped in an unnecessary group.
-      const expressions = (ast.body as any).expressions || [ast.body];
-      const resultBlocks = transformNodeListToBlocks(expressions);
-      console.log('--- DEBUG: STEP 4: Final blocks returned from parser ---');
-      console.log(JSON.stringify(resultBlocks, null, 2));
-      return resultBlocks;
+      if (ast.body.type === 'Alternative') {
+        resultBlocks = transformNodeListToBlocks((ast.body as any).expressions);
+      } else {
+        resultBlocks = transformNodeToBlocks(ast.body);
+      }
     }
-    return [];
+    
+    console.log('--- DEBUG: STEP 4: Final blocks returned from parser ---');
+    console.log(JSON.stringify(resultBlocks, null, 2));
+    return resultBlocks;
+
   } catch (error) {
     if (error instanceof Error) {
       if (error.message.includes('Unexpected quantifier')) {
@@ -59,7 +60,6 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
   }
 }
 
-// New function to process a list of nodes
 function transformNodeListToBlocks(expressions: any[]): Block[] {
     console.log(`--- DEBUG: transformNodeListToBlocks: Processing expressions:`, JSON.stringify(expressions, null, 2));
     const fusedBlocks: Block[] = [];
@@ -96,8 +96,7 @@ function transformNodeToBlocks(node: any): Block[] {
     case 'Alternative': {
         const expressions = node.expressions || [];
         const blocks = transformNodeListToBlocks(expressions);
-        // An alternative inside another expression is just a sequence.
-        // If it contains more than one logical block, it should be grouped.
+
         if (blocks.length > 1) {
              const wrapperGroup: Block = {
                 id: generateId(),
@@ -231,28 +230,25 @@ function transformNodeToBlocks(node: any): Block[] {
         const alternativesAstNodes = collectAlternatives(node);
         console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', JSON.stringify(alternativesAstNodes, null, 2));
         
-        const childrenBlockArrays = alternativesAstNodes.map(altNode => {
-            if (!altNode) return [];
-            return transformNodeToBlocks(altNode);
-        });
-        console.log('--- DEBUG: DISJUNCTION: Processed alternatives into block arrays:', JSON.stringify(childrenBlockArrays, null, 2));
-
-        const children = childrenBlockArrays.map(blockArray => {
-             if (blockArray.length > 1) {
+        const children = alternativesAstNodes.map(altNode => {
+            if (!altNode) return null;
+            const blocks = transformNodeToBlocks(altNode);
+            // If an alternative consists of multiple blocks, it should be represented as a single group.
+            if (blocks.length > 1) {
                 const groupWrapper: Block = {
                     id: generateId(),
                     type: BlockType.GROUP,
                     settings: { type: 'non-capturing' } as GroupSettings,
-                    children: blockArray,
+                    children: blocks,
                     isExpanded: true
                 };
-                 console.log(`--- DEBUG: DISJUNCTION: Wrapping multi-block alternative in a group:`, JSON.stringify(groupWrapper, null, 2));
                 return groupWrapper;
             }
-            return blockArray[0];
-        }).filter(Boolean); // Filter out any empty/undefined items
+            return blocks[0];
+        }).filter((b): b is Block => b !== null);
 
         console.log(`--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:`, JSON.stringify(children, null, 2));
+        
         const alternationBlock: Block = {
             id: newId,
             type: BlockType.ALTERNATION,
@@ -267,29 +263,18 @@ function transformNodeToBlocks(node: any): Block[] {
     case 'Assertion': {
         console.log('--- DEBUG: STEP 3: Processing Assertion node ---', JSON.stringify({ kind: node.kind, negative: node.negative }, null, 2));
 
-        if (node.kind === '\\b' || node.kind === '\\B') {
-            const anchorBlock: Block = {
-                id: newId,
-                type: BlockType.ANCHOR,
-                settings: { type: node.kind } as AnchorSettings,
-                children: [],
-                isExpanded: false
-            };
-            return [anchorBlock];
-        }
-
         let blockType: BlockType | null = null;
         let settings: any = {};
         let children: Block[] = [];
         let isExpanded = false;
-        
+
         if (node.kind === 'Lookahead' || node.kind === 'Lookbehind') {
             blockType = BlockType.LOOKAROUND;
             const prefix = node.negative ? 'negative' : 'positive';
             settings.type = `${prefix}-${node.kind.toLowerCase()}`;
             children = node.assertion ? transformNodeToBlocks(node.assertion) : [];
             isExpanded = true;
-        } else {
+        } else if (node.kind === '^' || node.kind === '$' || node.kind === '\\b' || node.kind === '\\B') {
             blockType = BlockType.ANCHOR;
             settings.type = node.kind;
         }
@@ -330,5 +315,3 @@ function transformNodeToBlocks(node: any): Block[] {
         return [];
   }
 }
-
-    

@@ -35,13 +35,14 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
   const stringParts: RegexStringPart[] = [];
   let capturingGroupCount = 0;
 
-  const generateRecursive = (block: Block, context: 'root' | 'child' = 'root') => {
+  const generateRecursive = (block: Block) => {
     console.log(`--- DEBUG: UTILS: Processing block ID ${block.id} of type ${block.type} ---`);
+    console.log(`--- DEBUG: UTILS: Block settings:`, JSON.stringify(block.settings, null, 2));
     const settings = block.settings;
 
     const processChildren = (b: Block) => {
       if (!b.children) return;
-      b.children.forEach(child => generateRecursive(child, 'child'));
+      b.children.forEach(child => generateRecursive(child));
     };
 
     switch (block.type) {
@@ -104,14 +105,12 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
         stringParts.push({ text: ')', blockId: block.id, blockType: block.type });
         break;
       case BlockType.ANCHOR:
-        console.log('--- DEBUG: STEP 5: Generating string from ANCHOR block ---');
-        console.log("Anchor settings:", JSON.stringify(settings, null, 2));
         stringParts.push({ text: (settings as AnchorSettings).type, blockId: block.id, blockType: block.type });
         break;
       case BlockType.ALTERNATION:
         if (!block.children || block.children.length === 0) break;
         block.children.forEach((child, index) => {
-          generateRecursive(child, 'child');
+          generateRecursive(child);
           if (index < block.children.length - 1) {
             stringParts.push({ text: '|', blockId: block.id, blockType: block.type });
           }
@@ -136,10 +135,10 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
          const condSettings = settings as ConditionalSettings;
          const { condition, yesPattern, noPattern } = condSettings;
          stringParts.push({ text: `(?(${condition})`, blockId: block.id, blockType: block.type });
-         generateRecursive(createLiteral(yesPattern, true), 'child');
+         generateRecursive(createLiteral(yesPattern, true));
          if (noPattern) {
            stringParts.push({ text: `|`, blockId: block.id, blockType: block.type });
-           generateRecursive(createLiteral(noPattern, true), 'child');
+           generateRecursive(createLiteral(noPattern, true));
          }
          stringParts.push({ text: `)`, blockId: block.id, blockType: block.type });
          break;
@@ -148,7 +147,7 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
     }
   };
 
-  blocks.forEach(block => generateRecursive(block, 'root'));
+  blocks.forEach(block => generateRecursive(block));
 
   const regexString = stringParts.map(part => part.text).join('');
   return { regexString, groupInfos, stringParts };
@@ -290,4 +289,3 @@ export const findBlockAndParent = (
   }
   return { block: null, parent: null };
 };
-
