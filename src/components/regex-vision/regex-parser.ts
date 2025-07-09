@@ -8,7 +8,7 @@ import { generateId, createLiteral } from './utils';
 export function parseRegexWithLibrary(regexString: string): Block[] {
   try {
     console.log('--- DEBUG: STEP 1: Input to parseRegexWithLibrary ---');
-    console.log('Regex String:', regexString);
+    console.log(`Regex String: ${regexString}`);
 
     const placeholder = '\uE000';
     const escapedRegexString = regexString
@@ -22,7 +22,12 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
     console.log(JSON.stringify(ast.body, null, 2));
 
     if (ast.body) {
-      const resultBlocks = transformNodeToBlocks(ast.body);
+      // The top-level `ast.body` is almost always an 'Alternative'.
+      // We pass its expressions directly to `transformNodeToBlocks` which is designed
+      // to handle an array of expression nodes. This prevents the top-level
+      // from being wrapped in an unnecessary group.
+      const expressions = (ast.body as any).expressions || [ast.body];
+      const resultBlocks = transformNodeListToBlocks(expressions);
       console.log('--- DEBUG: STEP 4: Final blocks returned from parser ---');
       console.log(JSON.stringify(resultBlocks, null, 2));
       return resultBlocks;
@@ -54,6 +59,34 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
   }
 }
 
+// New function to process a list of nodes
+function transformNodeListToBlocks(expressions: any[]): Block[] {
+    console.log(`--- DEBUG: transformNodeListToBlocks: Processing expressions:`, JSON.stringify(expressions, null, 2));
+    const fusedBlocks: Block[] = [];
+    let currentLiteralText = '';
+
+    const pushLiteral = () => {
+        if (currentLiteralText) {
+            fusedBlocks.push(createLiteral(currentLiteralText));
+            currentLiteralText = '';
+        }
+    };
+
+    for (const expr of expressions) {
+        if (expr.type === 'Char' && expr.kind === 'simple' && !expr.escaped) {
+            currentLiteralText += expr.value;
+        } else {
+            pushLiteral();
+            fusedBlocks.push(...transformNodeToBlocks(expr));
+        }
+    }
+    pushLiteral();
+    
+    console.log(`--- DEBUG: transformNodeListToBlocks: Produced blocks:`, JSON.stringify(fusedBlocks, null, 2));
+    return fusedBlocks;
+}
+
+
 function transformNodeToBlocks(node: any): Block[] {
   if (!node) return [];
 
@@ -61,32 +94,21 @@ function transformNodeToBlocks(node: any): Block[] {
 
   switch (node.type) {
     case 'Alternative': {
-        const expressions = node.expressions;
-        console.log('--- DEBUG: ALTERNATIVE: Processing expressions:', JSON.stringify(expressions, null, 2));
-        
-        const fusedBlocks: Block[] = [];
-        let currentLiteralText = '';
-
-        const pushLiteral = () => {
-            if (currentLiteralText) {
-                fusedBlocks.push(createLiteral(currentLiteralText));
-                currentLiteralText = '';
-            }
-        };
-
-        for (const expr of expressions) {
-            if (expr.type === 'Char' && expr.kind === 'simple' && !expr.escaped) {
-                currentLiteralText += expr.value;
-            } else {
-                pushLiteral();
-                fusedBlocks.push(...transformNodeToBlocks(expr));
-            }
+        const expressions = node.expressions || [];
+        // An alternative inside another expression is just a sequence.
+        // If it contains more than one logical block, it should be grouped.
+        const blocks = transformNodeListToBlocks(expressions);
+        if (blocks.length > 1) {
+             const wrapperGroup: Block = {
+                id: generateId(),
+                type: BlockType.GROUP,
+                settings: { type: 'non-capturing' } as GroupSettings,
+                children: blocks,
+                isExpanded: true
+            };
+            return [wrapperGroup];
         }
-        pushLiteral();
-        
-        console.log('--- DEBUG: ALTERNATIVE: Produced blocks:', JSON.stringify(fusedBlocks, null, 2));
-
-        return fusedBlocks;
+        return blocks;
     }
 
     case 'Repetition': {
@@ -209,27 +231,10 @@ function transformNodeToBlocks(node: any): Block[] {
         const alternativesAstNodes = collectAlternatives(node);
         console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', JSON.stringify(alternativesAstNodes, null, 2));
         
-        const childrenBlockArrays = alternativesAstNodes.map(altNode => {
+        const children = alternativesAstNodes.flatMap(altNode => {
             if (!altNode) return [];
             return transformNodeToBlocks(altNode);
         });
-
-        console.log('--- DEBUG: DISJUNCTION: Processed alternatives into block arrays:', JSON.stringify(childrenBlockArrays, null, 2));
-
-        const children = childrenBlockArrays.map(blockArray => {
-            if (blockArray.length > 1) {
-                const wrapperGroup: Block = {
-                    id: generateId(),
-                    type: BlockType.GROUP,
-                    settings: { type: 'non-capturing' } as GroupSettings,
-                    children: blockArray,
-                    isExpanded: true
-                };
-                console.log('--- DEBUG: DISJUNCTION: Wrapping multi-block alternative in a group:', JSON.stringify(wrapperGroup, null, 2));
-                return wrapperGroup;
-            }
-            return blockArray[0];
-        }).filter(Boolean);
 
         console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.stringify(children, null, 2));
 
@@ -310,3 +315,5 @@ function transformNodeToBlocks(node: any): Block[] {
         return [];
   }
 }
+
+    
