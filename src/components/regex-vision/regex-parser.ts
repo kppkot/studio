@@ -19,12 +19,12 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
     const ast = regexpTree.parse(`/${escapedRegexString}/u`, { allowGroupNameDuplicates: true });
     
     console.log('--- DEBUG: STEP 2: Parsed AST from regexp-tree ---');
-    console.log(JSON.parse(JSON.stringify(ast.body)));
+    console.log(JSON.stringify(ast.body, null, 2));
 
     if (ast.body) {
       const resultBlocks = transformNodeToBlocks(ast.body);
       console.log('--- DEBUG: STEP 4: Final blocks returned from parser ---');
-      console.log(JSON.parse(JSON.stringify(resultBlocks)));
+      console.log(JSON.stringify(resultBlocks, null, 2));
       return resultBlocks;
     }
     return [];
@@ -62,7 +62,7 @@ function transformNodeToBlocks(node: any): Block[] {
   switch (node.type) {
     case 'Alternative': {
         const expressions = node.expressions;
-        console.log('--- DEBUG: ALTERNATIVE: Processing expressions:', JSON.parse(JSON.stringify(expressions)));
+        console.log('--- DEBUG: ALTERNATIVE: Processing expressions:', JSON.stringify(expressions, null, 2));
         
         const fusedBlocks: Block[] = [];
         let currentLiteralText = '';
@@ -84,9 +84,8 @@ function transformNodeToBlocks(node: any): Block[] {
         }
         pushLiteral();
         
-        console.log('--- DEBUG: ALTERNATIVE: Produced blocks:', JSON.parse(JSON.stringify(fusedBlocks)));
+        console.log('--- DEBUG: ALTERNATIVE: Produced blocks:', JSON.stringify(fusedBlocks, null, 2));
 
-        // Previous broken logic was here. Now it's just returning the blocks.
         return fusedBlocks;
     }
 
@@ -208,14 +207,14 @@ function transformNodeToBlocks(node: any): Block[] {
         };
         
         const alternativesAstNodes = collectAlternatives(node);
-        console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', JSON.parse(JSON.stringify(alternativesAstNodes)));
+        console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', JSON.stringify(alternativesAstNodes, null, 2));
         
         const childrenBlockArrays = alternativesAstNodes.map(altNode => {
             if (!altNode) return [];
             return transformNodeToBlocks(altNode);
         });
 
-        console.log('--- DEBUG: DISJUNCTION: Processed alternatives into block arrays:', JSON.parse(JSON.stringify(childrenBlockArrays)));
+        console.log('--- DEBUG: DISJUNCTION: Processed alternatives into block arrays:', JSON.stringify(childrenBlockArrays, null, 2));
 
         const children = childrenBlockArrays.map(blockArray => {
             if (blockArray.length > 1) {
@@ -226,13 +225,13 @@ function transformNodeToBlocks(node: any): Block[] {
                     children: blockArray,
                     isExpanded: true
                 };
-                console.log('--- DEBUG: DISJUNCTION: Wrapping multi-block alternative in a group:', JSON.parse(JSON.stringify(wrapperGroup)));
+                console.log('--- DEBUG: DISJUNCTION: Wrapping multi-block alternative in a group:', JSON.stringify(wrapperGroup, null, 2));
                 return wrapperGroup;
             }
             return blockArray[0];
         }).filter(Boolean);
 
-        console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.parse(JSON.stringify(children)));
+        console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.stringify(children, null, 2));
 
         const alternationBlock: Block = {
             id: newId,
@@ -246,7 +245,8 @@ function transformNodeToBlocks(node: any): Block[] {
     }
 
     case 'Assertion': {
-        console.log('--- DEBUG: STEP 3: Processing Assertion node ---', { kind: node.kind, negative: node.negative });
+        console.log('--- DEBUG: STEP 3: Processing Assertion node ---', JSON.stringify({ kind: node.kind, negative: node.negative }, null, 2));
+
         if (node.kind === '\\b' || node.kind === '\\B') {
             const anchorBlock: Block = {
                 id: newId,
