@@ -1,10 +1,10 @@
-
 import type { Block, CharacterClassSettings, ConditionalSettings, GroupSettings, LiteralSettings, LookaroundSettings, QuantifierSettings, AnchorSettings, BackreferenceSettings, GroupInfo, RegexStringPart } from './types';
 import { BlockType } from './types';
 
 export const generateId = (): string => Math.random().toString(36).substring(2, 11);
 
 const escapeRegexCharsForGenerator = (text: string): string => {
+  // Do not escape chars within a character class content
   return text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 }
 
@@ -37,7 +37,7 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
 
   const generateRecursive = (block: Block) => {
     console.log(`--- DEBUG: UTILS: Processing block ID ${block.id} of type ${block.type} ---`);
-    console.log(`--- DEBUG: UTILS: Block settings: ${JSON.stringify(block.settings, null, 2)}`);
+    console.log(`--- DEBUG: UTILS: Block settings:`, JSON.stringify(block.settings, null, 2));
     const settings = block.settings;
 
     const processChildren = (b: Block) => {
@@ -53,19 +53,16 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
         break;
       case BlockType.CHARACTER_CLASS:
         const ccSettings = settings as CharacterClassSettings;
-        const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '\\p{L}'];
-        if (ccSettings.pattern === '.') {
-            stringParts.push({ text: '.', blockId: block.id, blockType: block.type });
-            break;
-        }
-        let pattern;
-        if (!ccSettings.negated && specialShorthands.includes(ccSettings.pattern)) {
-          pattern = ccSettings.pattern;
+        const pattern = ccSettings.pattern;
+        
+        // Handle shorthands that should not be in brackets
+        if (['.', '\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '\\p{L}'].includes(pattern)) {
+             stringParts.push({ text: pattern, blockId: block.id, blockType: block.type });
         } else {
-          const content = block.children && block.children.length > 0 ? reconstructPatternFromChildren(block.children) : ccSettings.pattern || '';
-          pattern = `[${ccSettings.negated ? '^' : ''}${content}]`;
+             const content = ccSettings.pattern || '';
+             const fullPattern = `[${ccSettings.negated ? '^' : ''}${content}]`;
+             stringParts.push({ text: fullPattern, blockId: block.id, blockType: block.type });
         }
-        stringParts.push({ text: pattern, blockId: block.id, blockType: block.type });
         break;
       case BlockType.QUANTIFIER: {
         const qSettings = settings as QuantifierSettings;
@@ -154,7 +151,6 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
 };
 
 export const reconstructPatternFromChildren = (children: Block[]): string => {
-  if (!children) return '';
   return children.map(child => {
     if (child.type === BlockType.LITERAL) {
       return (child.settings as LiteralSettings).text;
@@ -165,37 +161,6 @@ export const reconstructPatternFromChildren = (children: Block[]): string => {
     return '';
   }).join('');
 };
-
-export const breakdownPatternIntoChildren = (pattern: string): Block[] => {
-  if (!pattern) return [];
-
-  const components: Block[] = [];
-  const predefinedRanges: { [key: string]: string } = { 'a-z': 'a-z', 'A-Z': 'A-Z', '0-9': '0-9' };
-  let remainingPattern = pattern;
-
-  Object.keys(predefinedRanges).forEach(rangeKey => {
-    if (remainingPattern.includes(rangeKey)) {
-      components.push({ id: generateId(), type: BlockType.CHARACTER_CLASS, settings: { pattern: rangeKey, negated: false } as CharacterClassSettings, children: [], isExpanded: false });
-      remainingPattern = remainingPattern.replace(new RegExp(rangeKey.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), '');
-    }
-  });
-  
-  const specialShorthands = ['\\d', '\\D', '\\w', '\\W', '\\s', '\\S'];
-  specialShorthands.forEach(shorthand => {
-    const escapedShorthand = shorthand.replace('\\', '\\\\');
-    if (remainingPattern.includes(shorthand)) {
-      components.push({ id: generateId(), type: BlockType.CHARACTER_CLASS, settings: { pattern: shorthand, negated: false } as CharacterClassSettings, children: [], isExpanded: false });
-      remainingPattern = remainingPattern.replace(new RegExp(escapedShorthand, 'g'), '');
-    }
-  });
-
-  if (remainingPattern.length > 0) {
-     for (const char of remainingPattern) {
-       components.push({ id: generateId(), type: BlockType.LITERAL, settings: { text: char } as LiteralSettings, children: [], isExpanded: false });
-    }
-  }
-  return components;
-}
 
 export const processAiBlocks = (aiBlocks: any[]): Block[] => {
   if (!aiBlocks || !Array.isArray(aiBlocks)) {
