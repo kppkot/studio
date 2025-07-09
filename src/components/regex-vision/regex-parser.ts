@@ -7,16 +7,9 @@ import { generateId, createLiteral } from './utils';
 export function parseRegexWithLibrary(regexString: string): Block[] {
   try {
     console.log('--- DEBUG: STEP 1: Input to parseRegexWithLibrary ---');
-    console.log(`Regex String: ${regexString}`);
+    console.log('Regex String:', regexString);
 
-    // Workaround for regexp-tree not handling escaped slashes well.
-    const placeholder = '\uE000';
-    const escapedRegexString = regexString
-      .replace(/\\\//g, placeholder)
-      .replace(/\//g, '\\/')
-      .replace(new RegExp(placeholder, 'g'), '\\/');
-
-    const ast = regexpTree.parse(`/${escapedRegexString}/u`, { allowGroupNameDuplicates: true });
+    const ast = regexpTree.parse(`/${regexString}/u`, { allowGroupNameDuplicates: true });
     
     console.log('--- DEBUG: STEP 2: Parsed AST from regexp-tree ---');
     console.log(JSON.stringify(ast.body, null, 2));
@@ -201,42 +194,47 @@ function transformNodeToBlocks(node: any): Block[] {
     }
 
     case 'Disjunction': {
-        console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', JSON.stringify([node.left, node.right], null, 2));
+      console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', JSON.stringify([node.left, node.right], null, 2));
 
-        const leftBlocks = transformNodeToBlocks(node.left);
-        const rightBlocks = transformNodeToBlocks(node.right);
-        
-        const processAlternative = (blocks: Block[]): Block[] => {
-            if (blocks.length > 1) {
-                return [{
-                    id: generateId(),
-                    type: BlockType.GROUP,
-                    settings: { type: 'non-capturing' } as GroupSettings,
-                    children: blocks,
-                    isExpanded: true
-                }];
-            }
-            return blocks;
-        };
+      let leftBlocks = transformNodeToBlocks(node.left);
+      let rightBlocks = transformNodeToBlocks(node.right);
+      
+      // Corrective logic: wrap multi-block alternatives in a non-capturing group
+      // This is the core fix.
+      if (leftBlocks.length > 1) {
+        leftBlocks = [{
+          id: generateId(),
+          type: BlockType.GROUP,
+          settings: { type: 'non-capturing' } as GroupSettings,
+          children: leftBlocks,
+          isExpanded: true,
+        }];
+      }
 
-        const alternationBlock: Block = {
-            id: newId,
-            type: BlockType.ALTERNATION,
-            settings: {},
-            children: [
-                ...processAlternative(leftBlocks),
-                ...processAlternative(rightBlocks)
-            ],
-            isExpanded: true,
-        };
+      if (rightBlocks.length > 1) {
+         rightBlocks = [{
+          id: generateId(),
+          type: BlockType.GROUP,
+          settings: { type: 'non-capturing' } as GroupSettings,
+          children: rightBlocks,
+          isExpanded: true,
+        }];
+      }
 
-        console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.stringify(alternationBlock.children, null, 2));
-        
-        return [alternationBlock];
+      const alternationBlock: Block = {
+        id: newId,
+        type: BlockType.ALTERNATION,
+        settings: {},
+        children: [...leftBlocks, ...rightBlocks],
+        isExpanded: true,
+      };
+
+      console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.stringify(alternationBlock.children, null, 2));
+      return [alternationBlock];
     }
-
+    
     case 'Assertion': {
-        console.log('--- DEBUG: STEP 3: Processing Assertion node ---', JSON.stringify({ kind: node.kind, negative: node.negative }, null, 2));
+        console.log('--- DEBUG: STEP 3: Processing Assertion node ---', JSON.stringify({kind: node.kind}, null, 2));
 
         let blockType: BlockType | null = null;
         let settings: any = {};
@@ -249,9 +247,17 @@ function transformNodeToBlocks(node: any): Block[] {
             settings.type = `${prefix}-${node.kind.toLowerCase()}`;
             children = node.assertion ? transformNodeToBlocks(node.assertion) : [];
             isExpanded = true;
-        } else if (node.kind === '^' || node.kind === '$' || node.kind === '\\b' || node.kind === '\\B') {
-            blockType = BlockType.ANCHOR;
-            settings.type = node.kind;
+        } else {
+             const anchorTypeMap: { [key: string]: AnchorSettings['type'] } = {
+                '^': '^',
+                '$': '$',
+                '\\b': '\\b',
+                '\\B': '\\B'
+            };
+            if (Object.keys(anchorTypeMap).includes(node.kind)) {
+                 blockType = BlockType.ANCHOR;
+                 settings.type = anchorTypeMap[node.kind];
+            }
         }
 
         if (blockType) {
