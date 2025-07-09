@@ -37,7 +37,7 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
 
   const generateRecursive = (block: Block) => {
     console.log(`--- DEBUG: UTILS: Processing block ID ${block.id} of type ${block.type} ---`);
-    console.log(`--- DEBUG: UTILS: Block settings:`, JSON.stringify(block.settings, null, 2));
+    console.log(`--- DEBUG: UTILS: Block settings: ${JSON.stringify(block.settings, null, 2)}`);
     const settings = block.settings;
 
     const processChildren = (b: Block) => {
