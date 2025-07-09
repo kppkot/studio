@@ -104,10 +104,11 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
         break;
       case BlockType.ANCHOR:
         console.log('--- DEBUG: STEP 5: Generating string from ANCHOR block ---');
-        console.log('Anchor settings:', settings);
+        console.log('Anchor settings:', JSON.stringify(settings, null, 2));
         stringParts.push({ text: (settings as AnchorSettings).type, blockId: block.id, blockType: block.type });
         break;
       case BlockType.ALTERNATION:
+        if (!block.children || block.children.length === 0) break;
         block.children.forEach((child, index) => {
           generateRecursive(child);
           if (index < block.children.length - 1) {
