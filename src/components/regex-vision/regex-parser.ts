@@ -4,12 +4,12 @@ import { BlockType } from './types';
 import { generateId } from './utils';
 
 // Main exported function
-export function parseRegexWithLibrary(regexString: string): Block[] {
+export function parseRegexWithLibrary(regexString: string): { blocks: Block[], ast: object } {
   console.log('--- DEBUG: STEP 1: Input to parseRegexWithLibrary ---');
   console.log('Regex String:', regexString);
 
   if (!regexString.trim()) {
-    return [];
+    return { blocks: [], ast: {} };
   }
   
   try {
@@ -21,31 +21,30 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
 
     console.log('--- DEBUG: STEP 4: Final blocks returned from parser ---');
     console.log(JSON.stringify(resultBlocks, null, 2));
-    return resultBlocks;
+    return { blocks: resultBlocks, ast: ast.body };
 
   } catch (error) {
-    if (error instanceof Error) {
-      if (error.message.includes('Unexpected quantifier')) {
-        throw new Error('Синтаксическая ошибка: квантификатор (например, *, +, ?) оказался в неожиданном месте, ему нечего повторять.');
-      }
-      if (error.message.includes('Unmatched left parenthesis')) {
-        throw new Error('Синтаксическая ошибка: есть незакрытая открывающая скобка `(`.');
-      }
-      if (error.message.includes('Unmatched right parenthesis')) {
-        throw new Error('Синтаксическая ошибка: найдена лишняя закрывающая скобка `)`.');
-      }
-       if (error.message.includes('Invalid group')) {
-        throw new Error('Синтаксическая ошибка: неверная или неполная группа.');
-      }
-      if (error.message.includes('Invalid character class')) {
-        throw new Error('Синтаксическая ошибка: неверно сформирован символьный класс (выражение в квадратных скобках `[]`).');
-      }
-      if (error.message.includes('Trailing backslash')) {
-        throw new Error('Синтаксическая ошибка: выражение не может заканчиваться одиночным обратным слэшем `\\`.');
-      }
-      throw new Error(`Ошибка синтаксиса в выражении. ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : "Неизвестная ошибка парсера.";
+    let friendlyMessage = `Ошибка синтаксиса в выражении. ${errorMessage}`;
+    if (errorMessage.includes('Unexpected quantifier')) {
+      friendlyMessage = 'Синтаксическая ошибка: квантификатор (например, *, +, ?) оказался в неожиданном месте, ему нечего повторять.';
     }
-    throw new Error('Произошла неизвестная ошибка при разборе выражения.');
+    if (errorMessage.includes('Unmatched left parenthesis')) {
+      friendlyMessage = 'Синтаксическая ошибка: есть незакрытая открывающая скобка `(`.';
+    }
+    if (errorMessage.includes('Unmatched right parenthesis')) {
+      friendlyMessage = 'Синтаксическая ошибка: найдена лишняя закрывающая скобка `)`.';
+    }
+     if (errorMessage.includes('Invalid group')) {
+      friendlyMessage = 'Синтаксическая ошибка: неверная или неполная группа.';
+    }
+    if (errorMessage.includes('Invalid character class')) {
+      friendlyMessage = 'Синтаксическая ошибка: неверно сформирован символьный класс (выражение в квадратных скобках `[]`).';
+    }
+    if (errorMessage.includes('Trailing backslash')) {
+      friendlyMessage = 'Синтаксическая ошибка: выражение не может заканчиваться одиночным обратным слэшем `\\`.';
+    }
+    throw new Error(friendlyMessage);
   }
 }
 
@@ -53,12 +52,58 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
 function transformNodeToBlocks(node: any): Block[] {
   if (!node) return [];
 
+  // This function handles sequences of expressions like 'abc' or the content of a group.
+  const transformNodeListToBlocks = (expressions: any[]): Block[] => {
+    console.log('--- DEBUG: transformNodeListToBlocks: Processing expressions:', expressions);
+    const blocks: Block[] = [];
+    for (const expr of expressions) {
+      blocks.push(...transformNodeToBlocks(expr));
+    }
+    
+    // This is the "smart" part that was causing issues. We'll try to combine adjacent simple characters.
+    const combinedBlocks: Block[] = [];
+    let currentLiteral = '';
+
+    for (const block of blocks) {
+      const isSimpleLiteral = block.type === BlockType.LITERAL && !(block.settings as LiteralSettings).isRawRegex;
+      
+      if (isSimpleLiteral) {
+        currentLiteral += (block.settings as LiteralSettings).text;
+      } else {
+        if (currentLiteral) {
+          combinedBlocks.push({
+            id: generateId(),
+            type: BlockType.LITERAL,
+            settings: { text: currentLiteral, isRawRegex: false } as LiteralSettings,
+            children: [],
+            isExpanded: false
+          });
+          currentLiteral = '';
+        }
+        combinedBlocks.push(block);
+      }
+    }
+
+    if (currentLiteral) {
+      combinedBlocks.push({
+        id: generateId(),
+        type: BlockType.LITERAL,
+        settings: { text: currentLiteral, isRawRegex: false } as LiteralSettings,
+        children: [],
+        isExpanded: false
+      });
+    }
+
+    console.log('--- DEBUG: transformNodeListToBlocks: Produced blocks:', combinedBlocks);
+    return combinedBlocks;
+  };
+
   const newId = generateId();
 
   switch (node.type) {
     // A sequence of expressions
     case 'Alternative':
-      return node.expressions.flatMap((expr: any) => transformNodeToBlocks(expr));
+      return transformNodeListToBlocks(node.expressions);
 
     // A repeating element, e.g., a* or a{1,3}
     case 'Repetition': {
@@ -110,8 +155,8 @@ function transformNodeToBlocks(node: any): Block[] {
             }];
         }
         // Unicode properties like \p{L}
-        if (node.kind === 'unicode' && node.symbol === 'L') {
-            return [{
+        if (node.kind === 'unicode' && (node.value === 'L' || (node.property === 'L' && node.value ==='L'))) {
+             return [{
                 id: newId,
                 type: BlockType.CHARACTER_CLASS,
                 settings: { pattern: '\\p{L}', negated: false } as CharacterClassSettings,
@@ -169,15 +214,18 @@ function transformNodeToBlocks(node: any): Block[] {
         // Helper to process each side of the disjunction
         const processAlternative = (altNode: any): Block[] => {
             if (!altNode) return [];
-            // The direct child of a disjunction is an 'Alternative', which contains the actual expressions.
-            return altNode.expressions.flatMap((expr: any) => transformNodeToBlocks(expr));
+            // A Disjunction's child can be another Disjunction or an Alternative.
+            if (altNode.type === 'Disjunction') {
+                return transformNodeToBlocks(altNode);
+            }
+            return transformNodeListToBlocks(altNode.expressions);
         };
         
         let leftBlocks = processAlternative(node.left);
         let rightBlocks = processAlternative(node.right);
 
-        // This is the key logic: if an alternative expanded into more than one block,
-        // it needs to be wrapped in a non-capturing group to preserve its meaning.
+        // If an alternative consists of more than one block, it needs to be wrapped
+        // in a non-capturing group to preserve its meaning within the alternation.
         if (leftBlocks.length > 1) {
             leftBlocks = [{
                 id: generateId(),
@@ -187,7 +235,7 @@ function transformNodeToBlocks(node: any): Block[] {
                 isExpanded: true,
             }];
         }
-        if (rightBlocks.length > 1) {
+         if (rightBlocks.length > 1) {
             rightBlocks = [{
                 id: generateId(),
                 type: BlockType.GROUP,
@@ -211,6 +259,7 @@ function transformNodeToBlocks(node: any): Block[] {
     
     // An assertion, e.g., ^, $, \b, (?=...)
     case 'Assertion': {
+        console.log("--- DEBUG: STEP 3: Processing Assertion node ---", { kind: node.kind });
         let blockType: BlockType | null = null;
         let settings: any = {};
         let children: Block[] = [];

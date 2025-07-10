@@ -25,7 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Layers, Edit3, Code2, Plus, FoldVertical, UnfoldVertical, Menu, Puzzle, Share2, DownloadCloud, UploadCloud, Loader2 } from 'lucide-react';
+import { Layers, Edit3, Code2, Plus, FoldVertical, UnfoldVertical, Menu, Puzzle, Share2, DownloadCloud, UploadCloud, Loader2, Binary } from 'lucide-react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import AnalysisPanel from './AnalysisPanel';
@@ -88,6 +88,7 @@ const RegexVisionWorkspace: React.FC = () => {
     stringParts: [],
   });
   const [naturalLanguageQuery, setNaturalLanguageQuery] = useState('');
+  const [rawAst, setRawAst] = useState<object | null>(null);
 
   // Drag and Drop State
   const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
@@ -765,6 +766,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const handleParseRegexString = useCallback((regexString: string) => {
     if (!regexString) {
       setBlocks([]);
+      setRawAst(null);
       return;
     }
 
@@ -786,8 +788,9 @@ const RegexVisionWorkspace: React.FC = () => {
 
     setIsParsing(true);
     try {
-      const parsedBlocks = parseRegexWithLibrary(processedRegex);
+      const { blocks: parsedBlocks, ast } = parseRegexWithLibrary(processedRegex);
       setBlocks(parsedBlocks);
+      setRawAst(ast);
       setNaturalLanguageQuery('');
 
       if (extractedFlags) {
@@ -806,6 +809,7 @@ const RegexVisionWorkspace: React.FC = () => {
         description: `Не удалось разобрать выражение: ${message}`,
         variant: "destructive",
       });
+      setRawAst({ error: message, originalRegex: processedRegex });
     } finally {
       setIsParsing(false);
     }
@@ -998,15 +1002,34 @@ const RegexVisionWorkspace: React.FC = () => {
             <ResizableHandle withHandle />
 
             <ResizablePanel defaultSize={25} minSize={25}>
-                <div className="h-full p-2">
-                    <TestArea
-                        testText={testText}
-                        onTestTextChange={setTestText}
-                        matches={matches}
-                        generatedRegex={regexOutputState.regexString}
-                        highlightedGroupIndex={highlightedGroupIndex}
-                        regexError={regexError}
-                    />
+                <div className="h-full p-2 flex flex-col gap-2">
+                    <div className="flex-grow min-h-0">
+                      <TestArea
+                          testText={testText}
+                          onTestTextChange={setTestText}
+                          matches={matches}
+                          generatedRegex={regexOutputState.regexString}
+                          highlightedGroupIndex={highlightedGroupIndex}
+                          regexError={regexError}
+                      />
+                    </div>
+                    {rawAst && (
+                      <Card className="flex-shrink-0">
+                        <CardHeader className="py-2 px-3 border-b">
+                            <CardTitle className="text-sm flex items-center gap-2">
+                                <Binary size={16} className="text-muted-foreground"/>
+                                Отладочный вывод AST (дерево из библиотеки)
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-2">
+                          <ScrollArea className="h-32">
+                              <pre className="text-xs font-mono bg-muted p-2 rounded-md">
+                                  {JSON.stringify(rawAst, null, 2)}
+                              </pre>
+                          </ScrollArea>
+                        </CardContent>
+                      </Card>
+                    )}
                     <AnalysisPanel
                       originalQuery={naturalLanguageQuery}
                       generatedRegex={regexOutputState.regexString}
