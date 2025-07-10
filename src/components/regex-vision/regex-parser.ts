@@ -186,24 +186,14 @@ function transformNodeToBlocks(node: any): Block[] {
             
             const leftBlocks = transformNodeToBlocks(node.left);
             const rightBlocks = transformNodeToBlocks(node.right);
+             
+             // This is the simplest possible logic. Create an ALTERNATION block,
+             // and its children are the results of parsing the left and right sides.
+             const finalChildren = [
+                ...leftBlocks,
+                ...rightBlocks
+             ];
 
-            // This is the core fix. Each side of the | is processed. If one side
-            // results in multiple blocks (like http + s + ?), we wrap it in a non-capturing group
-            // to preserve its logical unity.
-            const wrapIfNeeded = (blocks: Block[]): Block[] => {
-                if (blocks.length > 1) {
-                    return [{
-                        id: generateId(),
-                        type: BlockType.GROUP,
-                        settings: { type: 'non-capturing' } as GroupSettings,
-                        children: blocks,
-                        isExpanded: true,
-                    }];
-                }
-                return blocks;
-            };
-
-            const finalChildren = [...wrapIfNeeded(leftBlocks), ...wrapIfNeeded(rightBlocks)];
              console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.stringify(finalChildren, null, 2));
 
              return [{
@@ -251,5 +241,3 @@ function transformNodeToBlocks(node: any): Block[] {
             return [];
     }
 }
-
-    
