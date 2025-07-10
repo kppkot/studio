@@ -249,10 +249,47 @@ export const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
     return blocks;
 };
 
-// Naive implementation that does not handle deeper nesting correctly
+// This function combines adjacent literal blocks into a single block.
 export const combineLiterals = (blocks: Block[]): Block[] => {
-    return blocks;
-}
+  if (!blocks || blocks.length === 0) {
+    return [];
+  }
+
+  const newBlocks: Block[] = [];
+  let currentLiteral: Block | null = null;
+
+  for (const block of blocks) {
+    // If we have a non-raw literal and there's a current literal being built
+    if (block.type === BlockType.LITERAL && !(block.settings as LiteralSettings).isRawRegex) {
+      if (currentLiteral) {
+        // Append text to the current literal
+        (currentLiteral.settings as LiteralSettings).text += (block.settings as LiteralSettings).text;
+      } else {
+        // Start a new literal block
+        currentLiteral = cloneBlockForState(block);
+      }
+    } else {
+      // If we encounter a non-literal block, push the current literal (if it exists)
+      if (currentLiteral) {
+        newBlocks.push(currentLiteral);
+        currentLiteral = null;
+      }
+      // Push the current non-literal block, and recursively combine its children
+      const newBlock = { ...block };
+      if (newBlock.children) {
+        newBlock.children = combineLiterals(newBlock.children);
+      }
+      newBlocks.push(newBlock);
+    }
+  }
+
+  // Push any remaining literal at the end
+  if (currentLiteral) {
+    newBlocks.push(currentLiteral);
+  }
+
+  return newBlocks;
+};
 
 export const findBlockAndParent = (
   nodes: Block[],

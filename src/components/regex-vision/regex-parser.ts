@@ -135,22 +135,20 @@ function transformNodeToBlocks(node: any): Block[] {
 
         // The OR operator |
         case 'Disjunction': {
-             // THIS IS THE CRITICAL PART
-             // The left and right side are entire alternatives.
-             // They must be processed and kept separate.
-             const leftBranch = transformNodeToBlocks(node.left);
-             const rightBranch = transformNodeToBlocks(node.right);
+             // THIS IS THE CRITICAL PART - NO WRAPPING!
+             const leftBlocks = transformNodeToBlocks(node.left);
+             const rightBlocks = transformNodeToBlocks(node.right);
+
+             // To keep the left and right sides as distinct alternatives,
+             // we create a placeholder group for each.
+             const leftGroup: Block = { id: generateId(), type: BlockType.GROUP, settings: { type: 'non-capturing' }, children: leftBlocks, isExpanded: true };
+             const rightGroup: Block = { id: generateId(), type: BlockType.GROUP, settings: { type: 'non-capturing' }, children: rightBlocks, isExpanded: true };
 
              return [{
                 id: newId,
                 type: BlockType.ALTERNATION,
                 settings: {},
-                children: [
-                    // A group to hold the left side
-                    { id: generateId(), type: BlockType.GROUP, settings: { type: 'non-capturing' }, children: leftBranch, isExpanded: true },
-                    // A group to hold the right side
-                    { id: generateId(), type: BlockType.GROUP, settings: { type: 'non-capturing' }, children: rightBranch, isExpanded: true },
-                ],
+                children: [ leftGroup, rightGroup ],
                 isExpanded: true,
             }];
         }
