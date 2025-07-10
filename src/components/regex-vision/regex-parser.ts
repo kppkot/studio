@@ -1,25 +1,24 @@
 import regexpTree from 'regexp-tree';
-import type { Block, CharacterClassSettings, LiteralSettings, QuantifierSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, GroupSettings, ConditionalSettings } from './types';
+import type { Block, CharacterClassSettings, LiteralSettings, QuantifierSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, GroupSettings } from './types';
 import { BlockType } from './types';
-import { generateId, createLiteral } from './utils';
+import { generateId } from './utils';
 
 // Main exported function
 export function parseRegexWithLibrary(regexString: string): Block[] {
+  console.log('--- DEBUG: STEP 1: Input to parseRegexWithLibrary ---');
+  console.log('Regex String:', regexString);
+
+  if (!regexString.trim()) {
+    return [];
+  }
+  
   try {
-    console.log('--- DEBUG: STEP 1: Input to parseRegexWithLibrary ---');
-    console.log('Regex String:', regexString);
-
-    if (!regexString.trim()) {
-      return [];
-    }
-
     const ast = regexpTree.parse(`/${regexString}/u`, { allowGroupNameDuplicates: true });
-    
     console.log('--- DEBUG: STEP 2: Parsed AST from regexp-tree ---');
     console.log(JSON.stringify(ast.body, null, 2));
-
-    const resultBlocks = transformNodeToBlocks(ast.body);
     
+    const resultBlocks = transformNodeToBlocks(ast.body);
+
     console.log('--- DEBUG: STEP 4: Final blocks returned from parser ---');
     console.log(JSON.stringify(resultBlocks, null, 2));
     return resultBlocks;
@@ -57,29 +56,11 @@ function transformNodeToBlocks(node: any): Block[] {
   const newId = generateId();
 
   switch (node.type) {
+    // A sequence of expressions
     case 'Alternative':
-      // This is a sequence of expressions. Fuse adjacent simple characters.
-      const fusedBlocks: Block[] = [];
-      let currentLiteralText = '';
+      return node.expressions.flatMap((expr: any) => transformNodeToBlocks(expr));
 
-      const pushCurrentLiteral = () => {
-          if (currentLiteralText) {
-              fusedBlocks.push(createLiteral(currentLiteralText));
-              currentLiteralText = '';
-          }
-      };
-      
-      (node.expressions || []).forEach((expr: any) => {
-          if (expr.type === 'Char' && expr.kind === 'simple') {
-              currentLiteralText += expr.value;
-          } else {
-              pushCurrentLiteral();
-              fusedBlocks.push(...transformNodeToBlocks(expr));
-          }
-      });
-      pushCurrentLiteral();
-      return fusedBlocks;
-
+    // A repeating element, e.g., a* or a{1,3}
     case 'Repetition': {
         const subjectBlocks = transformNodeToBlocks(node.expression);
         const q = node.quantifier;
@@ -99,7 +80,7 @@ function transformNodeToBlocks(node: any): Block[] {
                 break;
         }
 
-        if (type === null) return subjectBlocks;
+        if (type === null) return subjectBlocks; // Should not happen with valid regex
 
         const quantifierBlock: Block = {
             id: generateId(),
@@ -116,8 +97,10 @@ function transformNodeToBlocks(node: any): Block[] {
         return [...subjectBlocks, quantifierBlock];
     }
 
+    // A single character or escape sequence
     case 'Char': {
         const value = node.value;
+        // Meta characters like \d, \s, .
         if (node.kind === 'meta' && ['.', '\\d', '\\D', '\\w', '\\W', '\\s', '\\S'].includes(value)) {
              return [{
                 id: newId,
@@ -126,6 +109,7 @@ function transformNodeToBlocks(node: any): Block[] {
                 children: [],
             }];
         }
+        // Unicode properties like \p{L}
         if (node.kind === 'unicode' && node.symbol === 'L') {
             return [{
                 id: newId,
@@ -134,9 +118,17 @@ function transformNodeToBlocks(node: any): Block[] {
                 children: [],
             }];
         }
-        return [createLiteral(value)];
+        // Simple characters
+        return [{
+          id: newId,
+          type: BlockType.LITERAL,
+          settings: { text: value, isRawRegex: false } as LiteralSettings,
+          children: [],
+          isExpanded: false
+        }];
     }
 
+    // A character class, e.g., [a-z]
     case 'CharacterClass': {
       const pattern = node.expressions.map((expr: any) => regexpTree.generate(expr)).join('');
       return [{
@@ -147,6 +139,7 @@ function transformNodeToBlocks(node: any): Block[] {
       }];
     }
 
+    // A group, e.g., (...) or (?:...)
     case 'Group': {
       let groupType: GroupSettings['type'] = 'capturing';
       let name: string | undefined = undefined;
@@ -169,39 +162,23 @@ function transformNodeToBlocks(node: any): Block[] {
       }];
     }
 
+    // Alternation, e.g., a|b
     case 'Disjunction': {
-        console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', JSON.stringify({ left: node.left, right: node.right }, null, 2));
+        const left = node.left ? transformNodeToBlocks(node.left) : [];
+        const right = node.right ? transformNodeToBlocks(node.right) : [];
 
-        const leftBlocks = transformNodeToBlocks(node.left);
-        const rightBlocks = transformNodeToBlocks(node.right);
-        
-        // This is the core simplification. If an alternative is composed of multiple blocks,
-        // it must be wrapped in a non-capturing group to preserve its meaning within the alternation.
-        const processAlternative = (blocks: Block[]): Block => {
-            if (blocks.length === 1) {
-                return blocks[0];
-            }
-            return {
-                id: generateId(),
-                type: BlockType.GROUP,
-                settings: { type: 'non-capturing' } as GroupSettings,
-                children: blocks,
-                isExpanded: true,
-            };
-        };
-
-        const finalChildren = [processAlternative(leftBlocks), processAlternative(rightBlocks)];
-        console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.stringify(finalChildren, null, 2));
-
+        // Here we just flatten the two sides into one list for the alternation block.
+        // This is the simplest possible interpretation of the AST.
         return [{
             id: newId,
             type: BlockType.ALTERNATION,
             settings: {},
-            children: finalChildren,
+            children: [...left, ...right],
             isExpanded: true,
         }];
     }
     
+    // An assertion, e.g., ^, $, \b, (?=...)
     case 'Assertion': {
         let blockType: BlockType | null = null;
         let settings: any = {};
@@ -237,6 +214,7 @@ function transformNodeToBlocks(node: any): Block[] {
         return [];
     }
 
+    // A backreference, e.g., \1 or \k<name>
     case 'Backreference': {
        const ref = node.number ? String(node.number) : node.name;
        return [{
@@ -247,16 +225,9 @@ function transformNodeToBlocks(node: any): Block[] {
       }];
     }
 
+    // Default case for any unhandled node type
     default:
-        if (node.raw) {
-             return [{
-                id: newId,
-                type: BlockType.LITERAL,
-                settings: { text: node.raw, isRawRegex: true } as LiteralSettings,
-                children: [],
-            }];
-        }
-        console.warn(`Unhandled AST node type: ${node.type}`);
+        console.warn(`Unhandled AST node type: ${node.type}. Raw value: ${node.raw || 'N/A'}`);
         return [];
   }
 }
