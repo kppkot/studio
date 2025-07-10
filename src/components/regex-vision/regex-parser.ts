@@ -52,39 +52,39 @@ export function parseRegexWithLibrary(regexString: string): { blocks: Block[], a
 // This function specifically handles 'Alternative' nodes from the AST.
 // It combines consecutive characters into single LITERAL blocks.
 function transformAlternative(expressions: any[]): Block[] {
-    const combinedExpressions: Block[] = [];
+    const combinedBlocks: Block[] = [];
     let currentLiteral = '';
 
     const flushLiteral = () => {
         if (currentLiteral) {
-            combinedExpressions.push({
+            combinedBlocks.push({
                 id: generateId(),
                 type: BlockType.LITERAL,
                 settings: { text: currentLiteral, isRawRegex: false } as LiteralSettings,
                 children: [],
+                isExpanded: false
             });
             currentLiteral = '';
         }
     };
 
     for (const expr of expressions) {
-        // If it's a simple character, add it to our running literal string.
         if (expr.type === 'Char' && expr.kind === 'simple') {
             currentLiteral += expr.value;
         } else {
-            // If we hit something that's NOT a simple character (like a quantifier or group),
-            // first push any existing literal, then process the complex node.
             flushLiteral();
-            combinedExpressions.push(...transformNodeToBlocks(expr));
+            // Process complex nodes like Repetition, Group, etc.
+            const nestedBlocks = transformNodeToBlocks(expr);
+            combinedBlocks.push(...nestedBlocks);
         }
     }
-    // Push any remaining literal at the end.
-    flushLiteral();
-    return combinedExpressions;
+
+    flushLiteral(); // Add any remaining literal string
+    return combinedBlocks;
 }
 
 
-// Simplified version that relies more on the library's structure.
+// The one and only recursive transformer.
 function transformNodeToBlocks(node: any): Block[] {
     if (!node) return [];
 
@@ -92,11 +92,14 @@ function transformNodeToBlocks(node: any): Block[] {
 
     switch (node.type) {
         case 'Alternative': {
+             // Let the specialized function handle this
             return transformAlternative(node.expressions);
         }
 
         case 'Repetition': {
+            // Process the expression that is being repeated
             const subjectBlocks = transformNodeToBlocks(node.expression);
+
             const q = node.quantifier;
             let type: QuantifierSettings['type'] | null = null;
             let min, max;
@@ -114,7 +117,7 @@ function transformNodeToBlocks(node: any): Block[] {
                     break;
             }
 
-            if (type === null) return subjectBlocks;
+            if (type === null) return subjectBlocks; // Should not happen with valid regex
 
             const quantifierBlock: Block = {
                 id: generateId(),
@@ -126,11 +129,13 @@ function transformNodeToBlocks(node: any): Block[] {
                 children: [],
             };
             
+            // The quantifier applies to the last block of the subject.
             return [...subjectBlocks, quantifierBlock];
         }
 
         case 'Char': {
             const value = node.value;
+            // Handle meta characters that are standalone blocks
             if (node.kind === 'meta' && ['.', '\\d', '\\D', '\\w', '\\W', '\\s', '\\S'].includes(value)) {
                 return [{
                     id: newId, type: BlockType.CHARACTER_CLASS,
@@ -145,7 +150,7 @@ function transformNodeToBlocks(node: any): Block[] {
                     children: [],
                 }];
             }
-            // This case should ideally be handled within 'Alternative' now, but kept as a fallback for single chars.
+            // For simple characters, we return them directly. transformAlternative will group them.
             return [{
                 id: newId, type: BlockType.LITERAL,
                 settings: { text: value, isRawRegex: false } as LiteralSettings,
@@ -176,31 +181,25 @@ function transformNodeToBlocks(node: any): Block[] {
             return [{
                 id: newId, type: BlockType.GROUP,
                 settings: { type: groupType, name } as GroupSettings,
-                children: transformNodeToBlocks(node.expression),
+                children: transformNodeToBlocks(node.expression), // Recurse on the content of the group
                 isExpanded: true,
             }];
         }
 
         case 'Disjunction': {
-             console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', { left: node.left, right: node.right });
-            
-            const leftBlocks = transformNodeToBlocks(node.left);
-            const rightBlocks = transformNodeToBlocks(node.right);
-             
-             // This is the simplest possible logic. Create an ALTERNATION block,
-             // and its children are the results of parsing the left and right sides.
-             const finalChildren = [
-                ...leftBlocks,
-                ...rightBlocks
-             ];
-
-             console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.stringify(finalChildren, null, 2));
+             // This is the OR operator `|`
+             const leftBranch = transformNodeToBlocks(node.left);
+             const rightBranch = transformNodeToBlocks(node.right);
 
              return [{
                 id: newId,
                 type: BlockType.ALTERNATION,
                 settings: {},
-                children: finalChildren,
+                children: [
+                    // Each branch of the alternation is its own self-contained set of blocks
+                    ...leftBranch,
+                    ...rightBranch
+                ],
                 isExpanded: true,
             }];
         }
