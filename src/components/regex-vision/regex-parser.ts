@@ -49,6 +49,7 @@ export function parseRegexWithLibrary(regexString: string): { blocks: Block[], a
   }
 }
 
+// Simplified version that relies more on the library's structure.
 function transformNodeToBlocks(node: any): Block[] {
     if (!node) return [];
 
@@ -56,7 +57,32 @@ function transformNodeToBlocks(node: any): Block[] {
 
     switch (node.type) {
         case 'Alternative': {
-            return node.expressions.flatMap(transformNodeToBlocks);
+             // Combine consecutive Char nodes into a single Literal block
+            const combinedExpressions: Block[] = [];
+            let currentLiteral = '';
+
+            const flushLiteral = () => {
+                if (currentLiteral) {
+                    combinedExpressions.push({
+                        id: generateId(),
+                        type: BlockType.LITERAL,
+                        settings: { text: currentLiteral, isRawRegex: false } as LiteralSettings,
+                        children: [],
+                    });
+                    currentLiteral = '';
+                }
+            };
+
+            for (const expr of node.expressions) {
+                if (expr.type === 'Char' && expr.kind === 'simple') {
+                    currentLiteral += expr.value;
+                } else {
+                    flushLiteral();
+                    combinedExpressions.push(...transformNodeToBlocks(expr));
+                }
+            }
+            flushLiteral();
+            return combinedExpressions;
         }
 
         case 'Repetition': {
@@ -102,18 +128,18 @@ function transformNodeToBlocks(node: any): Block[] {
                     children: [],
                 }];
             }
-            if (node.kind === 'unicode' && (node.property === 'L' || node.value === 'L')) {
+             if (node.kind === 'unicode' && (node.property === 'L' || node.value === 'L')) {
                 return [{
                     id: newId, type: BlockType.CHARACTER_CLASS,
                     settings: { pattern: '\\p{L}', negated: false } as CharacterClassSettings,
                     children: [],
                 }];
             }
+            // This case should ideally be handled within 'Alternative' now, but kept as a fallback.
             return [{
                 id: newId, type: BlockType.LITERAL,
                 settings: { text: value, isRawRegex: false } as LiteralSettings,
                 children: [],
-                isExpanded: false
             }];
         }
 
@@ -151,27 +177,11 @@ function transformNodeToBlocks(node: any): Block[] {
             const leftBlocks = transformNodeToBlocks(node.left);
             const rightBlocks = transformNodeToBlocks(node.right);
 
-            const wrapIfNeeded = (blocks: Block[]): Block => {
-                if (blocks.length === 1) {
-                    return blocks[0];
-                }
-                return {
-                    id: generateId(),
-                    type: BlockType.GROUP,
-                    settings: { type: 'non-capturing' } as GroupSettings,
-                    children: blocks,
-                    isExpanded: true,
-                };
-            };
-            
-            const children = [wrapIfNeeded(leftBlocks), wrapIfNeeded(rightBlocks)];
-             console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.parse(JSON.stringify(children)));
-
-            return [{
+             return [{
                 id: newId,
                 type: BlockType.ALTERNATION,
                 settings: {},
-                children: children,
+                children: [...leftBlocks, ...rightBlocks],
                 isExpanded: true,
             }];
         }
