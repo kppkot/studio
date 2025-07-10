@@ -57,15 +57,11 @@ function transformNodeToBlocks(node: any): Block[] {
 
     switch (node.type) {
         case 'Alternative': {
-             // Each element in an Alternative is processed in sequence.
-             // This is the simplest possible translation.
              return node.expressions.flatMap((expr: any) => transformNodeToBlocks(expr));
         }
 
         case 'Repetition': {
-            // Process the expression that is being repeated
             const subjectBlocks = transformNodeToBlocks(node.expression);
-
             const q = node.quantifier;
             let type: QuantifierSettings['type'] | null = null;
             let min, max;
@@ -83,14 +79,14 @@ function transformNodeToBlocks(node: any): Block[] {
                     break;
             }
 
-            if (type === null) return subjectBlocks; // Should not happen with valid regex
+            if (type === null) return subjectBlocks;
 
             const quantifierBlock: Block = {
                 id: generateId(),
                 type: BlockType.QUANTIFIER,
                 settings: {
                     type, min, max,
-                    mode: q.greedy ? 'greedy' : (q.lazy ? 'lazy' : 'greedy'),
+                    mode: q.greedy ? 'greedy' : 'lazy', // 'possessive' not directly supported in this simple parser
                 } as QuantifierSettings,
                 children: [],
             };
@@ -155,28 +151,14 @@ function transformNodeToBlocks(node: any): Block[] {
              // This is the OR operator `|`. We process left and right branches separately.
              const leftBranch = transformNodeToBlocks(node.left);
              const rightBranch = transformNodeToBlocks(node.right);
-
-             const createBranchBlock = (branch: Block[]): Block => {
-                if (branch.length === 1) {
-                    return branch[0]; // If it's already a single block, no need to wrap
-                }
-                // If the branch contains multiple blocks, we wrap them in a non-capturing group to preserve the logic.
-                return {
-                    id: generateId(),
-                    type: BlockType.GROUP,
-                    settings: { type: 'non-capturing' } as GroupSettings,
-                    children: branch,
-                    isExpanded: true
-                };
-             };
              
              return [{
                 id: newId,
                 type: BlockType.ALTERNATION,
                 settings: {},
                 children: [
-                    createBranchBlock(leftBranch),
-                    createBranchBlock(rightBranch)
+                    ...leftBranch,
+                    ...rightBranch
                 ],
                 isExpanded: true,
             }];

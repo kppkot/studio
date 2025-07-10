@@ -272,6 +272,18 @@ export const isRegexValid = (regex: string): boolean => {
   }
 };
 
+export const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
+    // This function is now a placeholder and does not perform transformations.
+    // It's kept for potential future use if a very specific, safe transformation is needed.
+    return blocks;
+};
+
+export const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
+    // This function is now a placeholder.
+    return blocks;
+};
+
+
 export const findBlockAndParent = (
   nodes: Block[],
   id: string,
