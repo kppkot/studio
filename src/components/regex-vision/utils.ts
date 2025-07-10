@@ -1,63 +1,12 @@
 
-import type { Block, CharacterClassSettings, ConditionalSettings, GroupSettings, LiteralSettings, LookaroundSettings, QuantifierSettings, AnchorSettings, BackreferenceSettings, GroupInfo, RegexStringPart } from './types';
+import type { Block, RegexStringPart, GroupInfo } from './types';
 import { BlockType } from './types';
+import type { CharacterClassSettings, LiteralSettings, QuantifierSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, ConditionalSettings, GroupSettings } from './types';
 
 export const generateId = (): string => Math.random().toString(36).substring(2, 11);
 
-const escapeRegexCharsForGenerator = (text: string): string => {
-  return text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
-}
-
-export const createLiteral = (text: string, isRawRegex = false): Block => ({
-  id: generateId(), type: BlockType.LITERAL, settings: {text, isRawRegex} as LiteralSettings, children: [], isExpanded: false
-});
-
-export const cloneBlockForState = (block: Block): Block => {
-  const newBlock: Block = {
-    ...block,
-    id: generateId(),
-    settings: { ...block.settings },
-    children: block.children ? block.children.map(child => cloneBlockForState(child)) : [],
-    isExpanded: block.isExpanded,
-  };
-  if ([BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(newBlock.type)) {
-      newBlock.children = newBlock.children || [];
-  }
-  return newBlock;
-};
-
-// A new, smarter function to combine consecutive literal blocks
-export const combineLiterals = (blocks: Block[]): Block[] => {
-  if (!blocks || blocks.length === 0) return [];
-  
-  const result: Block[] = [];
-  let literalAccumulator = '';
-
-  const flushLiteral = () => {
-    if (literalAccumulator) {
-      result.push(createLiteral(literalAccumulator));
-      literalAccumulator = '';
-    }
-  };
-
-  for (const block of blocks) {
-    if (block.type === BlockType.LITERAL && !(block.settings as LiteralSettings).isRawRegex) {
-      literalAccumulator += (block.settings as LiteralSettings).text;
-    } else {
-      flushLiteral();
-      if (block.children) {
-        result.push({ ...block, children: combineLiterals(block.children) });
-      } else {
-        result.push(block);
-      }
-    }
-  }
-
-  flushLiteral();
-  return result;
-};
-
-
+// This function takes the final block structure and generates the string from it.
+// It ensures the visual representation is the source of truth for the output string.
 export const generateRegexStringAndGroupInfo = (blocks: Block[]): { 
     regexString: string;
     groupInfos: GroupInfo[];
@@ -66,6 +15,10 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
   const groupInfos: GroupInfo[] = [];
   const stringParts: RegexStringPart[] = [];
   let capturingGroupCount = 0;
+
+  const escapeRegexCharsForGenerator = (text: string): string => {
+    return text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  }
 
   const generateRecursive = (block: Block) => {
     const settings = block.settings;
@@ -161,10 +114,10 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
          const condSettings = settings as ConditionalSettings;
          const { condition, yesPattern, noPattern } = condSettings;
          stringParts.push({ text: `(?(${condition})`, blockId: block.id, blockType: block.type });
-         generateRecursive(createLiteral(yesPattern, true));
+         stringParts.push({ text: yesPattern, blockId: block.id, blockType: block.type });
          if (noPattern) {
            stringParts.push({ text: `|`, blockId: block.id, blockType: block.type });
-           generateRecursive(createLiteral(noPattern, true));
+           stringParts.push({ text: noPattern, blockId: block.id, blockType: block.type });
          }
          stringParts.push({ text: `)`, blockId: block.id, blockType: block.type });
          break;
@@ -178,6 +131,26 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
   const regexString = stringParts.map(part => part.text).join('');
   return { regexString, groupInfos, stringParts };
 };
+
+// --- Other Utility Functions ---
+
+export const cloneBlockForState = (block: Block): Block => {
+  const newBlock: Block = {
+    ...block,
+    id: generateId(),
+    settings: { ...block.settings },
+    children: block.children ? block.children.map(child => cloneBlockForState(child)) : [],
+    isExpanded: block.isExpanded,
+  };
+  if ([BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(newBlock.type)) {
+      newBlock.children = newBlock.children || [];
+  }
+  return newBlock;
+};
+
+export const createLiteral = (text: string, isRawRegex = false): Block => ({
+  id: generateId(), type: BlockType.LITERAL, settings: {text, isRawRegex} as LiteralSettings, children: [], isExpanded: false
+});
 
 export const reconstructPatternFromChildren = (children: Block[]): string => {
   return children.map(child => {
@@ -222,6 +195,7 @@ export const processAiBlocks = (aiBlocks: any[]): Block[] => {
       newBlock.isExpanded = true;
     }
     
+    // Basic settings validation to prevent crashes
     switch (newBlock.type) {
         case BlockType.LITERAL:
             if (typeof newBlock.settings?.text !== 'string') newBlock.settings = { text: '' };
@@ -265,17 +239,20 @@ export const isRegexValid = (regex: string): boolean => {
   }
 };
 
+// --- These functions are intentionally left empty or simplified after refactoring ---
+
 export const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
-    // This function is now a placeholder and does not perform transformations.
-    // It's kept for potential future use if a very specific, safe transformation is needed.
     return blocks;
 };
 
 export const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
-    // This function is now a placeholder.
     return blocks;
 };
 
+// Naive implementation that does not handle deeper nesting correctly
+export const combineLiterals = (blocks: Block[]): Block[] => {
+    return blocks;
+}
 
 export const findBlockAndParent = (
   nodes: Block[],

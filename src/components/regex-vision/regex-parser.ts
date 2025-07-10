@@ -22,67 +22,51 @@ export function parseRegexWithLibrary(regexString: string): { blocks: Block[], a
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Неизвестная ошибка парсера.";
-    let friendlyMessage = `Ошибка синтаксиса в выражении. ${errorMessage}`;
-    if (errorMessage.includes('Unexpected quantifier')) {
-      friendlyMessage = 'Синтаксическая ошибка: квантификатор (например, *, +, ?) оказался в неожиданном месте, ему нечего повторять.';
-    }
-    if (errorMessage.includes('Unmatched left parenthesis')) {
-      friendlyMessage = 'Синтаксическая ошибка: есть незакрытая открывающая скобка `(`.'
-    }
-    if (errorMessage.includes('Unmatched right parenthesis')) {
-      friendlyMessage = 'Синтаксическая ошибка: найдена лишняя закрывающая скобка `)`.';
-    }
-     if (errorMessage.includes('Invalid group')) {
-      friendlyMessage = 'Синтаксическая ошибка: неверная или неполная группа.';
-    }
-    if (errorMessage.includes('Invalid character class')) {
-      friendlyMessage = 'Синтаксическая ошибка: неверно сформирован символьный класс (выражение в квадратных скобках `[]`).';
-    }
-    if (errorMessage.includes('Trailing backslash')) {
-      friendlyMessage = 'Синтаксическая ошибка: выражение не может заканчиваться одиночным обратным слэшем `\\`.';
-    }
-    throw new Error(friendlyMessage);
+    // Keep error messages simple for now
+    throw new Error(`Ошибка синтаксиса: ${errorMessage}`);
   }
 }
 
+// This is now the ONLY transformation function. No helpers.
 function transformNodeToBlocks(node: any): Block[] {
     if (!node) return [];
 
     const newId = generateId();
 
     switch (node.type) {
+        // A sequence of expressions
         case 'Alternative': {
-             const expressions = node.expressions.flatMap(transformNodeToBlocks);
-             // Try to combine consecutive simple literals
-             if (!expressions || expressions.length === 0) return [];
-
-             const combined: Block[] = [];
-             let currentLiteral = '';
-
-             const flushLiteral = () => {
-                 if (currentLiteral) {
-                     combined.push({
-                         id: generateId(),
-                         type: BlockType.LITERAL,
-                         settings: { text: currentLiteral, isRawRegex: false } as LiteralSettings,
-                         children: []
-                     });
-                     currentLiteral = '';
-                 }
-             };
-
-             for (const block of expressions) {
-                 if (block.type === BlockType.LITERAL && !(block.settings as LiteralSettings).isRawRegex) {
-                     currentLiteral += (block.settings as LiteralSettings).text;
-                 } else {
-                     flushLiteral();
-                     combined.push(block);
-                 }
-             }
-             flushLiteral();
-             return combined;
+             return node.expressions.flatMap(transformNodeToBlocks);
         }
 
+        // A single character or simple escape
+        case 'Char': {
+            const value = node.value;
+            // Handle simple meta characters as CharacterClass blocks
+            if (node.kind === 'meta' && ['.', '\\d', '\\D', '\\w', '\\W', '\\s', '\\S'].includes(value)) {
+                return [{
+                    id: newId, type: BlockType.CHARACTER_CLASS,
+                    settings: { pattern: value, negated: false } as CharacterClassSettings,
+                    children: [],
+                }];
+            }
+             // Handle unicode property escapes
+             if (node.kind === 'unicode' && (node.property === 'L' || node.value === 'L')) {
+                return [{
+                    id: newId, type: BlockType.CHARACTER_CLASS,
+                    settings: { pattern: '\\p{L}', negated: false } as CharacterClassSettings,
+                    children: [],
+                }];
+            }
+            // Everything else is a literal character
+            return [{
+                id: newId, type: BlockType.LITERAL,
+                settings: { text: value, isRawRegex: false } as LiteralSettings,
+                children: [],
+            }];
+        }
+
+        // A repetition like *, +, ?, {n,m}
         case 'Repetition': {
             const subjectBlocks = transformNodeToBlocks(node.expression);
             const q = node.quantifier;
@@ -102,7 +86,7 @@ function transformNodeToBlocks(node: any): Block[] {
                     break;
             }
 
-            if (type === null) return subjectBlocks;
+            if (type === null) return subjectBlocks; // Should not happen with valid regex
 
             const quantifierBlock: Block = {
                 id: generateId(),
@@ -114,41 +98,22 @@ function transformNodeToBlocks(node: any): Block[] {
                 children: [],
             };
             
+            // The quantifier applies to the preceding block.
             return [...subjectBlocks, quantifierBlock];
         }
-
-        case 'Char': {
-            const value = node.value;
-            if (node.kind === 'meta' && ['.', '\\d', '\\D', '\\w', '\\W', '\\s', '\\S'].includes(value)) {
-                return [{
-                    id: newId, type: BlockType.CHARACTER_CLASS,
-                    settings: { pattern: value, negated: false } as CharacterClassSettings,
-                    children: [],
-                }];
-            }
-             if (node.kind === 'unicode' && (node.property === 'L' || node.value === 'L')) {
-                return [{
-                    id: newId, type: BlockType.CHARACTER_CLASS,
-                    settings: { pattern: '\\p{L}', negated: false } as CharacterClassSettings,
-                    children: [],
-                }];
-            }
-            return [{
-                id: newId, type: BlockType.LITERAL,
-                settings: { text: value, isRawRegex: false } as LiteralSettings,
-                children: [],
-            }];
-        }
-
+        
+        // A character class like [a-z] or [^0-9]
         case 'CharacterClass': {
             const pattern = node.expressions.map((expr: any) => regexpTree.generate(expr)).join('');
             return [{
                 id: newId, type: BlockType.CHARACTER_CLASS,
                 settings: { pattern, negated: node.negative } as CharacterClassSettings,
                 children: [],
+                isExpanded: true,
             }];
         }
 
+        // A group like (...) or (?:...)
         case 'Group': {
             let groupType: GroupSettings['type'] = 'capturing';
             let name: string | undefined = undefined;
@@ -163,27 +128,36 @@ function transformNodeToBlocks(node: any): Block[] {
             return [{
                 id: newId, type: BlockType.GROUP,
                 settings: { type: groupType, name } as GroupSettings,
-                children: transformNodeToBlocks(node.expression),
+                children: transformNodeToBlocks(node.expression), // The expression is the content of the group
                 isExpanded: true,
             }];
         }
 
+        // The OR operator |
         case 'Disjunction': {
-             // Correct handling of |
-             // Process left and right sides. If they are complex, they become a single group.
-             const leftBranchBlocks = transformNodeToBlocks(node.left);
-             const rightBranchBlocks = transformNodeToBlocks(node.right);
-             
+             // THIS IS THE CRITICAL PART
+             // The left and right side are entire alternatives.
+             // They must be processed and kept separate.
+             const leftBranch = transformNodeToBlocks(node.left);
+             const rightBranch = transformNodeToBlocks(node.right);
+
              return [{
                 id: newId,
                 type: BlockType.ALTERNATION,
                 settings: {},
-                children: [ ...leftBranchBlocks, ...rightBranchBlocks ],
+                children: [
+                    // A group to hold the left side
+                    { id: generateId(), type: BlockType.GROUP, settings: { type: 'non-capturing' }, children: leftBranch, isExpanded: true },
+                    // A group to hold the right side
+                    { id: generateId(), type: BlockType.GROUP, settings: { type: 'non-capturing' }, children: rightBranch, isExpanded: true },
+                ],
                 isExpanded: true,
             }];
         }
 
+        // An assertion like ^, $, \b, (?=...)
         case 'Assertion': {
+            // Lookarounds are groups with an assertion
             if (node.kind === 'Lookahead' || node.kind === 'Lookbehind') {
                 return [{
                     id: newId, type: BlockType.LOOKAROUND,
@@ -194,6 +168,7 @@ function transformNodeToBlocks(node: any): Block[] {
                     isExpanded: true,
                 }];
             }
+            // Anchors are simple assertions
             const anchorTypeMap: { [key: string]: AnchorSettings['type'] } = { '^': '^', '$': '$', '\\b': '\\b', '\\B': '\\B' };
             if (Object.keys(anchorTypeMap).includes(node.kind)) {
                 return [{
@@ -202,9 +177,10 @@ function transformNodeToBlocks(node: any): Block[] {
                     children: [],
                 }];
             }
-            return [];
+            return []; // Other assertions not handled
         }
 
+        // A backreference like \1 or \k<name>
         case 'Backreference': {
             const ref = node.number ? String(node.number) : node.name;
             return [{
@@ -215,6 +191,8 @@ function transformNodeToBlocks(node: any): Block[] {
         }
 
         default:
+            // For any unhandled node type, return empty and log it.
+            console.warn(`Unhandled AST node type: ${node.type}`);
             return [];
     }
 }
