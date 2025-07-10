@@ -164,16 +164,47 @@ function transformNodeToBlocks(node: any): Block[] {
 
     // Alternation, e.g., a|b
     case 'Disjunction': {
-        const left = node.left ? transformNodeToBlocks(node.left) : [];
-        const right = node.right ? transformNodeToBlocks(node.right) : [];
+        console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', { left: node.left, right: node.right });
+        
+        // Helper to process each side of the disjunction
+        const processAlternative = (altNode: any): Block[] => {
+            if (!altNode) return [];
+            // The direct child of a disjunction is an 'Alternative', which contains the actual expressions.
+            return altNode.expressions.flatMap((expr: any) => transformNodeToBlocks(expr));
+        };
+        
+        let leftBlocks = processAlternative(node.left);
+        let rightBlocks = processAlternative(node.right);
 
-        // Here we just flatten the two sides into one list for the alternation block.
-        // This is the simplest possible interpretation of the AST.
+        // This is the key logic: if an alternative expanded into more than one block,
+        // it needs to be wrapped in a non-capturing group to preserve its meaning.
+        if (leftBlocks.length > 1) {
+            leftBlocks = [{
+                id: generateId(),
+                type: BlockType.GROUP,
+                settings: { type: 'non-capturing' } as GroupSettings,
+                children: leftBlocks,
+                isExpanded: true,
+            }];
+        }
+        if (rightBlocks.length > 1) {
+            rightBlocks = [{
+                id: generateId(),
+                type: BlockType.GROUP,
+                settings: { type: 'non-capturing' } as GroupSettings,
+                children: rightBlocks,
+                isExpanded: true,
+            }];
+        }
+
+        const finalChildren = [...leftBlocks, ...rightBlocks];
+        console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.stringify(finalChildren, null, 2));
+
         return [{
             id: newId,
             type: BlockType.ALTERNATION,
             settings: {},
-            children: [...left, ...right],
+            children: finalChildren,
             isExpanded: true,
         }];
     }
