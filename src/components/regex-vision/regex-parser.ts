@@ -58,14 +58,16 @@ function transformNodeListToBlocks(expressions: any[]): Block[] {
         }
     };
 
-    for (const expr of expressions) {
-        if (expr.type === 'Char' && expr.kind === 'simple' && !expr.escaped) {
-            currentLiteralText += expr.value;
+    expressions.forEach(expr => {
+        const transformed = transformNodeToBlocks(expr);
+        if (transformed.length === 1 && transformed[0].type === BlockType.LITERAL && !(transformed[0].settings as LiteralSettings).isRawRegex) {
+             currentLiteralText += (transformed[0].settings as LiteralSettings).text;
         } else {
             pushCurrentLiteral();
-            fusedBlocks.push(...transformNodeToBlocks(expr));
+            fusedBlocks.push(...transformed);
         }
-    }
+    });
+
     pushCurrentLiteral();
     console.log('--- DEBUG: transformNodeListToBlocks: Produced blocks:', JSON.stringify(fusedBlocks, null, 2));
     return fusedBlocks;
@@ -118,12 +120,20 @@ function transformNodeToBlocks(node: any): Block[] {
 
     case 'Char': {
         const value = node.value;
-        if (node.kind === 'meta' || (node.escaped && !/[0-9]/.test(node.value))) {
+        if (node.kind === 'meta' && ['.', '\\d', '\\D', '\\w', '\\W', '\\s', '\\S'].includes(value)) {
             const pattern = (node.escaped ? '\\' : '') + value;
-            return [{
+             return [{
                 id: newId,
                 type: BlockType.CHARACTER_CLASS,
                 settings: { pattern, negated: false } as CharacterClassSettings,
+                children: [],
+            }];
+        }
+        if (node.kind === 'unicode' && node.symbol === 'L') {
+            return [{
+                id: newId,
+                type: BlockType.CHARACTER_CLASS,
+                settings: { pattern: '\\p{L}', negated: false } as CharacterClassSettings,
                 children: [],
             }];
         }
@@ -163,44 +173,22 @@ function transformNodeToBlocks(node: any): Block[] {
     }
 
     case 'Disjunction': {
-        const alternatives = [node.left, node.right];
-        // This is a simplification; a real Disjunction can be a tree.
-        // regexp-tree seems to represent it as a linked list via `left` and `right`.
-        let current = node;
-        const expressions = [];
-        while (current && current.type === 'Disjunction') {
-          expressions.unshift(current.right);
-          current = current.left;
-        }
-        if (current) {
-          expressions.unshift(current);
-        }
+        console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', JSON.stringify({left: node.left, right: node.right}, null, 2));
 
-        console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', JSON.stringify(expressions, null, 2));
+        const leftBlocks = transformNodeToBlocks(node.left);
+        const rightBlocks = transformNodeToBlocks(node.right);
+        
+        // This is the core simplification. We trust the AST. If something needed grouping,
+        // it would have been a Group node already. We just lay out the alternatives.
+        const children = [...leftBlocks, ...rightBlocks];
 
-        const processedAlternatives = expressions.map(expr => {
-            const blocks = transformNodeToBlocks(expr);
-            // If an alternative consists of multiple blocks, wrap it in a non-capturing group to preserve its sequence.
-            if (blocks.length > 1) {
-                return [{
-                    id: generateId(),
-                    type: BlockType.GROUP,
-                    settings: { type: 'non-capturing' } as GroupSettings,
-                    children: blocks,
-                    isExpanded: true,
-                }];
-            }
-            return blocks;
-        });
-
-        const finalChildren = processedAlternatives.flat();
-        console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.stringify(finalChildren, null, 2));
+        console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.stringify(children, null, 2));
         
         return [{
             id: newId,
             type: BlockType.ALTERNATION,
             settings: {},
-            children: finalChildren,
+            children: children,
             isExpanded: true,
         }];
     }
