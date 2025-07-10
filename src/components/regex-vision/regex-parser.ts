@@ -56,8 +56,7 @@ function transformNodeToBlocks(node: any): Block[] {
 
     switch (node.type) {
         case 'Alternative': {
-            const rawBlocks = node.expressions.flatMap(transformNodeToBlocks);
-            return combineLiterals(rawBlocks);
+            return node.expressions.flatMap(transformNodeToBlocks);
         }
 
         case 'Repetition': {
@@ -114,6 +113,7 @@ function transformNodeToBlocks(node: any): Block[] {
                 id: newId, type: BlockType.LITERAL,
                 settings: { text: value, isRawRegex: false } as LiteralSettings,
                 children: [],
+                isExpanded: false
             }];
         }
 
@@ -146,13 +146,13 @@ function transformNodeToBlocks(node: any): Block[] {
         }
 
         case 'Disjunction': {
-            console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', { left: node.left, right: node.right });
+             console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', { left: node.left, right: node.right });
             
             const leftBlocks = transformNodeToBlocks(node.left);
             const rightBlocks = transformNodeToBlocks(node.right);
 
             const wrapIfNeeded = (blocks: Block[]): Block => {
-                if (blocks.length === 1 && blocks[0].type !== BlockType.ALTERNATION) {
+                if (blocks.length === 1) {
                     return blocks[0];
                 }
                 return {
@@ -165,7 +165,7 @@ function transformNodeToBlocks(node: any): Block[] {
             };
             
             const children = [wrapIfNeeded(leftBlocks), wrapIfNeeded(rightBlocks)];
-            console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.parse(JSON.stringify(children)));
+             console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.parse(JSON.stringify(children)));
 
             return [{
                 id: newId,
@@ -211,41 +211,4 @@ function transformNodeToBlocks(node: any): Block[] {
             console.warn(`Unhandled AST node type: ${node.type}.`);
             return [];
     }
-}
-
-function combineLiterals(blocks: Block[]): Block[] {
-    if (!blocks || blocks.length === 0) return [];
-    
-    const combined: Block[] = [];
-    let currentLiteral = '';
-    let currentBlockId = generateId(); // Start with a new ID
-
-    for (const block of blocks) {
-        const isSimpleLiteral = block.type === BlockType.LITERAL && !(block.settings as LiteralSettings).isRawRegex;
-        
-        if (isSimpleLiteral) {
-            currentLiteral += (block.settings as LiteralSettings).text;
-        } else {
-            if (currentLiteral) {
-                combined.push({
-                    id: currentBlockId, type: BlockType.LITERAL,
-                    settings: { text: currentLiteral, isRawRegex: false } as LiteralSettings,
-                    children: [],
-                });
-                currentLiteral = '';
-                currentBlockId = generateId(); // Get a new ID for the next potential literal
-            }
-            combined.push(block);
-        }
-    }
-
-    if (currentLiteral) {
-        combined.push({
-            id: currentBlockId, type: BlockType.LITERAL,
-            settings: { text: currentLiteral, isRawRegex: false } as LiteralSettings,
-            children: [],
-        });
-    }
-
-    return combined;
 }
