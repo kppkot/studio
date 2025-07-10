@@ -1,11 +1,11 @@
 // This file will contain the new, correct parser, built step-by-step.
 import regexpTree from 'regexp-tree';
-import type { Block } from './types';
+import type { Block, LiteralSettings, GroupSettings } from './types';
+import { BlockType } from './types';
 import { generateId } from './newlab-utils'; // We will use this soon.
 
 /**
  * Main exported function to parse a regex string.
- * Currently, it only parses and logs the AST for debugging purposes.
  * It will be expanded step-by-step.
  * @param regexString The regular expression string to parse.
  * @returns An object containing the generated blocks and the raw AST.
@@ -23,12 +23,13 @@ export function parseRegexWithLibrary(regexString: string): { blocks: Block[], a
     const ast = regexpTree.parse(`/${regexString}/u`, { allowGroupNameDuplicates: true });
     
     // As requested, log the raw AST from the library to the console.
-    // This is our "source of truth".
-    console.log('[NewLab Parser] Successfully parsed. AST from regexp-tree:', JSON.stringify(ast.body, null, 2));
+    console.log('[NewLab Parser] Successfully parsed. Raw AST from regexp-tree:', JSON.stringify(ast.body, null, 2));
 
-    const resultBlocks: Block[] = []; // TODO: Implement transformation logic here.
+    const resultBlocks = transformNodeToBlocks(ast.body);
     
-    // For now, we return an empty block array but the correct AST.
+    // NEW: Log the generated blocks to check our transformation logic.
+    console.log('[NewLab Parser] Transformed Blocks:', JSON.stringify(resultBlocks, null, 2));
+    
     return { blocks: resultBlocks, ast: ast.body };
 
   } catch (error) {
@@ -37,4 +38,54 @@ export function parseRegexWithLibrary(regexString: string): { blocks: Block[], a
     // Propagate the error so the UI can display it.
     throw new Error(`Syntax Error: ${errorMessage}`);
   }
+}
+
+
+/**
+ * Recursively transforms an AST node from regexp-tree into our Block structure.
+ * @param node The AST node to transform.
+ * @returns An array of Block objects.
+ */
+function transformNodeToBlocks(node: any): Block[] {
+    if (!node) {
+        return [];
+    }
+
+    const newId = generateId();
+
+    switch (node.type) {
+        case 'Group':
+            return [{
+                id: newId,
+                type: BlockType.GROUP,
+                settings: {
+                    type: node.capturing ? 'capturing' : 'non-capturing',
+                    name: typeof node.name === 'string' ? node.name : undefined
+                } as GroupSettings,
+                children: transformNodeToBlocks(node.expression),
+                isExpanded: true,
+            }];
+
+        case 'Alternative':
+            // An Alternative is a sequence of expressions, so we process each one
+            // and flatten the resulting arrays of blocks.
+            return node.expressions.flatMap(transformNodeToBlocks);
+
+        case 'Char':
+            // A simple character becomes a LITERAL block.
+            return [{
+                id: newId,
+                type: BlockType.LITERAL,
+                settings: {
+                    text: node.value,
+                    isRawRegex: false
+                } as LiteralSettings,
+                children: [],
+            }];
+
+        // TODO: Add more cases here, starting with Repetition and Disjunction.
+        default:
+            console.warn(`[NewLab Parser] Unhandled AST node type: ${node.type}`);
+            return [];
+    }
 }
