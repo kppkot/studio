@@ -9,7 +9,6 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
     console.log('--- DEBUG: STEP 1: Input to parseRegexWithLibrary ---');
     console.log('Regex String:', regexString);
 
-    // Ensure we handle empty strings gracefully
     if (!regexString.trim()) {
       return [];
     }
@@ -51,45 +50,7 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
   }
 }
 
-function transformNodeListToBlocks(expressions: any[]): Block[] {
-    console.log('--- DEBUG: transformNodeListToBlocks: Processing expressions:', JSON.stringify(expressions, null, 2));
-    if (!expressions || expressions.length === 0) {
-        return [];
-    }
-    
-    const allBlocks: Block[] = [];
-    expressions.forEach(expr => {
-        const transformed = transformNodeToBlocks(expr);
-        allBlocks.push(...transformed);
-    });
-
-    // Fuse adjacent simple literals
-    const fusedBlocks: Block[] = [];
-    let currentLiteralText = '';
-
-    const pushCurrentLiteral = () => {
-        if (currentLiteralText) {
-            fusedBlocks.push(createLiteral(currentLiteralText));
-            currentLiteralText = '';
-        }
-    };
-
-    allBlocks.forEach(block => {
-        const isSimpleLiteral = block.type === BlockType.LITERAL && !(block.settings as LiteralSettings).isRawRegex;
-
-        if (isSimpleLiteral) {
-             currentLiteralText += (block.settings as LiteralSettings).text;
-        } else {
-            pushCurrentLiteral();
-            fusedBlocks.push(block);
-        }
-    });
-
-    pushCurrentLiteral();
-    console.log('--- DEBUG: transformNodeListToBlocks: Produced blocks:', JSON.stringify(fusedBlocks, null, 2));
-    return fusedBlocks;
-}
-
+// Simple recursive transformer. No more "smart" logic.
 function transformNodeToBlocks(node: any): Block[] {
   if (!node) return [];
 
@@ -97,7 +58,27 @@ function transformNodeToBlocks(node: any): Block[] {
 
   switch (node.type) {
     case 'Alternative':
-      return transformNodeListToBlocks(node.expressions || []);
+      // This is a sequence of expressions. Fuse adjacent simple characters.
+      const fusedBlocks: Block[] = [];
+      let currentLiteralText = '';
+
+      const pushCurrentLiteral = () => {
+          if (currentLiteralText) {
+              fusedBlocks.push(createLiteral(currentLiteralText));
+              currentLiteralText = '';
+          }
+      };
+      
+      (node.expressions || []).forEach((expr: any) => {
+          if (expr.type === 'Char' && expr.kind === 'simple') {
+              currentLiteralText += expr.value;
+          } else {
+              pushCurrentLiteral();
+              fusedBlocks.push(...transformNodeToBlocks(expr));
+          }
+      });
+      pushCurrentLiteral();
+      return fusedBlocks;
 
     case 'Repetition': {
         const subjectBlocks = transformNodeToBlocks(node.expression);
@@ -138,11 +119,10 @@ function transformNodeToBlocks(node: any): Block[] {
     case 'Char': {
         const value = node.value;
         if (node.kind === 'meta' && ['.', '\\d', '\\D', '\\w', '\\W', '\\s', '\\S'].includes(value)) {
-            const pattern = value;
              return [{
                 id: newId,
                 type: BlockType.CHARACTER_CLASS,
-                settings: { pattern, negated: false } as CharacterClassSettings,
+                settings: { pattern: value, negated: false } as CharacterClassSettings,
                 children: [],
             }];
         }
@@ -194,7 +174,7 @@ function transformNodeToBlocks(node: any): Block[] {
 
         const leftBlocks = transformNodeToBlocks(node.left);
         const rightBlocks = transformNodeToBlocks(node.right);
-
+        
         // This is the core simplification. If an alternative is composed of multiple blocks,
         // it must be wrapped in a non-capturing group to preserve its meaning within the alternation.
         const processAlternative = (blocks: Block[]): Block => {
@@ -211,7 +191,6 @@ function transformNodeToBlocks(node: any): Block[] {
         };
 
         const finalChildren = [processAlternative(leftBlocks), processAlternative(rightBlocks)];
-
         console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.stringify(finalChildren, null, 2));
 
         return [{
@@ -224,7 +203,6 @@ function transformNodeToBlocks(node: any): Block[] {
     }
     
     case 'Assertion': {
-        console.log('--- DEBUG: STEP 3: Processing Assertion node ---', JSON.stringify({kind: node.kind}, null, 2));
         let blockType: BlockType | null = null;
         let settings: any = {};
         let children: Block[] = [];
