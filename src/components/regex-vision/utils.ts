@@ -1,10 +1,10 @@
+
 import type { Block, CharacterClassSettings, ConditionalSettings, GroupSettings, LiteralSettings, LookaroundSettings, QuantifierSettings, AnchorSettings, BackreferenceSettings, GroupInfo, RegexStringPart } from './types';
 import { BlockType } from './types';
 
 export const generateId = (): string => Math.random().toString(36).substring(2, 11);
 
 const escapeRegexCharsForGenerator = (text: string): string => {
-  // Do not escape chars within a character class content
   return text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 }
 
@@ -25,6 +25,43 @@ export const cloneBlockForState = (block: Block): Block => {
   }
   return newBlock;
 };
+
+// A new, smarter function to combine consecutive literal blocks
+export const combineLiterals = (blocks: Block[]): Block[] => {
+  if (!blocks.length) return [];
+  const result: Block[] = [];
+  let currentLiteralText = '';
+
+  const flushLiteral = () => {
+    if (currentLiteralText) {
+      result.push({
+        id: generateId(),
+        type: BlockType.LITERAL,
+        settings: { text: currentLiteralText, isRawRegex: false } as LiteralSettings,
+        children: [],
+      });
+      currentLiteralText = '';
+    }
+  };
+
+  for (const block of blocks) {
+    if (block.type === BlockType.LITERAL && !(block.settings as LiteralSettings).isRawRegex) {
+      currentLiteralText += (block.settings as LiteralSettings).text;
+    } else {
+      flushLiteral();
+      // For groups and other containers, recursively combine their children
+      if (block.children && block.children.length > 0) {
+        result.push({ ...block, children: combineLiterals(block.children) });
+      } else {
+        result.push(block);
+      }
+    }
+  }
+
+  flushLiteral();
+  return result;
+};
+
 
 export const generateRegexStringAndGroupInfo = (blocks: Block[]): { 
     regexString: string;
@@ -55,7 +92,6 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
         const ccSettings = settings as CharacterClassSettings;
         const pattern = ccSettings.pattern;
         
-        // Handle shorthands that should not be in brackets
         if (['.', '\\d', '\\D', '\\w', '\\W', '\\s', '\\S', '\\p{L}'].includes(pattern)) {
              stringParts.push({ text: pattern, blockId: block.id, blockType: block.type });
         } else {

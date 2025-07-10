@@ -49,41 +49,6 @@ export function parseRegexWithLibrary(regexString: string): { blocks: Block[], a
   }
 }
 
-// This function specifically handles 'Alternative' nodes from the AST.
-// It combines consecutive characters into single LITERAL blocks.
-function transformAlternative(expressions: any[]): Block[] {
-    const combinedBlocks: Block[] = [];
-    let currentLiteral = '';
-
-    const flushLiteral = () => {
-        if (currentLiteral) {
-            combinedBlocks.push({
-                id: generateId(),
-                type: BlockType.LITERAL,
-                settings: { text: currentLiteral, isRawRegex: false } as LiteralSettings,
-                children: [],
-                isExpanded: false
-            });
-            currentLiteral = '';
-        }
-    };
-
-    for (const expr of expressions) {
-        if (expr.type === 'Char' && expr.kind === 'simple') {
-            currentLiteral += expr.value;
-        } else {
-            flushLiteral();
-            // Process complex nodes like Repetition, Group, etc.
-            const nestedBlocks = transformNodeToBlocks(expr);
-            combinedBlocks.push(...nestedBlocks);
-        }
-    }
-
-    flushLiteral(); // Add any remaining literal string
-    return combinedBlocks;
-}
-
-
 // The one and only recursive transformer.
 function transformNodeToBlocks(node: any): Block[] {
     if (!node) return [];
@@ -92,8 +57,9 @@ function transformNodeToBlocks(node: any): Block[] {
 
     switch (node.type) {
         case 'Alternative': {
-             // Let the specialized function handle this
-            return transformAlternative(node.expressions);
+             // Each element in an Alternative is processed in sequence.
+             // This is the simplest possible translation.
+             return node.expressions.flatMap((expr: any) => transformNodeToBlocks(expr));
         }
 
         case 'Repetition': {
@@ -129,7 +95,6 @@ function transformNodeToBlocks(node: any): Block[] {
                 children: [],
             };
             
-            // The quantifier applies to the last block of the subject.
             return [...subjectBlocks, quantifierBlock];
         }
 
@@ -150,7 +115,7 @@ function transformNodeToBlocks(node: any): Block[] {
                     children: [],
                 }];
             }
-            // For simple characters, we return them directly. transformAlternative will group them.
+            // For simple characters, we create one literal block per character.
             return [{
                 id: newId, type: BlockType.LITERAL,
                 settings: { text: value, isRawRegex: false } as LiteralSettings,
@@ -187,18 +152,31 @@ function transformNodeToBlocks(node: any): Block[] {
         }
 
         case 'Disjunction': {
-             // This is the OR operator `|`
+             // This is the OR operator `|`. We process left and right branches separately.
              const leftBranch = transformNodeToBlocks(node.left);
              const rightBranch = transformNodeToBlocks(node.right);
 
+             const createBranchBlock = (branch: Block[]): Block => {
+                if (branch.length === 1) {
+                    return branch[0]; // If it's already a single block, no need to wrap
+                }
+                // If the branch contains multiple blocks, we wrap them in a non-capturing group to preserve the logic.
+                return {
+                    id: generateId(),
+                    type: BlockType.GROUP,
+                    settings: { type: 'non-capturing' } as GroupSettings,
+                    children: branch,
+                    isExpanded: true
+                };
+             };
+             
              return [{
                 id: newId,
                 type: BlockType.ALTERNATION,
                 settings: {},
                 children: [
-                    // Each branch of the alternation is its own self-contained set of blocks
-                    ...leftBranch,
-                    ...rightBranch
+                    createBranchBlock(leftBranch),
+                    createBranchBlock(rightBranch)
                 ],
                 isExpanded: true,
             }];

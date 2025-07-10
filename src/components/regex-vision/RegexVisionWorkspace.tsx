@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, lazy, Suspense, useMemo } from
 import type { Block, RegexMatch, GroupInfo, CharacterClassSettings, RegexStringPart, SavedPattern, DropIndicator } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { generateId, cloneBlockForState, generateRegexStringAndGroupInfo, reconstructPatternFromChildren } from './utils';
+import { generateId, cloneBlockForState, generateRegexStringAndGroupInfo, reconstructPatternFromChildren, combineLiterals } from './utils';
 import { useToast } from '@/hooks/use-toast';
 import { parseRegexWithLibrary } from './regex-parser';
 
@@ -106,7 +106,9 @@ const RegexVisionWorkspace: React.FC = () => {
 
   // Effect to update regex string and matches whenever the block structure changes
   useEffect(() => {
-    const { regexString: newRegex, groupInfos, stringParts } = generateRegexStringAndGroupInfo(blocks);
+    // Combine literals after any block change for a cleaner display and string representation.
+    const combinedBlocks = combineLiterals(blocks);
+    const { regexString: newRegex, groupInfos, stringParts } = generateRegexStringAndGroupInfo(combinedBlocks);
     setRegexOutputState({ regexString: newRegex, groupInfos, stringParts });
 
     if (newRegex && testText) {
@@ -857,9 +859,11 @@ const RegexVisionWorkspace: React.FC = () => {
 
   const renderBlockNodes = (nodes: Block[], parentId: string | null, depth: number, groupInfos: GroupInfo[]): React.ReactNode[] => {
     const nodeList: React.ReactNode[] = [];
+    const combinedNodes = combineLiterals(nodes);
 
-    for (let i = 0; i < nodes.length; i++) {
-        const block = nodes[i];
+
+    for (let i = 0; i < combinedNodes.length; i++) {
+        const block = combinedNodes[i];
         let quantifierToRender: Block | null = null;
 
         if (block.type === BlockType.QUANTIFIER) {
@@ -868,8 +872,8 @@ const RegexVisionWorkspace: React.FC = () => {
         }
 
         // Check if the next block is a quantifier for the current block.
-        if (i + 1 < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
-            quantifierToRender = nodes[i + 1];
+        if (i + 1 < combinedNodes.length && combinedNodes[i + 1].type === BlockType.QUANTIFIER) {
+            quantifierToRender = combinedNodes[i + 1];
         }
 
         nodeList.push(
@@ -1084,5 +1088,3 @@ const RegexVisionWorkspace: React.FC = () => {
 };
 
 export default RegexVisionWorkspace;
-
-    
