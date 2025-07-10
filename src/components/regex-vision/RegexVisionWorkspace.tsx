@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, lazy, Suspense, useMemo } from
 import type { Block, RegexMatch, GroupInfo, CharacterClassSettings, RegexStringPart, SavedPattern, DropIndicator } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { generateId, cloneBlockForState, generateRegexStringAndGroupInfo } from './utils';
+import { generateId, cloneBlockForState, generateRegexStringAndGroupInfo, reconstructPatternFromChildren } from './utils';
 import { useToast } from '@/hooks/use-toast';
 import { parseRegexWithLibrary } from './regex-parser';
 
@@ -78,6 +78,8 @@ const RegexVisionWorkspace: React.FC = () => {
   const [regexFlags, setRegexFlags] = useState<string>('gmu');
   const [matches, setMatches] = useState<RegexMatch[]>([]);
   const [regexError, setRegexError] = useState<string | null>(null);
+  const [ast, setAst] = useState<object | null>(null);
+
   const [regexOutputState, setRegexOutputState] = useState<{
     regexString: string;
     groupInfos: GroupInfo[];
@@ -765,6 +767,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const handleParseRegexString = useCallback((regexString: string) => {
     if (!regexString) {
       setBlocks([]);
+      setAst(null);
       return;
     }
 
@@ -785,9 +788,11 @@ const RegexVisionWorkspace: React.FC = () => {
     }
 
     setIsParsing(true);
+    setAst(null);
     try {
-      const { blocks: parsedBlocks } = parseRegexWithLibrary(processedRegex);
+      const { blocks: parsedBlocks, ast: parsedAst } = parseRegexWithLibrary(processedRegex);
       setBlocks(parsedBlocks);
+      setAst(parsedAst);
       setNaturalLanguageQuery('');
 
       if (extractedFlags) {
@@ -1009,6 +1014,20 @@ const RegexVisionWorkspace: React.FC = () => {
                           regexError={regexError}
                       />
                     </div>
+                    {ast && (
+                        <Card className="flex-shrink-0">
+                            <CardHeader className="py-2 px-3">
+                                <CardTitle className="text-sm">AST (Отладка)</CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-2">
+                                <ScrollArea className="h-32">
+                                <pre className="text-xs font-mono bg-muted p-2 rounded-md">
+                                    {JSON.stringify(ast, null, 2)}
+                                </pre>
+                                </ScrollArea>
+                            </CardContent>
+                        </Card>
+                    )}
                     <AnalysisPanel
                       originalQuery={naturalLanguageQuery}
                       generatedRegex={regexOutputState.regexString}
@@ -1065,3 +1084,5 @@ const RegexVisionWorkspace: React.FC = () => {
 };
 
 export default RegexVisionWorkspace;
+
+    
