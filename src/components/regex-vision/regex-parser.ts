@@ -146,7 +146,8 @@ function transformNodeToBlocks(node: any): Block[] {
         }
 
         case 'Disjunction': {
-             console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', { left: node.left, right: node.right });
+            console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', { left: node.left, right: node.right });
+            
             const leftBlocks = transformNodeToBlocks(node.left);
             const rightBlocks = transformNodeToBlocks(node.right);
 
@@ -217,6 +218,7 @@ function combineLiterals(blocks: Block[]): Block[] {
     
     const combined: Block[] = [];
     let currentLiteral = '';
+    let currentBlockId = generateId(); // Start with a new ID
 
     for (const block of blocks) {
         const isSimpleLiteral = block.type === BlockType.LITERAL && !(block.settings as LiteralSettings).isRawRegex;
@@ -226,11 +228,12 @@ function combineLiterals(blocks: Block[]): Block[] {
         } else {
             if (currentLiteral) {
                 combined.push({
-                    id: generateId(), type: BlockType.LITERAL,
+                    id: currentBlockId, type: BlockType.LITERAL,
                     settings: { text: currentLiteral, isRawRegex: false } as LiteralSettings,
                     children: [],
                 });
                 currentLiteral = '';
+                currentBlockId = generateId(); // Get a new ID for the next potential literal
             }
             combined.push(block);
         }
@@ -238,7 +241,7 @@ function combineLiterals(blocks: Block[]): Block[] {
 
     if (currentLiteral) {
         combined.push({
-            id: generateId(), type: BlockType.LITERAL,
+            id: currentBlockId, type: BlockType.LITERAL,
             settings: { text: currentLiteral, isRawRegex: false } as LiteralSettings,
             children: [],
         });
@@ -246,5 +249,3 @@ function combineLiterals(blocks: Block[]): Block[] {
 
     return combined;
 }
-
-    
