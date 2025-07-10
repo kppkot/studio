@@ -28,29 +28,24 @@ export const cloneBlockForState = (block: Block): Block => {
 
 // A new, smarter function to combine consecutive literal blocks
 export const combineLiterals = (blocks: Block[]): Block[] => {
-  if (!blocks.length) return [];
+  if (!blocks || blocks.length === 0) return [];
+  
   const result: Block[] = [];
-  let currentLiteralText = '';
+  let literalAccumulator = '';
 
   const flushLiteral = () => {
-    if (currentLiteralText) {
-      result.push({
-        id: generateId(),
-        type: BlockType.LITERAL,
-        settings: { text: currentLiteralText, isRawRegex: false } as LiteralSettings,
-        children: [],
-      });
-      currentLiteralText = '';
+    if (literalAccumulator) {
+      result.push(createLiteral(literalAccumulator));
+      literalAccumulator = '';
     }
   };
 
   for (const block of blocks) {
     if (block.type === BlockType.LITERAL && !(block.settings as LiteralSettings).isRawRegex) {
-      currentLiteralText += (block.settings as LiteralSettings).text;
+      literalAccumulator += (block.settings as LiteralSettings).text;
     } else {
       flushLiteral();
-      // For groups and other containers, recursively combine their children
-      if (block.children && block.children.length > 0) {
+      if (block.children) {
         result.push({ ...block, children: combineLiterals(block.children) });
       } else {
         result.push(block);
@@ -73,8 +68,6 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
   let capturingGroupCount = 0;
 
   const generateRecursive = (block: Block) => {
-    console.log(`--- DEBUG: UTILS: Processing block ID ${block.id} of type ${block.type} ---`);
-    console.log(`--- DEBUG: UTILS: Block settings:`, JSON.stringify(block.settings, null, 2));
     const settings = block.settings;
 
     const processChildren = (b: Block) => {

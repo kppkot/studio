@@ -6,22 +6,20 @@ import { generateId } from './utils';
 
 // Main exported function
 export function parseRegexWithLibrary(regexString: string): { blocks: Block[], ast: object } {
-  console.log('--- DEBUG: STEP 1: Input to parseRegexWithLibrary ---');
-  console.log('Regex String:', regexString);
-
   if (!regexString.trim()) {
     return { blocks: [], ast: {} };
   }
   
   try {
     const ast = regexpTree.parse(`/${regexString}/u`, { allowGroupNameDuplicates: true });
-    console.log('--- DEBUG: STEP 2: Parsed AST from regexp-tree ---');
-    console.log(JSON.stringify(ast.body, null, 2));
     
-    const resultBlocks = transformNodeToBlocks(ast.body);
+    let resultBlocks: Block[] = [];
+    if (ast.body?.type === 'Alternative') {
+        resultBlocks = transformAlternativeToBlocks(ast.body);
+    } else if (ast.body) {
+        resultBlocks = transformNodeToBlocks(ast.body);
+    }
 
-    console.log('--- DEBUG: STEP 4: Final blocks returned from parser ---');
-    console.log(JSON.stringify(resultBlocks, null, 2));
     return { blocks: resultBlocks, ast: ast.body };
 
   } catch (error) {
@@ -49,6 +47,16 @@ export function parseRegexWithLibrary(regexString: string): { blocks: Block[], a
   }
 }
 
+function transformAlternativeToBlocks(alternativeNode: any): Block[] {
+    if (!alternativeNode || !alternativeNode.expressions) return [];
+    
+    let blocks: Block[] = [];
+    for (const expr of alternativeNode.expressions) {
+        blocks.push(...transformNodeToBlocks(expr));
+    }
+    return blocks;
+}
+
 // The one and only recursive transformer.
 function transformNodeToBlocks(node: any): Block[] {
     if (!node) return [];
@@ -57,7 +65,7 @@ function transformNodeToBlocks(node: any): Block[] {
 
     switch (node.type) {
         case 'Alternative': {
-             return node.expressions.flatMap((expr: any) => transformNodeToBlocks(expr));
+             return transformAlternativeToBlocks(node);
         }
 
         case 'Repetition': {
@@ -86,7 +94,7 @@ function transformNodeToBlocks(node: any): Block[] {
                 type: BlockType.QUANTIFIER,
                 settings: {
                     type, min, max,
-                    mode: q.greedy ? 'greedy' : 'lazy', // 'possessive' not directly supported in this simple parser
+                    mode: q.greedy ? 'greedy' : 'lazy',
                 } as QuantifierSettings,
                 children: [],
             };
@@ -96,7 +104,6 @@ function transformNodeToBlocks(node: any): Block[] {
 
         case 'Char': {
             const value = node.value;
-            // Handle meta characters that are standalone blocks
             if (node.kind === 'meta' && ['.', '\\d', '\\D', '\\w', '\\W', '\\s', '\\S'].includes(value)) {
                 return [{
                     id: newId, type: BlockType.CHARACTER_CLASS,
@@ -111,7 +118,6 @@ function transformNodeToBlocks(node: any): Block[] {
                     children: [],
                 }];
             }
-            // For simple characters, we create one literal block per character.
             return [{
                 id: newId, type: BlockType.LITERAL,
                 settings: { text: value, isRawRegex: false } as LiteralSettings,
@@ -138,17 +144,16 @@ function transformNodeToBlocks(node: any): Block[] {
                 groupType = 'named';
                 name = node.name;
             }
-
+            
             return [{
                 id: newId, type: BlockType.GROUP,
                 settings: { type: groupType, name } as GroupSettings,
-                children: transformNodeToBlocks(node.expression), // Recurse on the content of the group
+                children: transformNodeToBlocks(node.expression),
                 isExpanded: true,
             }];
         }
 
         case 'Disjunction': {
-             // This is the OR operator `|`. We process left and right branches separately.
              const leftBranch = transformNodeToBlocks(node.left);
              const rightBranch = transformNodeToBlocks(node.right);
              
@@ -196,7 +201,6 @@ function transformNodeToBlocks(node: any): Block[] {
         }
 
         default:
-            console.warn(`Unhandled AST node type: ${node.type}.`);
             return [];
     }
 }
