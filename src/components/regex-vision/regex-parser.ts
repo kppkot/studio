@@ -14,9 +14,7 @@ export function parseRegexWithLibrary(regexString: string): { blocks: Block[], a
     const ast = regexpTree.parse(`/${regexString}/u`, { allowGroupNameDuplicates: true });
     
     let resultBlocks: Block[] = [];
-    if (ast.body?.type === 'Alternative') {
-        resultBlocks = transformAlternativeToBlocks(ast.body);
-    } else if (ast.body) {
+    if (ast.body) {
         resultBlocks = transformNodeToBlocks(ast.body);
     }
 
@@ -47,17 +45,6 @@ export function parseRegexWithLibrary(regexString: string): { blocks: Block[], a
   }
 }
 
-function transformAlternativeToBlocks(alternativeNode: any): Block[] {
-    if (!alternativeNode || !alternativeNode.expressions) return [];
-    
-    let blocks: Block[] = [];
-    for (const expr of alternativeNode.expressions) {
-        blocks.push(...transformNodeToBlocks(expr));
-    }
-    return blocks;
-}
-
-// The one and only recursive transformer.
 function transformNodeToBlocks(node: any): Block[] {
     if (!node) return [];
 
@@ -65,7 +52,35 @@ function transformNodeToBlocks(node: any): Block[] {
 
     switch (node.type) {
         case 'Alternative': {
-             return transformAlternativeToBlocks(node);
+             const expressions = node.expressions.flatMap(transformNodeToBlocks);
+             // Try to combine consecutive simple literals
+             if (!expressions || expressions.length === 0) return [];
+
+             const combined: Block[] = [];
+             let currentLiteral = '';
+
+             const flushLiteral = () => {
+                 if (currentLiteral) {
+                     combined.push({
+                         id: generateId(),
+                         type: BlockType.LITERAL,
+                         settings: { text: currentLiteral, isRawRegex: false } as LiteralSettings,
+                         children: []
+                     });
+                     currentLiteral = '';
+                 }
+             };
+
+             for (const block of expressions) {
+                 if (block.type === BlockType.LITERAL && !(block.settings as LiteralSettings).isRawRegex) {
+                     currentLiteral += (block.settings as LiteralSettings).text;
+                 } else {
+                     flushLiteral();
+                     combined.push(block);
+                 }
+             }
+             flushLiteral();
+             return combined;
         }
 
         case 'Repetition': {
@@ -154,17 +169,16 @@ function transformNodeToBlocks(node: any): Block[] {
         }
 
         case 'Disjunction': {
-             const leftBranch = transformNodeToBlocks(node.left);
-             const rightBranch = transformNodeToBlocks(node.right);
+             // Correct handling of |
+             // Process left and right sides. If they are complex, they become a single group.
+             const leftBranchBlocks = transformNodeToBlocks(node.left);
+             const rightBranchBlocks = transformNodeToBlocks(node.right);
              
              return [{
                 id: newId,
                 type: BlockType.ALTERNATION,
                 settings: {},
-                children: [
-                    ...leftBranch,
-                    ...rightBranch
-                ],
+                children: [ ...leftBranchBlocks, ...rightBranchBlocks ],
                 isExpanded: true,
             }];
         }
