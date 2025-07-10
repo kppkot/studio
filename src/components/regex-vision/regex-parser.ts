@@ -49,6 +49,41 @@ export function parseRegexWithLibrary(regexString: string): { blocks: Block[], a
   }
 }
 
+// This function specifically handles 'Alternative' nodes from the AST.
+// It combines consecutive characters into single LITERAL blocks.
+function transformAlternative(expressions: any[]): Block[] {
+    const combinedExpressions: Block[] = [];
+    let currentLiteral = '';
+
+    const flushLiteral = () => {
+        if (currentLiteral) {
+            combinedExpressions.push({
+                id: generateId(),
+                type: BlockType.LITERAL,
+                settings: { text: currentLiteral, isRawRegex: false } as LiteralSettings,
+                children: [],
+            });
+            currentLiteral = '';
+        }
+    };
+
+    for (const expr of expressions) {
+        // If it's a simple character, add it to our running literal string.
+        if (expr.type === 'Char' && expr.kind === 'simple') {
+            currentLiteral += expr.value;
+        } else {
+            // If we hit something that's NOT a simple character (like a quantifier or group),
+            // first push any existing literal, then process the complex node.
+            flushLiteral();
+            combinedExpressions.push(...transformNodeToBlocks(expr));
+        }
+    }
+    // Push any remaining literal at the end.
+    flushLiteral();
+    return combinedExpressions;
+}
+
+
 // Simplified version that relies more on the library's structure.
 function transformNodeToBlocks(node: any): Block[] {
     if (!node) return [];
@@ -57,32 +92,7 @@ function transformNodeToBlocks(node: any): Block[] {
 
     switch (node.type) {
         case 'Alternative': {
-             // Combine consecutive Char nodes into a single Literal block
-            const combinedExpressions: Block[] = [];
-            let currentLiteral = '';
-
-            const flushLiteral = () => {
-                if (currentLiteral) {
-                    combinedExpressions.push({
-                        id: generateId(),
-                        type: BlockType.LITERAL,
-                        settings: { text: currentLiteral, isRawRegex: false } as LiteralSettings,
-                        children: [],
-                    });
-                    currentLiteral = '';
-                }
-            };
-
-            for (const expr of node.expressions) {
-                if (expr.type === 'Char' && expr.kind === 'simple') {
-                    currentLiteral += expr.value;
-                } else {
-                    flushLiteral();
-                    combinedExpressions.push(...transformNodeToBlocks(expr));
-                }
-            }
-            flushLiteral();
-            return combinedExpressions;
+            return transformAlternative(node.expressions);
         }
 
         case 'Repetition': {
@@ -135,7 +145,7 @@ function transformNodeToBlocks(node: any): Block[] {
                     children: [],
                 }];
             }
-            // This case should ideally be handled within 'Alternative' now, but kept as a fallback.
+            // This case should ideally be handled within 'Alternative' now, but kept as a fallback for single chars.
             return [{
                 id: newId, type: BlockType.LITERAL,
                 settings: { text: value, isRawRegex: false } as LiteralSettings,
@@ -177,11 +187,30 @@ function transformNodeToBlocks(node: any): Block[] {
             const leftBlocks = transformNodeToBlocks(node.left);
             const rightBlocks = transformNodeToBlocks(node.right);
 
+            // This is the core fix. Each side of the | is processed. If one side
+            // results in multiple blocks (like http + s + ?), we wrap it in a non-capturing group
+            // to preserve its logical unity.
+            const wrapIfNeeded = (blocks: Block[]): Block[] => {
+                if (blocks.length > 1) {
+                    return [{
+                        id: generateId(),
+                        type: BlockType.GROUP,
+                        settings: { type: 'non-capturing' } as GroupSettings,
+                        children: blocks,
+                        isExpanded: true,
+                    }];
+                }
+                return blocks;
+            };
+
+            const finalChildren = [...wrapIfNeeded(leftBlocks), ...wrapIfNeeded(rightBlocks)];
+             console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.stringify(finalChildren, null, 2));
+
              return [{
                 id: newId,
                 type: BlockType.ALTERNATION,
                 settings: {},
-                children: [...leftBlocks, ...rightBlocks],
+                children: finalChildren,
                 isExpanded: true,
             }];
         }
@@ -222,3 +251,5 @@ function transformNodeToBlocks(node: any): Block[] {
             return [];
     }
 }
+
+    
