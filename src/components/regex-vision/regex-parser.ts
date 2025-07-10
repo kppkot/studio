@@ -9,6 +9,11 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
     console.log('--- DEBUG: STEP 1: Input to parseRegexWithLibrary ---');
     console.log('Regex String:', regexString);
 
+    // Ensure we handle empty strings gracefully
+    if (!regexString.trim()) {
+      return [];
+    }
+
     const ast = regexpTree.parse(`/${regexString}/u`, { allowGroupNameDuplicates: true });
     
     console.log('--- DEBUG: STEP 2: Parsed AST from regexp-tree ---');
@@ -48,6 +53,17 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
 
 function transformNodeListToBlocks(expressions: any[]): Block[] {
     console.log('--- DEBUG: transformNodeListToBlocks: Processing expressions:', JSON.stringify(expressions, null, 2));
+    if (!expressions || expressions.length === 0) {
+        return [];
+    }
+    
+    const allBlocks: Block[] = [];
+    expressions.forEach(expr => {
+        const transformed = transformNodeToBlocks(expr);
+        allBlocks.push(...transformed);
+    });
+
+    // Fuse adjacent simple literals
     const fusedBlocks: Block[] = [];
     let currentLiteralText = '';
 
@@ -58,13 +74,14 @@ function transformNodeListToBlocks(expressions: any[]): Block[] {
         }
     };
 
-    expressions.forEach(expr => {
-        const transformed = transformNodeToBlocks(expr);
-        if (transformed.length === 1 && transformed[0].type === BlockType.LITERAL && !(transformed[0].settings as LiteralSettings).isRawRegex) {
-             currentLiteralText += (transformed[0].settings as LiteralSettings).text;
+    allBlocks.forEach(block => {
+        const isSimpleLiteral = block.type === BlockType.LITERAL && !(block.settings as LiteralSettings).isRawRegex;
+
+        if (isSimpleLiteral) {
+             currentLiteralText += (block.settings as LiteralSettings).text;
         } else {
             pushCurrentLiteral();
-            fusedBlocks.push(...transformed);
+            fusedBlocks.push(block);
         }
     });
 
@@ -121,7 +138,7 @@ function transformNodeToBlocks(node: any): Block[] {
     case 'Char': {
         const value = node.value;
         if (node.kind === 'meta' && ['.', '\\d', '\\D', '\\w', '\\W', '\\s', '\\S'].includes(value)) {
-            const pattern = (node.escaped ? '\\' : '') + value;
+            const pattern = value;
              return [{
                 id: newId,
                 type: BlockType.CHARACTER_CLASS,
@@ -173,22 +190,35 @@ function transformNodeToBlocks(node: any): Block[] {
     }
 
     case 'Disjunction': {
-        console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', JSON.stringify({left: node.left, right: node.right}, null, 2));
+        console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', JSON.stringify({ left: node.left, right: node.right }, null, 2));
 
         const leftBlocks = transformNodeToBlocks(node.left);
         const rightBlocks = transformNodeToBlocks(node.right);
-        
-        // This is the core simplification. We trust the AST. If something needed grouping,
-        // it would have been a Group node already. We just lay out the alternatives.
-        const children = [...leftBlocks, ...rightBlocks];
 
-        console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.stringify(children, null, 2));
-        
+        // This is the core simplification. If an alternative is composed of multiple blocks,
+        // it must be wrapped in a non-capturing group to preserve its meaning within the alternation.
+        const processAlternative = (blocks: Block[]): Block => {
+            if (blocks.length === 1) {
+                return blocks[0];
+            }
+            return {
+                id: generateId(),
+                type: BlockType.GROUP,
+                settings: { type: 'non-capturing' } as GroupSettings,
+                children: blocks,
+                isExpanded: true,
+            };
+        };
+
+        const finalChildren = [processAlternative(leftBlocks), processAlternative(rightBlocks)];
+
+        console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.stringify(finalChildren, null, 2));
+
         return [{
             id: newId,
             type: BlockType.ALTERNATION,
             settings: {},
-            children: children,
+            children: finalChildren,
             isExpanded: true,
         }];
     }
