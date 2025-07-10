@@ -88,8 +88,7 @@ const RegexVisionWorkspace: React.FC = () => {
     stringParts: [],
   });
   const [naturalLanguageQuery, setNaturalLanguageQuery] = useState('');
-  const [rawAst, setRawAst] = useState<object | null>(null);
-
+  
   // Drag and Drop State
   const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
   const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null);
@@ -766,7 +765,6 @@ const RegexVisionWorkspace: React.FC = () => {
   const handleParseRegexString = useCallback((regexString: string) => {
     if (!regexString) {
       setBlocks([]);
-      setRawAst(null);
       return;
     }
 
@@ -788,9 +786,8 @@ const RegexVisionWorkspace: React.FC = () => {
 
     setIsParsing(true);
     try {
-      const { blocks: parsedBlocks, ast } = parseRegexWithLibrary(processedRegex);
+      const { blocks: parsedBlocks } = parseRegexWithLibrary(processedRegex);
       setBlocks(parsedBlocks);
-      setRawAst(ast);
       setNaturalLanguageQuery('');
 
       if (extractedFlags) {
@@ -809,7 +806,6 @@ const RegexVisionWorkspace: React.FC = () => {
         description: `Не удалось разобрать выражение: ${message}`,
         variant: "destructive",
       });
-      setRawAst({ error: message, originalRegex: processedRegex });
     } finally {
       setIsParsing(false);
     }
@@ -1013,23 +1009,6 @@ const RegexVisionWorkspace: React.FC = () => {
                           regexError={regexError}
                       />
                     </div>
-                    {rawAst && (
-                      <Card className="flex-shrink-0">
-                        <CardHeader className="py-2 px-3 border-b">
-                            <CardTitle className="text-sm flex items-center gap-2">
-                                <Binary size={16} className="text-muted-foreground"/>
-                                Отладочный вывод AST (дерево из библиотеки)
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-2">
-                          <ScrollArea className="h-32">
-                              <pre className="text-xs font-mono bg-muted p-2 rounded-md">
-                                  {JSON.stringify(rawAst, null, 2)}
-                              </pre>
-                          </ScrollArea>
-                        </CardContent>
-                      </Card>
-                    )}
                     <AnalysisPanel
                       originalQuery={naturalLanguageQuery}
                       generatedRegex={regexOutputState.regexString}
