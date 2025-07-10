@@ -9,7 +9,6 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
     console.log('--- DEBUG: STEP 1: Input to parseRegexWithLibrary ---');
     console.log('Regex String:', regexString);
 
-    // The 'u' flag is essential for regexp-tree to correctly parse Unicode and other modern features.
     const ast = regexpTree.parse(`/${regexString}/u`, { allowGroupNameDuplicates: true });
     
     console.log('--- DEBUG: STEP 2: Parsed AST from regexp-tree ---');
@@ -47,8 +46,8 @@ export function parseRegexWithLibrary(regexString: string): Block[] {
   }
 }
 
-// Simplified function to handle lists of expressions by fusing simple characters.
-function transformExpressionList(expressions: any[]): Block[] {
+function transformNodeListToBlocks(expressions: any[]): Block[] {
+    console.log('--- DEBUG: transformNodeListToBlocks: Processing expressions:', JSON.stringify(expressions, null, 2));
     const fusedBlocks: Block[] = [];
     let currentLiteralText = '';
 
@@ -60,21 +59,18 @@ function transformExpressionList(expressions: any[]): Block[] {
     };
 
     for (const expr of expressions) {
-        // We only fuse simple, non-escaped characters.
         if (expr.type === 'Char' && expr.kind === 'simple' && !expr.escaped) {
             currentLiteralText += expr.value;
         } else {
-            pushCurrentLiteral(); // Push any accumulated literal first
-            fusedBlocks.push(...transformNodeToBlocks(expr)); // Then handle the complex node
+            pushCurrentLiteral();
+            fusedBlocks.push(...transformNodeToBlocks(expr));
         }
     }
-    pushCurrentLiteral(); // Push any remaining literal at the end
-
+    pushCurrentLiteral();
+    console.log('--- DEBUG: transformNodeListToBlocks: Produced blocks:', JSON.stringify(fusedBlocks, null, 2));
     return fusedBlocks;
 }
 
-
-// Main transformation logic. This is a recursive function.
 function transformNodeToBlocks(node: any): Block[] {
   if (!node) return [];
 
@@ -82,8 +78,7 @@ function transformNodeToBlocks(node: any): Block[] {
 
   switch (node.type) {
     case 'Alternative':
-        // An Alternative is a sequence of expressions.
-        return transformExpressionList(node.expressions || []);
+      return transformNodeListToBlocks(node.expressions || []);
 
     case 'Repetition': {
         const subjectBlocks = transformNodeToBlocks(node.expression);
@@ -97,7 +92,6 @@ function transformNodeToBlocks(node: any): Block[] {
             case '?': type = '?'; break;
             case 'Range':
                 min = q.from;
-                // regexp-tree uses undefined for unbounded max, not Infinity
                 max = q.to === undefined ? null : q.to;
                 if (min !== undefined && max === null) type = '{n,}';
                 else if (min !== undefined && max !== undefined && min === max) type = '{n}';
@@ -105,7 +99,7 @@ function transformNodeToBlocks(node: any): Block[] {
                 break;
         }
 
-        if (type === null) return subjectBlocks; // Should not happen with valid regex
+        if (type === null) return subjectBlocks;
 
         const quantifierBlock: Block = {
             id: generateId(),
@@ -114,7 +108,7 @@ function transformNodeToBlocks(node: any): Block[] {
                 type,
                 min: min,
                 max: max,
-                mode: q.greedy ? 'greedy' : (q.greedy === false ? 'lazy' : 'greedy'), // Handle explicit non-greedy
+                mode: q.greedy ? 'greedy' : 'lazy',
             } as QuantifierSettings,
             children: [],
         };
@@ -137,7 +131,6 @@ function transformNodeToBlocks(node: any): Block[] {
     }
 
     case 'CharacterClass': {
-      // Use regexp-tree's generator to get the inner pattern string.
       const pattern = node.expressions.map((expr: any) => regexpTree.generate(expr)).join('');
       return [{
           id: newId,
@@ -169,29 +162,51 @@ function transformNodeToBlocks(node: any): Block[] {
       }];
     }
 
-    case 'Disjunction': { // This is the "OR" operator |
-        const left = node.left ? transformNodeToBlocks(node.left) : [];
-        const right = node.right ? transformNodeToBlocks(node.right) : [];
-
-        // If the left side is already an alternation, flatten it to avoid deep nesting.
-        if (left.length === 1 && left[0].type === BlockType.ALTERNATION) {
-             return [{
-                ...left[0],
-                children: [...left[0].children, ...right]
-             }];
+    case 'Disjunction': {
+        const alternatives = [node.left, node.right];
+        // This is a simplification; a real Disjunction can be a tree.
+        // regexp-tree seems to represent it as a linked list via `left` and `right`.
+        let current = node;
+        const expressions = [];
+        while (current && current.type === 'Disjunction') {
+          expressions.unshift(current.right);
+          current = current.left;
         }
+        if (current) {
+          expressions.unshift(current);
+        }
+
+        console.log('--- DEBUG: DISJUNCTION: Processing AST alternatives:', JSON.stringify(expressions, null, 2));
+
+        const processedAlternatives = expressions.map(expr => {
+            const blocks = transformNodeToBlocks(expr);
+            // If an alternative consists of multiple blocks, wrap it in a non-capturing group to preserve its sequence.
+            if (blocks.length > 1) {
+                return [{
+                    id: generateId(),
+                    type: BlockType.GROUP,
+                    settings: { type: 'non-capturing' } as GroupSettings,
+                    children: blocks,
+                    isExpanded: true,
+                }];
+            }
+            return blocks;
+        });
+
+        const finalChildren = processedAlternatives.flat();
+        console.log('--- DEBUG: DISJUNCTION: Final children for ALTERNATION block:', JSON.stringify(finalChildren, null, 2));
         
         return [{
             id: newId,
             type: BlockType.ALTERNATION,
             settings: {},
-            children: [...left, ...right],
+            children: finalChildren,
             isExpanded: true,
         }];
     }
     
     case 'Assertion': {
-        console.log('--- DEBUG: STEP 3: Processing Assertion node ---', JSON.stringify({kind: node.kind}));
+        console.log('--- DEBUG: STEP 3: Processing Assertion node ---', JSON.stringify({kind: node.kind}, null, 2));
         let blockType: BlockType | null = null;
         let settings: any = {};
         let children: Block[] = [];
@@ -237,7 +252,6 @@ function transformNodeToBlocks(node: any): Block[] {
     }
 
     default:
-        // Fallback for any unhandled node types.
         if (node.raw) {
              return [{
                 id: newId,
