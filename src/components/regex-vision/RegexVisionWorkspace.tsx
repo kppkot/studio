@@ -7,7 +7,7 @@ import { BLOCK_CONFIGS } from './constants';
 // import { generateId, cloneBlockForState, generateRegexStringAndGroupInfo, reconstructPatternFromChildren, combineLiterals } from './utils';
 import { generateId, cloneBlockForState, reconstructPatternFromChildren } from './utils';
 import { useToast } from '@/hooks/use-toast';
-// import { parseRegexWithLibrary } from './regex-parser';
+import { parseRegexWithLibrary } from './newlab-parser'; // <<< USING NEWLAB PARSER
 
 import BlockNode from './BlockNode';
 import SettingsPanel from './SettingsPanel';
@@ -766,6 +766,7 @@ const RegexVisionWorkspace: React.FC = () => {
   }, [selectedBlockId, blocks, handleDeleteBlock, handleExpandAll, handleCollapseAll, handleUpdateBlock]);
 
   const handleParseRegexString = useCallback((regexString: string) => {
+    // START OF COMMENTED OUT SECTION
     // if (!regexString) {
     //   setBlocks([]);
     //   setAst(null);
@@ -787,34 +788,32 @@ const RegexVisionWorkspace: React.FC = () => {
     //   });
     //   processedRegex = regexString.substring(inlineFlagMatch[0].length);
     // }
+    // END OF COMMENTED OUT SECTION
 
-    // setIsParsing(true);
-    // setAst(null);
-    // try {
-    //   const { blocks: parsedBlocks, ast: parsedAst } = parseRegexWithLibrary(processedRegex);
-    //   setBlocks(parsedBlocks);
-    //   setAst(parsedAst);
-    //   setNaturalLanguageQuery('');
+    setIsParsing(true);
+    setRegexError(null);
+    setAst(null);
+    try {
+      // We now use the newlab parser exclusively.
+      const { blocks: parsedBlocks, ast: parsedAst } = parseRegexWithLibrary(regexString);
+      setBlocks(parsedBlocks);
+      setAst(parsedAst); // For debugging
+      setNaturalLanguageQuery('');
 
-    //   if (extractedFlags) {
-    //     toast({
-    //       title: "Выражение разобрано",
-    //       description: `Встроенный флаг '${extractedFlags}' был автоматически активирован.`,
-    //     });
-    //   } else {
-    //     toast({ title: "Выражение разобрано", description: "Структура блоков построена успешно." });
-    //   }
+      toast({ title: "Выражение разобрано", description: "Структура блоков построена успешно." });
 
-    // } catch (error) {
-    //   const message = error instanceof Error ? error.message : "Неизвестная ошибка парсера.";
-    //   toast({
-    //     title: "Ошибка разбора",
-    //     description: `Не удалось разобрать выражение: ${message}`,
-    //     variant: "destructive",
-    //   });
-    // } finally {
-    //   setIsParsing(false);
-    // }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Неизвестная ошибка парсера.";
+      setRegexError(message);
+      setBlocks([]); // Clear blocks on error
+      toast({
+        title: "Ошибка разбора",
+        description: `Не удалось разобрать выражение: ${message}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsParsing(false);
+    }
   }, [toast]);
 
   // Memoize the highlighted group index to prevent re-calculation on every render.
