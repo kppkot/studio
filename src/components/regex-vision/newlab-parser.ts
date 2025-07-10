@@ -24,7 +24,7 @@ export function parseRegexWithLibrary(regexString: string): { blocks: Block[], a
     
     // As requested, log the raw AST from the library to the console.
     // This is our "source of truth".
-    console.log('[NewLab Parser] Successfully parsed. AST from regexp-tree:', ast.body);
+    console.log('[NewLab Parser] Successfully parsed. AST from regexp-tree:', JSON.stringify(ast.body, null, 2));
 
     const resultBlocks: Block[] = []; // TODO: Implement transformation logic here.
     
