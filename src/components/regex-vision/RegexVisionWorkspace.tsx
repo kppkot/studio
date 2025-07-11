@@ -853,27 +853,27 @@ const RegexVisionWorkspace: React.FC = () => {
             key={block.id}
             block={block}
             quantifierToRender={quantifierToRender}
-            onUpdate={handleUpdateBlock}
-            onDelete={handleDeleteBlock}
-            onAddChild={(pId) => handleOpenPaletteFor(pId, block.id)}
-            onAddSibling={(pId, ctxId) => handleOpenPaletteFor(pId, ctxId)}
-            onDuplicate={handleDuplicateBlock}
-            onUngroup={handleUngroupBlock}
-            onWrapBlock={handleWrapBlock}
-            selectedId={selectedBlockId}
-            onSelect={handleSelectBlock}
+            // onUpdate={handleUpdateBlock}
+            // onDelete={handleDeleteBlock}
+            // onAddChild={(pId) => handleOpenPaletteFor(pId, block.id)}
+            // onAddSibling={(pId, ctxId) => handleOpenPaletteFor(pId, ctxId)}
+            // onDuplicate={handleDuplicateBlock}
+            // onUngroup={handleUngroupBlock}
+            // onWrapBlock={handleWrapBlock}
+            // selectedId={selectedBlockId}
+            // onSelect={handleSelectBlock}
             parentId={parentId}
             depth={depth}
-            hoveredId={hoveredBlockId}
-            onBlockHover={handleBlockHover}
+            // hoveredId={hoveredBlockId}
+            // onBlockHover={handleBlockHover}
             renderChildNodes={(childNodes, pId, nextDepth, gInfos) => renderBlockNodes(childNodes, pId, nextDepth, gInfos)}
-            groupInfos={groupInfos}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            dropIndicator={dropIndicator}
+            // groupInfos={groupInfos}
+            // onDragStart={handleDragStart}
+            // onDragEnd={handleDragEnd}
+            // onDrop={handleDrop}
+            // onDragOver={handleDragOver}
+            // onDragLeave={handleDragLeave}
+            // dropIndicator={dropIndicator}
           />
         );
     }
