@@ -831,11 +831,9 @@ const RegexVisionWorkspace: React.FC = () => {
 
   const renderBlockNodes = (nodes: Block[], parentId: string | null, depth: number, groupInfos: GroupInfo[]): React.ReactNode[] => {
     const nodeList: React.ReactNode[] = [];
-    const combinedNodes = nodes;
-
-
-    for (let i = 0; i < combinedNodes.length; i++) {
-        const block = combinedNodes[i];
+    
+    for (let i = 0; i < nodes.length; i++) {
+        const block = nodes[i];
         let quantifierToRender: Block | null = null;
 
         if (block.type === BlockType.QUANTIFIER) {
@@ -844,8 +842,8 @@ const RegexVisionWorkspace: React.FC = () => {
         }
 
         // Check if the next block is a quantifier for the current block.
-        if (i + 1 < combinedNodes.length && combinedNodes[i + 1].type === BlockType.QUANTIFIER) {
-            quantifierToRender = combinedNodes[i + 1];
+        if (i + 1 < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
+            quantifierToRender = nodes[i + 1];
         }
 
         nodeList.push(
