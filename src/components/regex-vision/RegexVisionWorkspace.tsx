@@ -4,11 +4,11 @@ import React, { useState, useEffect, useCallback, lazy, Suspense, useMemo } from
 import type { Block, RegexMatch, GroupInfo, CharacterClassSettings, RegexStringPart, SavedPattern, DropIndicator } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { generateId, cloneBlockForState, generateRegexStringAndGroupInfo } from './utils';
+import { generateId, cloneBlockForState, generateRegexStringAndGroupInfo, processAiBlocks, isRegexValid, reconstructPatternFromChildren } from './utils';
 import { useToast } from '@/hooks/use-toast';
 import { parseRegexWithLibrary } from './regex-parser';
 
-import BlockNode from './BlockNode';
+import NewTreeNode from './newtree-node';
 import SettingsPanel from './SettingsPanel';
 import BlockPalette from './BlockPalette';
 import RegexOutputDisplay from './RegexOutputDisplay';
@@ -849,7 +849,7 @@ const RegexVisionWorkspace: React.FC = () => {
         }
 
         nodeList.push(
-          <BlockNode
+          <NewTreeNode
             key={block.id}
             block={block}
             quantifierToRender={quantifierToRender}
@@ -1060,3 +1060,5 @@ const RegexVisionWorkspace: React.FC = () => {
 };
 
 export default RegexVisionWorkspace;
+
+    
