@@ -20,12 +20,13 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
     return text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
   }
 
-  const generateRecursive = (block: Block) => {
+  const generateRecursive = (block: Block, isChildOfAlternation = false) => {
     const settings = block.settings;
 
     const processChildren = (b: Block) => {
       if (!b.children) return;
-      b.children.forEach(child => generateRecursive(child));
+      const isAlternation = b.type === BlockType.ALTERNATION;
+      b.children.forEach(child => generateRecursive(child, isAlternation));
     };
 
     switch (block.type) {
@@ -65,6 +66,17 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
       }
       case BlockType.GROUP:
         const gSettings = settings as GroupSettings;
+        
+        // This is the crucial fix: If a group is a direct child of an alternation,
+        // and it only exists to group a sequence (which it is, by parser design),
+        // we can just process its children without adding the group's own parentheses.
+        const isStructuralGroupInAlternation = isChildOfAlternation && gSettings.type === 'non-capturing';
+
+        if (isStructuralGroupInAlternation) {
+           processChildren(block);
+           break;
+        }
+
         let groupOpen = "(";
         if (gSettings.type === 'capturing' || gSettings.type === 'named') {
           capturingGroupCount++;
@@ -88,11 +100,8 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
         break;
       case BlockType.ALTERNATION:
         if (!block.children || block.children.length === 0) break;
-        // This is a key change: wrap the alternation's children in a non-capturing group
-        // ONLY if the alternation itself is not already inside a group.
-        // For now, we simplify and let the generator reflect the blocks directly.
         block.children.forEach((child, index) => {
-          generateRecursive(child);
+          generateRecursive(child, true); // Pass true to tell child it's in an alternation
           if (index < block.children.length - 1) {
             stringParts.push({ text: '|', blockId: block.id, blockType: block.type });
           }
@@ -205,3 +214,47 @@ export const reconstructPatternFromChildren = (children: Block[]): string => {
     }
   }).join('');
 };
+
+/**
+ * Combines consecutive LITERAL blocks into a single block for better readability.
+ * This is a post-processing step after initial parsing.
+ */
+export function combineLiterals(nodes: Block[]): Block[] {
+    if (!nodes || nodes.length === 0) {
+        return [];
+    }
+    
+    const combined: Block[] = [];
+    let currentLiteral: Block | null = null;
+
+    for (const node of nodes) {
+        if (node.type === BlockType.LITERAL && !(node.settings as LiteralSettings).isRawRegex) {
+            if (currentLiteral) {
+                // Append text to the existing literal
+                (currentLiteral.settings as LiteralSettings).text += (node.settings as LiteralSettings).text;
+            } else {
+                // Start a new literal
+                currentLiteral = cloneBlockForState(node);
+            }
+        } else {
+            // Not a literal, or a raw regex literal. Push any pending literal first.
+            if (currentLiteral) {
+                combined.push(currentLiteral);
+                currentLiteral = null;
+            }
+            // Recurse for children if they exist, then push the node itself
+            if (node.children && node.children.length > 0) {
+                combined.push({ ...node, children: combineLiterals(node.children) });
+            } else {
+                combined.push(node);
+            }
+        }
+    }
+
+    // Don't forget the last literal if it exists
+    if (currentLiteral) {
+        combined.push(currentLiteral);
+    }
+
+    return combined;
+}
