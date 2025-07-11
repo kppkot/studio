@@ -67,9 +67,6 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
       case BlockType.GROUP:
         const gSettings = settings as GroupSettings;
         
-        // This is the crucial fix: If a group is a direct child of an alternation,
-        // and it only exists to group a sequence (which it is, by parser design),
-        // we can just process its children without adding the group's own parentheses.
         const isStructuralGroupInAlternation = isChildOfAlternation && gSettings.type === 'non-capturing';
 
         if (isStructuralGroupInAlternation) {
@@ -228,16 +225,17 @@ export function combineLiterals(nodes: Block[]): Block[] {
     let currentLiteral: Block | null = null;
 
     for (const node of nodes) {
+        // We only combine simple literals, not "raw regex" literals.
         if (node.type === BlockType.LITERAL && !(node.settings as LiteralSettings).isRawRegex) {
             if (currentLiteral) {
                 // Append text to the existing literal
                 (currentLiteral.settings as LiteralSettings).text += (node.settings as LiteralSettings).text;
             } else {
-                // Start a new literal
+                // Start a new literal, ensuring we make a deep copy
                 currentLiteral = cloneBlockForState(node);
             }
         } else {
-            // Not a literal, or a raw regex literal. Push any pending literal first.
+            // Not a combinable literal. Push any pending literal first.
             if (currentLiteral) {
                 combined.push(currentLiteral);
                 currentLiteral = null;

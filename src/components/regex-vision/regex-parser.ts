@@ -2,7 +2,7 @@
 import regexpTree from 'regexp-tree';
 import type { Block, CharacterClassSettings, LiteralSettings, QuantifierSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, GroupSettings } from './types';
 import { BlockType } from './types';
-import { generateId } from './utils';
+import { generateId, combineLiterals } from './utils';
 
 // Main exported function
 export function parseRegexWithLibrary(regexString: string): { blocks: Block[], ast: object } {
@@ -21,8 +21,11 @@ export function parseRegexWithLibrary(regexString: string): { blocks: Block[], a
         resultBlocks = transformNodeToBlocks(ast.body);
     }
 
-    console.log('[Parser] Transformed Blocks:', JSON.stringify(resultBlocks, null, 2));
-    return { blocks: resultBlocks, ast: ast.body };
+    // Apply the combining utility after parsing
+    const combinedBlocks = combineLiterals(resultBlocks);
+
+    console.log('[Parser] Transformed & Combined Blocks:', JSON.stringify(combinedBlocks, null, 2));
+    return { blocks: combinedBlocks, ast: ast.body };
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Неизвестная ошибка парсера.";
