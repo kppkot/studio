@@ -881,6 +881,7 @@ const RegexVisionWorkspace: React.FC = () => {
   };
 
   const mainContent = () => {
+    console.log('[NewTree Renderer] Rendering blocks:', JSON.stringify(blocks, null, 2));
     return (
         <div className="h-full flex flex-col p-2">
             <Card className="flex-1 flex flex-col shadow-md border-primary/20 overflow-hidden">
@@ -1060,5 +1061,3 @@ const RegexVisionWorkspace: React.FC = () => {
 };
 
 export default RegexVisionWorkspace;
-
-    
