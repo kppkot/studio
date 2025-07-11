@@ -2,7 +2,7 @@
 import regexpTree from 'regexp-tree';
 import type { Block, CharacterClassSettings, LiteralSettings, QuantifierSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, GroupSettings } from './types';
 import { BlockType } from './types';
-import { generateId, combineLiterals } from './utils';
+import { generateId } from './utils';
 
 // Main exported function
 export function parseRegexWithLibrary(regexString: string): { blocks: Block[], ast: object } {
@@ -21,11 +21,8 @@ export function parseRegexWithLibrary(regexString: string): { blocks: Block[], a
         resultBlocks = transformNodeToBlocks(ast.body);
     }
 
-    // Apply the combining utility after parsing
-    const combinedBlocks = combineLiterals(resultBlocks);
-
-    console.log('[Parser] Transformed & Combined Blocks:', JSON.stringify(combinedBlocks, null, 2));
-    return { blocks: combinedBlocks, ast: ast.body };
+    console.log('[Parser] Transformed & Combined Blocks:', JSON.stringify(resultBlocks, null, 2));
+    return { blocks: resultBlocks, ast: ast.body };
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Неизвестная ошибка парсера.";
@@ -41,7 +38,33 @@ function transformNodeToBlocks(node: any): Block[] {
 
     switch (node.type) {
         case 'Alternative': {
-             return node.expressions.flatMap(transformNodeToBlocks);
+             // NEW LOGIC: Combine consecutive characters here directly.
+             const combinedExpressions: Block[] = [];
+             let currentLiteralText = '';
+
+             const flushLiteral = () => {
+                 if (currentLiteralText) {
+                     combinedExpressions.push({
+                         id: generateId(),
+                         type: BlockType.LITERAL,
+                         settings: { text: currentLiteralText, isRawRegex: false } as LiteralSettings,
+                         children: [],
+                     });
+                     currentLiteralText = '';
+                 }
+             };
+
+             for (const expr of node.expressions) {
+                 if (expr.type === 'Char' && expr.kind === 'simple') {
+                     currentLiteralText += expr.value;
+                 } else {
+                     flushLiteral();
+                     combinedExpressions.push(...transformNodeToBlocks(expr));
+                 }
+             }
+             flushLiteral(); // Add any remaining literal
+
+             return combinedExpressions;
         }
 
         case 'Char': {
@@ -60,6 +83,7 @@ function transformNodeToBlocks(node: any): Block[] {
                     children: [],
                 }];
             }
+            // This case will now mostly handle single characters that are not part of a sequence
             return [{
                 id: newId, type: BlockType.LITERAL,
                 settings: { text: value, isRawRegex: false } as LiteralSettings,
@@ -131,12 +155,25 @@ function transformNodeToBlocks(node: any): Block[] {
         }
 
         case 'Disjunction': {
-             const leftBlocks = transformNodeToBlocks(node.left);
-             const rightBlocks = transformNodeToBlocks(node.right);
+             const leftBranch = transformNodeToBlocks(node.left);
+             const rightBranch = transformNodeToBlocks(node.right);
              
-             // Wrap each side in a non-capturing group to preserve visual structure in the Alternation block
-             const leftGroup: Block = { id: generateId(), type: BlockType.GROUP, settings: { type: 'non-capturing' }, children: leftBlocks, isExpanded: true };
-             const rightGroup: Block = { id: generateId(), type: BlockType.GROUP, settings: { type: 'non-capturing' }, children: rightBlocks, isExpanded: true };
+             // Wrap each branch in a non-capturing group to visually contain them in the UI.
+             const leftGroup: Block = {
+                 id: generateId(),
+                 type: BlockType.GROUP,
+                 settings: { type: 'non-capturing' } as GroupSettings,
+                 children: leftBranch,
+                 isExpanded: true
+             };
+             
+             const rightGroup: Block = {
+                 id: generateId(),
+                 type: BlockType.GROUP,
+                 settings: { type: 'non-capturing' } as GroupSettings,
+                 children: rightBranch,
+                 isExpanded: true
+             };
 
              return [{
                 id: newId,
