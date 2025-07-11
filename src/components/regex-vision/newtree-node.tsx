@@ -1,7 +1,7 @@
 // This file will be the new, clean implementation for rendering a block node.
 // We will fill it in step-by-step.
 import React from 'react';
-import type { Block, GroupInfo, QuantifierSettings, GroupSettings, CharacterClassSettings, LiteralSettings } from './types';
+import type { Block, GroupInfo, QuantifierSettings, GroupSettings, CharacterClassSettings, LiteralSettings, AlternationSettings } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
 import { cn } from '@/lib/utils';

@@ -1,7 +1,7 @@
 
 "use client";
 import React, { useState, useEffect, useCallback, lazy, Suspense, useMemo } from 'react';
-import type { Block, RegexMatch, GroupInfo, CharacterClassSettings, RegexStringPart, SavedPattern, DropIndicator } from './types';
+import type { Block, RegexMatch, GroupInfo, CharacterClassSettings, RegexStringPart, SavedPattern, DropIndicator, GroupSettings } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
 import { generateId, cloneBlockForState, generateRegexStringAndGroupInfo, processAiBlocks, isRegexValid, reconstructPatternFromChildren } from './utils';
@@ -25,7 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Layers, Edit3, Code2, Plus, FoldVertical, UnfoldVertical, Menu, Puzzle, Share2, DownloadCloud, UploadCloud, Loader2, Binary } from 'lucide-react';
+import { Layers, Edit3, Code2, Plus, FoldVertical, UnfoldVertical, Menu, Puzzle, Share2, DownloadCloud, UploadCloud, Loader2, Binary, SplitSquareHorizontal } from 'lucide-react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import AnalysisPanel from './AnalysisPanel';
@@ -831,17 +831,23 @@ const RegexVisionWorkspace: React.FC = () => {
 
   const renderBlockNodes = (nodes: Block[], parentId: string | null, depth: number, groupInfos: GroupInfo[]): React.ReactNode[] => {
     const nodeList: React.ReactNode[] = [];
-    
+    const parentNode = parentId ? findBlockRecursive(blocks, parentId) : null;
+    const isParentAlternation = parentNode?.type === BlockType.ALTERNATION;
+
     for (let i = 0; i < nodes.length; i++) {
         const block = nodes[i];
+        
+        // Visual "unwrapping" for children of ALTERNATION
+        if (isParentAlternation && block.type === BlockType.GROUP && (block.settings as GroupSettings).type === 'non-capturing' && block.children) {
+            nodeList.push(...renderBlockNodes(block.children, block.id, depth, groupInfos));
+            continue;
+        }
+        
         let quantifierToRender: Block | null = null;
-
         if (block.type === BlockType.QUANTIFIER) {
-            // Quantifiers are rendered as badges on the block they quantify, so we skip rendering them as standalone nodes.
             continue;
         }
 
-        // Check if the next block is a quantifier for the current block.
         if (i + 1 < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
             quantifierToRender = nodes[i + 1];
         }
@@ -909,7 +915,37 @@ const RegexVisionWorkspace: React.FC = () => {
                     </div>
                 ) : (
                     <div className="space-y-1 p-2">
-                      {renderBlockNodes(blocks, null, 0, regexOutputState.groupInfos)}
+                      {blocks.map(block => {
+                          // Special handling for top-level Alternation to render separator
+                          if (block.type === BlockType.ALTERNATION && block.children) {
+                              return (
+                                  <div key={block.id}>
+                                      <NewTreeNode
+                                          block={block}
+                                          parentId={null}
+                                          depth={0}
+                                          renderChildNodes={(childNodes, pId, nextDepth, gInfos) => {
+                                              return childNodes.map((child, index) => (
+                                                  <React.Fragment key={child.id}>
+                                                      {renderBlockNodes([child], pId, nextDepth, gInfos)}
+                                                      {index < childNodes.length - 1 && (
+                                                          <div className="alternation-separator my-2 flex items-center justify-center ml-5" aria-hidden="true">
+                                                              <hr className="flex-grow border-t-0 border-b border-dashed border-purple-500/40" />
+                                                              <span className="mx-2 px-1.5 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 rounded-full">
+                                                                  ИЛИ
+                                                              </span>
+                                                              <hr className="flex-grow border-t-0 border-b border-dashed border-purple-500/40" />
+                                                          </div>
+                                                      )}
+                                                  </React.Fragment>
+                                              ));
+                                          }}
+                                      />
+                                  </div>
+                              );
+                          }
+                          return renderBlockNodes([block], null, 0, regexOutputState.groupInfos);
+                      })}
                     </div>
                 )}
                 </ScrollArea>
