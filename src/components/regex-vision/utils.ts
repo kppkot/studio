@@ -3,7 +3,7 @@ import type { Block, RegexStringPart, GroupInfo } from './types';
 import { BlockType } from './types';
 import type { CharacterClassSettings, LiteralSettings, QuantifierSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, ConditionalSettings, GroupSettings } from './types';
 
-export const generateId = (): string => Math.random().toString(36).substring(2, 11);
+export const generateId = (): string => `id-${Math.random().toString(36).substring(2, 11)}`;
 
 // This function takes the final block structure and generates the string from it.
 // It ensures the visual representation is the source of truth for the output string.
@@ -88,6 +88,9 @@ export const generateRegexStringAndGroupInfo = (blocks: Block[]): {
         break;
       case BlockType.ALTERNATION:
         if (!block.children || block.children.length === 0) break;
+        // This is a key change: wrap the alternation's children in a non-capturing group
+        // ONLY if the alternation itself is not already inside a group.
+        // For now, we simplify and let the generator reflect the blocks directly.
         block.children.forEach((child, index) => {
           generateRecursive(child);
           if (index < block.children.length - 1) {
@@ -148,164 +151,57 @@ export const cloneBlockForState = (block: Block): Block => {
   return newBlock;
 };
 
-export const createLiteral = (text: string, isRawRegex = false): Block => ({
-  id: generateId(), type: BlockType.LITERAL, settings: {text, isRawRegex} as LiteralSettings, children: [], isExpanded: false
-});
-
-export const reconstructPatternFromChildren = (children: Block[]): string => {
-  return children.map(child => {
-    if (child.type === BlockType.LITERAL) {
-      return (child.settings as LiteralSettings).text;
-    }
-    if (child.type === BlockType.CHARACTER_CLASS) {
-      return (child.settings as CharacterClassSettings).pattern;
-    }
-    return '';
-  }).join('');
-};
-
-export const processAiBlocks = (aiBlocks: any[]): Block[] => {
-  if (!aiBlocks || !Array.isArray(aiBlocks)) {
-    return [];
-  }
-
-  const validAiBlocks = aiBlocks.filter(b => b && typeof b === 'object' && Object.values(BlockType).includes(b.type));
-
-  return validAiBlocks.map((aiBlock: any): Block => {
-    const newBlock: Block = {
-      id: generateId(),
-      type: aiBlock.type as BlockType,
-      settings: aiBlock.settings || {},
-      children: [],
-      isExpanded: false,
-    };
-
-    if (aiBlock.children && Array.isArray(aiBlock.children)) {
-      newBlock.children = processAiBlocks(aiBlock.children);
-    }
-
-    const containerTypes: string[] = [ 
-      BlockType.GROUP,
-      BlockType.LOOKAROUND,
-      BlockType.ALTERNATION,
-      BlockType.CONDITIONAL,
-      BlockType.CHARACTER_CLASS,
-    ];
-    if (containerTypes.includes(newBlock.type!)) {
-      newBlock.isExpanded = true;
-    }
-    
-    // Basic settings validation to prevent crashes
-    switch (newBlock.type) {
-        case BlockType.LITERAL:
-            if (typeof newBlock.settings?.text !== 'string') newBlock.settings = { text: '' };
-            break;
-        case BlockType.CHARACTER_CLASS:
-            if (typeof newBlock.settings?.pattern !== 'string') newBlock.settings = { ...newBlock.settings, pattern: '' };
-            if (typeof newBlock.settings?.negated !== 'boolean') newBlock.settings = { ...newBlock.settings, negated: false };
-            break;
-        case BlockType.QUANTIFIER:
-            if (typeof newBlock.settings?.type !== 'string') newBlock.settings = { ...newBlock.settings, type: '*' };
-            if (!['greedy', 'lazy', 'possessive'].includes(newBlock.settings?.mode)) newBlock.settings = { ...newBlock.settings, mode: 'greedy' };
-            if (newBlock.settings?.type?.includes('{')) {
-                if (typeof newBlock.settings?.min !== 'number') newBlock.settings.min = 0;
-                if (newBlock.settings?.max === undefined) newBlock.settings.max = null; 
-            }
-            break;
-        case BlockType.GROUP:
-            if (!['capturing', 'non-capturing', 'named'].includes(newBlock.settings?.type)) newBlock.settings = { ...newBlock.settings, type: 'capturing' };
-            if (newBlock.settings?.type === 'named' && typeof newBlock.settings?.name !== 'string') newBlock.settings.name = '';
-            break;
-        case BlockType.ANCHOR:
-             if (typeof newBlock.settings?.type !== 'string' || !['^', '$', '\\b', '\\B'].includes(newBlock.settings?.type)) {
-                newBlock.settings = { ...newBlock.settings, type: '^' };
-             }
-            break;
-        default:
-            break;
-    }
-
-    return newBlock;
-  });
-};
-
-export const isRegexValid = (regex: string): boolean => {
-  if (!regex) return false;
+export const isRegexValid = (regexString: string): boolean => {
   try {
-    new RegExp(regex);
+    new RegExp(regexString);
     return true;
   } catch (e) {
     return false;
   }
 };
 
-// --- These functions are intentionally left empty or simplified after refactoring ---
-
-export const breakdownComplexCharClasses = (blocks: Block[]): Block[] => {
-    return blocks;
-};
-
-export const correctAndSanitizeAiBlocks = (blocks: Block[]): Block[] => {
-    return blocks;
-};
-
-// This function combines adjacent literal blocks into a single block.
-export const combineLiterals = (blocks: Block[]): Block[] => {
-  if (!blocks || blocks.length === 0) {
-    return [];
+/**
+ * Traverses a tree of blocks from an AI response and ensures each block
+ * has a unique ID and necessary default properties. This sanitizes the AI output.
+ * @param blocks An array of Block objects, potentially without IDs.
+ * @returns A sanitized array of Block objects with guaranteed unique IDs.
+ */
+export const processAiBlocks = (blocks: Block[]): Block[] => {
+  const processed: Block[] = [];
+  if (!Array.isArray(blocks)) {
+    return processed;
   }
-
-  const newBlocks: Block[] = [];
-  let currentLiteral: Block | null = null;
-
   for (const block of blocks) {
-    // If we have a non-raw literal and there's a current literal being built
-    if (block.type === BlockType.LITERAL && !(block.settings as LiteralSettings).isRawRegex) {
-      if (currentLiteral) {
-        // Append text to the current literal
-        (currentLiteral.settings as LiteralSettings).text += (block.settings as LiteralSettings).text;
-      } else {
-        // Start a new literal block
-        currentLiteral = cloneBlockForState(block);
-      }
-    } else {
-      // If we encounter a non-literal block, push the current literal (if it exists)
-      if (currentLiteral) {
-        newBlocks.push(currentLiteral);
-        currentLiteral = null;
-      }
-      // Push the current non-literal block, and recursively combine its children
-      const newBlock = { ...block };
-      if (newBlock.children) {
-        newBlock.children = combineLiterals(newBlock.children);
-      }
-      newBlocks.push(newBlock);
-    }
-  }
+    // Skip invalid entries
+    if (!block || !block.type) continue;
 
-  // Push any remaining literal at the end
-  if (currentLiteral) {
-    newBlocks.push(currentLiteral);
+    const newBlock: Block = {
+      ...block,
+      id: generateId(),
+      isExpanded: [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(block.type) ? true : undefined,
+      settings: block.settings || {},
+      children: block.children ? processAiBlocks(block.children) : [],
+    };
+    processed.push(newBlock);
   }
-
-  return newBlocks;
+  return processed;
 };
 
-export const findBlockAndParent = (
-  nodes: Block[],
-  id: string,
-  parent: Block | null = null
-): { block: Block | null; parent: Block | null } => {
-  for (const node of nodes) {
-    if (node.id === id) {
-      return { block: node, parent: parent };
-    }
-    if (node.children) {
-      const found = findBlockAndParent(node.children, id, node);
-      if (found.block) {
-        return found;
-      }
-    }
+export const reconstructPatternFromChildren = (children: Block[]): string => {
+  if (!children || children.length === 0) {
+    return '';
   }
-  return { block: null, parent: null };
+  
+  return children.map(child => {
+    switch(child.type) {
+      case BlockType.LITERAL:
+        return (child.settings as LiteralSettings).text || '';
+      case BlockType.CHARACTER_CLASS:
+        // This could be a shorthand like \d
+        return (child.settings as CharacterClassSettings).pattern || '';
+      // Other simple, non-container types could be added here if needed inside a character class
+      default:
+        return '';
+    }
+  }).join('');
 };

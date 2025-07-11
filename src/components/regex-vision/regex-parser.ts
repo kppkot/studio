@@ -6,43 +6,43 @@ import { generateId } from './utils';
 
 // Main exported function
 export function parseRegexWithLibrary(regexString: string): { blocks: Block[], ast: object } {
+  console.log(`[Parser] Received regex to parse: /${regexString}/`);
+  
   if (!regexString.trim()) {
     return { blocks: [], ast: {} };
   }
   
   try {
     const ast = regexpTree.parse(`/${regexString}/u`, { allowGroupNameDuplicates: true });
+    console.log('[Parser] Raw AST from regexp-tree:', JSON.stringify(ast.body, null, 2));
     
     let resultBlocks: Block[] = [];
     if (ast.body) {
         resultBlocks = transformNodeToBlocks(ast.body);
     }
 
+    console.log('[Parser] Transformed Blocks:', JSON.stringify(resultBlocks, null, 2));
     return { blocks: resultBlocks, ast: ast.body };
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Неизвестная ошибка парсера.";
-    // Keep error messages simple for now
-    throw new Error(`Ошибка синтаксиса: ${errorMessage}`);
+    console.error('[Parser] Syntax Error:', errorMessage);
+    throw new Error(`Syntax Error: ${errorMessage}`);
   }
 }
 
-// This is now the ONLY transformation function. No helpers.
 function transformNodeToBlocks(node: any): Block[] {
     if (!node) return [];
 
     const newId = generateId();
 
     switch (node.type) {
-        // A sequence of expressions
         case 'Alternative': {
              return node.expressions.flatMap(transformNodeToBlocks);
         }
 
-        // A single character or simple escape
         case 'Char': {
             const value = node.value;
-            // Handle simple meta characters as CharacterClass blocks
             if (node.kind === 'meta' && ['.', '\\d', '\\D', '\\w', '\\W', '\\s', '\\S'].includes(value)) {
                 return [{
                     id: newId, type: BlockType.CHARACTER_CLASS,
@@ -50,7 +50,6 @@ function transformNodeToBlocks(node: any): Block[] {
                     children: [],
                 }];
             }
-             // Handle unicode property escapes
              if (node.kind === 'unicode' && (node.property === 'L' || node.value === 'L')) {
                 return [{
                     id: newId, type: BlockType.CHARACTER_CLASS,
@@ -58,7 +57,6 @@ function transformNodeToBlocks(node: any): Block[] {
                     children: [],
                 }];
             }
-            // Everything else is a literal character
             return [{
                 id: newId, type: BlockType.LITERAL,
                 settings: { text: value, isRawRegex: false } as LiteralSettings,
@@ -66,7 +64,6 @@ function transformNodeToBlocks(node: any): Block[] {
             }];
         }
 
-        // A repetition like *, +, ?, {n,m}
         case 'Repetition': {
             const subjectBlocks = transformNodeToBlocks(node.expression);
             const q = node.quantifier;
@@ -86,7 +83,7 @@ function transformNodeToBlocks(node: any): Block[] {
                     break;
             }
 
-            if (type === null) return subjectBlocks; // Should not happen with valid regex
+            if (type === null) return subjectBlocks;
 
             const quantifierBlock: Block = {
                 id: generateId(),
@@ -98,11 +95,9 @@ function transformNodeToBlocks(node: any): Block[] {
                 children: [],
             };
             
-            // The quantifier applies to the preceding block.
             return [...subjectBlocks, quantifierBlock];
         }
         
-        // A character class like [a-z] or [^0-9]
         case 'CharacterClass': {
             const pattern = node.expressions.map((expr: any) => regexpTree.generate(expr)).join('');
             return [{
@@ -113,7 +108,6 @@ function transformNodeToBlocks(node: any): Block[] {
             }];
         }
 
-        // A group like (...) or (?:...)
         case 'Group': {
             let groupType: GroupSettings['type'] = 'capturing';
             let name: string | undefined = undefined;
@@ -128,19 +122,16 @@ function transformNodeToBlocks(node: any): Block[] {
             return [{
                 id: newId, type: BlockType.GROUP,
                 settings: { type: groupType, name } as GroupSettings,
-                children: transformNodeToBlocks(node.expression), // The expression is the content of the group
+                children: transformNodeToBlocks(node.expression),
                 isExpanded: true,
             }];
         }
 
-        // The OR operator |
         case 'Disjunction': {
-             // THIS IS THE CRITICAL PART - NO WRAPPING!
              const leftBlocks = transformNodeToBlocks(node.left);
              const rightBlocks = transformNodeToBlocks(node.right);
-
-             // To keep the left and right sides as distinct alternatives,
-             // we create a placeholder group for each.
+             
+             // Wrap each side in a non-capturing group to preserve visual structure in the Alternation block
              const leftGroup: Block = { id: generateId(), type: BlockType.GROUP, settings: { type: 'non-capturing' }, children: leftBlocks, isExpanded: true };
              const rightGroup: Block = { id: generateId(), type: BlockType.GROUP, settings: { type: 'non-capturing' }, children: rightBlocks, isExpanded: true };
 
@@ -153,9 +144,7 @@ function transformNodeToBlocks(node: any): Block[] {
             }];
         }
 
-        // An assertion like ^, $, \b, (?=...)
         case 'Assertion': {
-            // Lookarounds are groups with an assertion
             if (node.kind === 'Lookahead' || node.kind === 'Lookbehind') {
                 return [{
                     id: newId, type: BlockType.LOOKAROUND,
@@ -166,7 +155,6 @@ function transformNodeToBlocks(node: any): Block[] {
                     isExpanded: true,
                 }];
             }
-            // Anchors are simple assertions
             const anchorTypeMap: { [key: string]: AnchorSettings['type'] } = { '^': '^', '$': '$', '\\b': '\\b', '\\B': '\\B' };
             if (Object.keys(anchorTypeMap).includes(node.kind)) {
                 return [{
@@ -175,10 +163,9 @@ function transformNodeToBlocks(node: any): Block[] {
                     children: [],
                 }];
             }
-            return []; // Other assertions not handled
+            return [];
         }
 
-        // A backreference like \1 or \k<name>
         case 'Backreference': {
             const ref = node.number ? String(node.number) : node.name;
             return [{
@@ -189,7 +176,6 @@ function transformNodeToBlocks(node: any): Block[] {
         }
 
         default:
-            // For any unhandled node type, return empty and log it.
             console.warn(`Unhandled AST node type: ${node.type}`);
             return [];
     }

@@ -4,10 +4,9 @@ import React, { useState, useEffect, useCallback, lazy, Suspense, useMemo } from
 import type { Block, RegexMatch, GroupInfo, CharacterClassSettings, RegexStringPart, SavedPattern, DropIndicator } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-// import { generateId, cloneBlockForState, generateRegexStringAndGroupInfo, reconstructPatternFromChildren, combineLiterals } from './utils';
-import { generateId, cloneBlockForState, reconstructPatternFromChildren } from './utils';
+import { generateId, cloneBlockForState, generateRegexStringAndGroupInfo } from './utils';
 import { useToast } from '@/hooks/use-toast';
-import { parseRegexWithLibrary } from './newlab-parser'; // <<< USING NEWLAB PARSER
+import { parseRegexWithLibrary } from './regex-parser';
 
 import BlockNode from './BlockNode';
 import SettingsPanel from './SettingsPanel';
@@ -107,35 +106,35 @@ const RegexVisionWorkspace: React.FC = () => {
 
   // Effect to update regex string and matches whenever the block structure changes
   useEffect(() => {
-    // // Combine literals after any block change for a cleaner display and string representation.
-    // const combinedBlocks = combineLiterals(blocks);
-    // const { regexString: newRegex, groupInfos, stringParts } = generateRegexStringAndGroupInfo(combinedBlocks);
-    // setRegexOutputState({ regexString: newRegex, groupInfos, stringParts });
-    // if (newRegex && testText) {
-    //   try {
-    //     // 'd' flag is for match indices, which we need. Ensure it's always there.
-    //     const currentFlags = regexFlags.includes('d') ? regexFlags : regexFlags + 'd';
-    //     const regexObj = new RegExp(newRegex, currentFlags);
-    //     const foundRawMatches = [...testText.matchAll(regexObj)];
+    const { regexString: newRegex, groupInfos, stringParts } = generateRegexStringAndGroupInfo(blocks);
+    setRegexOutputState({ regexString: newRegex, groupInfos, stringParts });
+    console.log(`[Workspace] Результат в строке регулярное выражение после клика: /${newRegex}/`);
+
+    if (newRegex && testText) {
+      try {
+        // 'd' flag is for match indices, which we need. Ensure it's always there.
+        const currentFlags = regexFlags.includes('d') ? regexFlags : regexFlags + 'd';
+        const regexObj = new RegExp(newRegex, currentFlags);
+        const foundRawMatches = [...testText.matchAll(regexObj)];
         
-    //     const formattedMatches: RegexMatch[] = foundRawMatches.map(rawMatch => ({
-    //       match: rawMatch[0],
-    //       index: rawMatch.index!,
-    //       groups: Array.from(rawMatch).slice(1),
-    //       groupIndices: rawMatch.indices ? rawMatch.indices.slice(1) as [number, number][] : [],
-    //     }));
-    //     setMatches(formattedMatches);
-    //     setRegexError(null);
-    //   } catch (error) {
-    //     setMatches([]);
-    //     if (error instanceof Error) {
-    //         setRegexError(error.message);
-    //     }
-    //   }
-    // } else {
-    //   setMatches([]);
-    //    setRegexError(null);
-    // }
+        const formattedMatches: RegexMatch[] = foundRawMatches.map(rawMatch => ({
+          match: rawMatch[0],
+          index: rawMatch.index!,
+          groups: Array.from(rawMatch).slice(1),
+          groupIndices: rawMatch.indices ? rawMatch.indices.slice(1) as [number, number][] : [],
+        }));
+        setMatches(formattedMatches);
+        setRegexError(null);
+      } catch (error) {
+        setMatches([]);
+        if (error instanceof Error) {
+            setRegexError(error.message);
+        }
+      }
+    } else {
+      setMatches([]);
+       setRegexError(null);
+    }
   }, [blocks, testText, regexFlags]);
 
   const updateBlockRecursive = (currentBlocks: Block[], targetId: string, updatedBlockData: Partial<Block>): Block[] => {
@@ -766,35 +765,10 @@ const RegexVisionWorkspace: React.FC = () => {
   }, [selectedBlockId, blocks, handleDeleteBlock, handleExpandAll, handleCollapseAll, handleUpdateBlock]);
 
   const handleParseRegexString = useCallback((regexString: string) => {
-    // START OF COMMENTED OUT SECTION
-    // if (!regexString) {
-    //   setBlocks([]);
-    //   setAst(null);
-    //   return;
-    // }
-
-    // let processedRegex = regexString;
-    // const inlineFlagMatch = regexString.match(/^\(\?([imsuy]+)\)/);
-    // let extractedFlags = '';
-
-    // if (inlineFlagMatch) {
-    //   extractedFlags = inlineFlagMatch[1];
-    //   setRegexFlags(currentFlags => {
-    //     const flagSet = new Set(currentFlags.split(''));
-    //     for (const flag of extractedFlags) {
-    //       flagSet.add(flag);
-    //     }
-    //     return ['g', 'i', 'm', 's', 'u', 'y'].filter(f => flagSet.has(f as any)).join('');
-    //   });
-    //   processedRegex = regexString.substring(inlineFlagMatch[0].length);
-    // }
-    // END OF COMMENTED OUT SECTION
-
     setIsParsing(true);
     setRegexError(null);
     setAst(null);
     try {
-      // We now use the newlab parser exclusively.
       const { blocks: parsedBlocks, ast: parsedAst } = parseRegexWithLibrary(regexString);
       setBlocks(parsedBlocks);
       setAst(parsedAst); // For debugging
@@ -857,7 +831,6 @@ const RegexVisionWorkspace: React.FC = () => {
 
   const renderBlockNodes = (nodes: Block[], parentId: string | null, depth: number, groupInfos: GroupInfo[]): React.ReactNode[] => {
     const nodeList: React.ReactNode[] = [];
-    // const combinedNodes = combineLiterals(nodes);
     const combinedNodes = nodes;
 
 
