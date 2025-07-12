@@ -78,7 +78,6 @@ const RegexVisionWorkspace: React.FC = () => {
   const [regexFlags, setRegexFlags] = useState<string>('gmu');
   const [matches, setMatches] = useState<RegexMatch[]>([]);
   const [regexError, setRegexError] = useState<string | null>(null);
-  const [ast, setAst] = useState<object | null>({});
 
   const [regexOutputState, setRegexOutputState] = useState<{
     regexString: string;
@@ -743,15 +742,11 @@ const RegexVisionWorkspace: React.FC = () => {
   const handleParseRegexString = useCallback((regexString: string) => {
     setIsParsing(true);
     setRegexError(null);
-    setAst(null);
     try {
-      const { blocks: parsedBlocks, ast: parsedAst } = parseRegexWithLibrary(regexString);
+      const { blocks: parsedBlocks } = parseRegexWithLibrary(regexString);
       setBlocks(parsedBlocks);
-      setAst(parsedAst); // For debugging
       setNaturalLanguageQuery('');
-
       toast({ title: "Выражение разобрано" });
-
     } catch (error) {
       const message = error instanceof Error ? error.message : "Неизвестная ошибка парсера.";
       setRegexError(message);
@@ -980,20 +975,6 @@ const RegexVisionWorkspace: React.FC = () => {
                           regexError={regexError}
                       />
                     </div>
-                    {ast && (
-                        <Card className="flex-shrink-0">
-                            <CardHeader className="py-2 px-3">
-                                <CardTitle className="text-sm">AST (Отладка)</CardTitle>
-                            </CardHeader>
-                            <CardContent className="p-2">
-                                <ScrollArea className="h-32">
-                                <pre className="text-xs font-mono bg-muted p-2 rounded-md">
-                                    {JSON.stringify(ast, null, 2)}
-                                </pre>
-                                </ScrollArea>
-                            </CardContent>
-                        </Card>
-                    )}
                     <AnalysisPanel
                       originalQuery={naturalLanguageQuery}
                       generatedRegex={regexOutputState.regexString}
