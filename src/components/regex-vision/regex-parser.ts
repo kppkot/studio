@@ -13,7 +13,10 @@ export function parseRegexWithLibrary(regexString: string): { blocks: Block[], a
   }
   
   try {
-    const ast = regexpTree.parse(`/${regexString}/u`, { allowGroupNameDuplicates: true });
+    // Strip unsupported inline modifiers like (?i) from the start of the regex.
+    const cleanedRegexString = regexString.replace(/^\(\?i\)/, '');
+
+    const ast = regexpTree.parse(`/${cleanedRegexString}/u`, { allowGroupNameDuplicates: true });
     console.log('[Parser] Raw AST from regexp-tree:', JSON.stringify(ast.body, null, 2));
     
     let resultBlocks: Block[] = [];
@@ -38,7 +41,7 @@ function transformNodeToBlocks(node: any): Block[] {
 
     switch (node.type) {
         case 'Alternative': {
-             // NEW LOGIC: Combine consecutive characters here directly.
+             // Combine consecutive characters here directly.
              const combinedExpressions: Block[] = [];
              let currentLiteralText = '';
 
