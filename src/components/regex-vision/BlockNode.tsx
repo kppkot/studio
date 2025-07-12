@@ -257,7 +257,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         onMouseEnter={() => onBlockHover(quantifierToRender!.id)}
         onMouseLeave={() => onBlockHover(null)}
         className={cn(
-          "absolute top-1/2 -translate-y-1/2 right-[1rem] z-10 cursor-pointer",
+          "absolute top-1/2 -translate-y-1/2 right-2.5 z-10 cursor-pointer",
           "bg-sky-100 text-sky-800 border-sky-300 border",
           "dark:bg-sky-900/50 dark:text-sky-300 dark:border-sky-700/50",
           "px-2.5 py-1 rounded-full text-xs font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-1.5",
@@ -309,7 +309,10 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             dropIndicator?.targetId === block.id && dropIndicator?.position === 'inside' && 'ring-2 ring-blue-500 ring-inset'
           )}
         >
-          <div className="absolute top-1 right-1 flex items-center gap-0.5 z-20">
+          <div className={cn(
+            "absolute top-1 right-1 flex items-center gap-0.5 z-20",
+            quantifierToRender && "right-[calc(1rem+85px)]" // Adjust position if quantifier is present
+          )}>
               {isContainerBlock && (
                 <Button variant="ghost" size="iconSm" onClick={handleToggleExpand} className="h-6 w-6 text-muted-foreground hover:text-primary">
                   {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
