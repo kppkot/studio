@@ -257,7 +257,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         onMouseEnter={() => onBlockHover(quantifierToRender!.id)}
         onMouseLeave={() => onBlockHover(null)}
         className={cn(
-          "absolute top-1/2 -translate-y-1/2 right-[6.5rem] z-10 cursor-pointer",
+          "absolute top-1/2 -translate-y-1/2 right-[2.5rem] z-10 cursor-pointer",
           "bg-sky-100 text-sky-800 border-sky-300 border",
           "dark:bg-sky-900/50 dark:text-sky-300 dark:border-sky-700/50",
           "px-2.5 py-1 rounded-full text-xs font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-1.5",
