@@ -261,7 +261,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           "bg-sky-100 text-sky-800 border-sky-300 border",
           "dark:bg-sky-900/50 dark:text-sky-300 dark:border-sky-700/50",
           "px-2.5 py-1 rounded-full text-xs font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-1.5",
-          "right-[calc(1rem+85px)] group-hover/blocknode:right-2", // Dynamic positioning
+          "right-2", // Position it on the right
           (hoveredId === quantifierToRender.id) && !isQuantifierSelected && "ring-2 ring-accent bg-accent/20 brightness-110",
           isQuantifierSelected && "ring-2 ring-primary bg-primary/20 brightness-110"
         )}
@@ -310,48 +310,51 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             dropIndicator?.targetId === block.id && dropIndicator?.position === 'inside' && 'ring-2 ring-blue-500 ring-inset'
           )}
         >
-          <div className={cn(
-            "absolute top-1 right-1 flex items-center gap-0.5 z-20 opacity-0 group-hover/blocknode:opacity-100 transition-opacity"
-          )}>
+          <div className="absolute top-1 right-1 flex items-center gap-0.5 z-20">
               {isContainerBlock && (
                 <Button variant="ghost" size="iconSm" onClick={handleToggleExpand} className="h-6 w-6 text-muted-foreground hover:text-primary">
                   {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                 </Button>
               )}
-              {block.type === BlockType.GROUP && hasChildren && (
-                 <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onUngroup(block.id); }} className="h-6 w-6 text-muted-foreground hover:text-primary" title="Разгруппировать"><Ungroup size={14}/></Button>
-              )}
-               <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onWrapBlock(block.id); }} className="h-6 w-6 text-muted-foreground hover:text-primary" title="Обернуть в группу"><WrapText size={14} /></Button>
-              <Button
-                  variant="ghost"
-                  size="iconSm"
-                  onClick={(e) => {
-                      e.stopPropagation();
-                      onAddSibling(parentId, block.id);
-                  }}
-                  className="h-6 w-6 text-muted-foreground hover:text-primary"
-                  title="Добавить блок после"
-              >
-                  <PlusCircle size={14} />
-              </Button>
-              <Button
-                  variant="ghost"
-                  size="iconSm"
-                  onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(block.id, true);
-                  }}
-                  className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                  title="Удалить блок"
-              >
-                  <Trash2 size={14} />
-              </Button>
+              <div className="opacity-0 group-hover/blocknode:opacity-100 transition-opacity flex items-center gap-0.5">
+                {block.type === BlockType.GROUP && hasChildren && (
+                   <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onUngroup(block.id); }} className="h-6 w-6 text-muted-foreground hover:text-primary" title="Разгруппировать"><Ungroup size={14}/></Button>
+                )}
+                 <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onWrapBlock(block.id); }} className="h-6 w-6 text-muted-foreground hover:text-primary" title="Обернуть в группу"><WrapText size={14} /></Button>
+                <Button
+                    variant="ghost"
+                    size="iconSm"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onAddSibling(parentId, block.id);
+                    }}
+                    className="h-6 w-6 text-muted-foreground hover:text-primary"
+                    title="Добавить блок после"
+                >
+                    <PlusCircle size={14} />
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="iconSm"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(block.id, true);
+                    }}
+                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                    title="Удалить блок"
+                >
+                    <Trash2 size={14} />
+                </Button>
+              </div>
           </div>
 
           <div className="p-2 pr-4 flex items-start gap-3">
             <GripVertical className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1 cursor-grab" />
             
-             <div className={cn("flex-1 min-w-0", quantifierToRender && "pr-24")}>
+             <div className={cn(
+                "flex-1 min-w-0", 
+                quantifierToRender && "pr-24"
+             )}>
                 <div className="flex items-center gap-2">
                   <span className="text-primary h-5 w-5 flex items-center justify-center">{icon}</span>
                   <h3 className="font-semibold text-sm truncate">{title}</h3>
@@ -371,7 +374,9 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             </div>
           </div>
           
-          {renderQuantifierBadge()}
+          <div className="opacity-0 group-hover/blocknode:opacity-100 transition-opacity">
+            {renderQuantifierBadge()}
+          </div>
         </div>
 
         {isContainerBlock && isCurrentlyExpanded && (
