@@ -1,19 +1,19 @@
+
 "use client";
 import React, { useMemo } from 'react';
 import type { Block, GroupInfo, QuantifierSettings, GroupSettings, CharacterClassSettings, AnchorSettings, LookaroundSettings, BackreferenceSettings, LiteralSettings, DropIndicator } from './types';
 import { BlockType } from './types';
-import { ChevronDown, ChevronRight, GripVertical, Repeat, Trash2, PlusCircle } from 'lucide-react';
+import { ChevronDown, ChevronRight, GripVertical, Repeat, Trash2, PlusCircle, Ungroup, WrapText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { BLOCK_CONFIGS } from './constants';
-import { reconstructPatternFromChildren } from './utils';
 
 interface BlockNodeProps {
   block: Block;
   quantifierToRender?: Block | null;
   onUpdate: (id: string, updatedBlock: Partial<Block>) => void;
   onDelete: (id: string, deleteAttachedQuantifier?: boolean) => void;
-  onAddChild: (parentId: string | null, contextId: string) => void;
+  onAddChild: (parentId: string, contextId: string) => void;
   onAddSibling: (parentId: string | null, contextId:string) => void;
   onDuplicate: (id: string) => void;
   onUngroup: (id: string) => void;
@@ -68,10 +68,9 @@ const BlockNode: React.FC<BlockNodeProps> = ({
       block.type === BlockType.GROUP ||
       block.type === BlockType.LOOKAROUND ||
       block.type === BlockType.ALTERNATION ||
-      block.type === BlockType.CONDITIONAL ||
-      (block.type === BlockType.CHARACTER_CLASS && hasChildren);
+      block.type === BlockType.CONDITIONAL;
 
-  const isCurrentlyExpanded = block.isExpanded ?? (isContainerBlock ? true : false);
+  const isCurrentlyExpanded = block.isExpanded ?? false;
   const isEmptyContainer = isContainerBlock && !hasChildren;
 
   const isBlockSelected = selectedId === block.id;
@@ -111,14 +110,16 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           title = 'Текст';
           regexFragment = (litSettings.text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         }
-        if (!regexFragment) {
+        if (regexFragment) {
+            details = `'${(litSettings.text || '').substring(0, 20)}'`;
+        } else {
             details = 'Пустой литерал. Введите текст.';
         }
         break;
 
       case BlockType.CHARACTER_CLASS:
         const ccSettings = settings as CharacterClassSettings;
-        const pattern = block.children && block.children.length > 0 ? reconstructPatternFromChildren(block.children) : ccSettings.pattern;
+        const pattern = ccSettings.pattern;
 
         const shorthandInfo: { [key: string]: { title: string; details: string } } = {
           '\\d': { title: 'Любая цифра', details: 'Эквивалент [0-9]' },
@@ -137,7 +138,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         } else {
           title = 'Набор символов';
           if (pattern) {
-            details = ccSettings.negated ? 'Кроме указанных символов' : 'Любой из указанных символов';
+            details = ccSettings.negated ? `Кроме: [${pattern}]` : `Любой из: [${pattern}]`;
           } else {
             details = 'Пустой или составной набор';
           }
@@ -159,21 +160,21 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           case 'capturing':
             title = groupInfo ? `Группа (захват №${groupInfo.groupIndex})` : 'Группа (захватывающая)';
             regexFragment = `(...)`;
-            details = 'Сохраняет найденный текст в группу.';
+            details = 'Сохраняет найденный текст.';
             break;
           case 'non-capturing':
             title = `Группа (незахватывающая)`;
             regexFragment = `(?:...)`;
-            details = 'Объединяет блоки, но не сохраняет результат.';
+            details = 'Объединяет, но не сохраняет.';
             break;
           case 'named':
             title = `Группа (имя: ${gSettings.name || '...'})`;
             regexFragment = `(?<${gSettings.name || '...'}>...)`;
-            details = 'Сохраняет результат в именованную группу.';
+            details = 'Сохраняет в именованную группу.';
             break;
           default:
             title = "Группа";
-            details = 'Контейнер для других блоков';
+            details = 'Контейнер для блоков';
             regexFragment = `(...)`;
         }
         break;
@@ -181,24 +182,24 @@ const BlockNode: React.FC<BlockNodeProps> = ({
       case BlockType.ANCHOR:
         const aSettings = settings as AnchorSettings;
         const anchorMap: {[key: string]: {title: string, details: string, regex: string}} = {
-            '^': {title: 'Начало строки/текста', details: 'Совпадение в начале строки', regex: '^'},
-            '$': {title: 'Конец строки/текста', details: 'Совпадение в конце строки', regex: '$'},
-            '\\b': {title: 'Граница слова', details: 'На границе целого слова', regex: '\\b'},
+            '^': {title: 'Начало строки/текста', details: 'Совпадение в начале', regex: '^'},
+            '$': {title: 'Конец строки/текста', details: 'Совпадение в конце', regex: '$'},
+            '\\b': {title: 'Граница слова', details: 'На границе слова', regex: '\\b'},
             '\\B': {title: 'Не граница слова', details: 'Не на границе слова', regex: '\\B'},
         };
         const anchorInfo = anchorMap[aSettings.type];
         title = anchorInfo?.title || 'Якорь';
-        details = anchorInfo?.details || 'Указывает на позицию в тексте';
+        details = anchorInfo?.details || 'Указывает позицию';
         regexFragment = anchorInfo?.regex || aSettings.type;
         break;
 
       case BlockType.LOOKAROUND:
         const lSettings = settings as LookaroundSettings;
         const lookaroundInfo: {[key in LookaroundSettings['type']]: {title: string, details: string, regex: string, hint: React.ReactNode} } = {
-          'positive-lookahead': { title: 'Просмотр вперёд (+)', details: 'Условие: далее следует шаблон', regex: '(?=...)', hint: <div className="flex items-center gap-1 text-xs text-muted-foreground/80 font-semibold"><span className="font-bold text-lg leading-none text-primary/70">→</span><span>Проверка</span></div> },
-          'negative-lookahead': { title: 'Просмотр вперёд (-)', details: 'Условие: далее НЕ следует шаблон', regex: '(?!...)', hint: <div className="flex items-center gap-1 text-xs text-muted-foreground/80 font-semibold"><span className="font-bold text-lg leading-none text-primary/70">→</span><span>Проверка</span></div> },
-          'positive-lookbehind': { title: 'Просмотр назад (+)', details: 'Условие: этому предшествует шаблон', regex: '(?<=...)', hint: <div className="flex items-center gap-1 text-xs text-muted-foreground/80 font-semibold"><span className="font-bold text-lg leading-none text-primary/70">←</span><span>Проверка</span></div> },
-          'negative-lookbehind': { title: 'Просмотр назад (-)', details: 'Условие: этому НЕ предшествует шаблон', regex: '(?<!...)', hint: <div className="flex items-center gap-1 text-xs text-muted-foreground/80 font-semibold"><span className="font-bold text-lg leading-none text-primary/70">←</span><span>Проверка</span></div> },
+          'positive-lookahead': { title: 'Просмотр вперёд (+)', details: 'Условие: далее следует', regex: '(?=...)', hint: <div className="flex items-center gap-1 text-xs text-muted-foreground/80 font-semibold"><span className="font-bold text-lg leading-none text-primary/70">→</span><span>Проверка</span></div> },
+          'negative-lookahead': { title: 'Просмотр вперёд (-)', details: 'Условие: далее НЕ следует', regex: '(?!...)', hint: <div className="flex items-center gap-1 text-xs text-muted-foreground/80 font-semibold"><span className="font-bold text-lg leading-none text-primary/70">→</span><span>Проверка</span></div> },
+          'positive-lookbehind': { title: 'Просмотр назад (+)', details: 'Условие: этому предшествует', regex: '(?<=...)', hint: <div className="flex items-center gap-1 text-xs text-muted-foreground/80 font-semibold"><span className="font-bold text-lg leading-none text-primary/70">←</span><span>Проверка</span></div> },
+          'negative-lookbehind': { title: 'Просмотр назад (-)', details: 'Условие: этому НЕ предшествует', regex: '(?<!...)', hint: <div className="flex items-center gap-1 text-xs text-muted-foreground/80 font-semibold"><span className="font-bold text-lg leading-none text-primary/70">←</span><span>Проверка</span></div> },
         };
         const info = lookaroundInfo[lSettings.type];
         title = info.title;
@@ -256,16 +257,16 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         onMouseEnter={() => onBlockHover(quantifierToRender!.id)}
         onMouseLeave={() => onBlockHover(null)}
         className={cn(
-          "absolute top-1/2 -translate-y-1/2 right-20 z-10 cursor-pointer",
+          "absolute top-1/2 -translate-y-1/2 right-[6.5rem] z-10 cursor-pointer",
           "bg-sky-100 text-sky-800 border-sky-300 border",
           "dark:bg-sky-900/50 dark:text-sky-300 dark:border-sky-700/50",
-          "px-2.5 py-1.5 rounded-full text-sm font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2",
+          "px-2.5 py-1 rounded-full text-xs font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-1.5",
           (hoveredId === quantifierToRender.id) && !isQuantifierSelected && "ring-2 ring-accent bg-accent/20 brightness-110",
           isQuantifierSelected && "ring-2 ring-primary bg-primary/20 brightness-110"
         )}
         title={`${modeMap[qSettings.mode]} квантификатор`}
       >
-        <Repeat size={14} />
+        <Repeat size={12} />
         <span>{badgeDetails}</span>
       </div>
     );
@@ -275,6 +276,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   return (
     <div
       id={`block-node-${block.id}`}
+      style={{ paddingLeft: `${depth * 1.5}rem` }}
       className="relative"
       onDragOver={(e) => onDragOver(e, block.id)}
       onDragLeave={onDragLeave}
@@ -295,7 +297,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         onDragEnd={onDragEnd}
         onMouseEnter={() => onBlockHover(block.id)}
         onMouseLeave={() => onBlockHover(null)}
-        className="transition-all relative group/blocknode rounded-md"
+        className="transition-all relative group/blocknode"
         onClick={(e) => handleSelectBlock(e, block.id)}
       >
         <div
@@ -313,6 +315,10 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                   {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                 </Button>
               )}
+              {block.type === BlockType.GROUP && hasChildren && (
+                 <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onUngroup(block.id); }} className="h-6 w-6 opacity-0 group-hover/blocknode:opacity-100 transition-opacity text-muted-foreground hover:text-primary" title="Разгруппировать"><Ungroup size={14}/></Button>
+              )}
+               <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onWrapBlock(block.id); }} className="h-6 w-6 opacity-0 group-hover/blocknode:opacity-100 transition-opacity text-muted-foreground hover:text-primary" title="Обернуть в группу"><WrapText size={14} /></Button>
               <Button
                   variant="ghost"
                   size="iconSm"
@@ -321,7 +327,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                       onAddSibling(parentId, block.id);
                   }}
                   className="h-6 w-6 opacity-0 group-hover/blocknode:opacity-100 transition-opacity text-muted-foreground hover:text-primary"
-                  title="Добавить блок"
+                  title="Добавить блок после"
               >
                   <PlusCircle size={14} />
               </Button>
@@ -339,12 +345,10 @@ const BlockNode: React.FC<BlockNodeProps> = ({
               </Button>
           </div>
 
-          <div className="p-2 flex items-start gap-3">
+          <div className="p-2 pr-4 flex items-start gap-3">
             <GripVertical className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1 cursor-grab" />
             
-            <div className="w-7 h-7 flex-shrink-0" />
-
-             <div className="flex-1 min-w-0 pr-4">
+             <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-primary h-5 w-5 flex items-center justify-center">{icon}</span>
                   <h3 className="font-semibold text-sm truncate">{title}</h3>
@@ -353,9 +357,9 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
                 {(details || regexFragment) && (
                     <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                        {details && <p className="text-xs text-muted-foreground">{details}</p>}
+                        {details && <p className="text-xs text-muted-foreground truncate">{details}</p>}
                         {regexFragment && (
-                            <div className="px-1.5 py-0.5 bg-muted/70 rounded-md font-mono text-xs text-foreground/80">
+                            <div className="px-1.5 py-0.5 bg-muted/70 rounded font-mono text-xs text-foreground/80">
                                 {regexFragment}
                             </div>
                         )}
@@ -368,11 +372,11 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 
         {isContainerBlock && isCurrentlyExpanded && (
           <div className="children-container mt-1 pl-6 relative">
-            <div className="absolute left-[18px] top-0 bottom-2 w-px bg-primary/20"></div>
+             <div className="absolute left-0 top-0 bottom-2 w-px bg-primary/20 -translate-x-1/2"></div>
              {isEmptyContainer ? (
                <div className="pt-2 pb-1">
                  <div
-                  className="ml-5 pl-4 pr-2 py-4 border-l-2 border-dashed border-muted-foreground/50 bg-muted/30 rounded-r-md text-center text-muted-foreground text-xs italic hover:border-primary hover:text-primary cursor-pointer"
+                  className="pl-4 pr-2 py-4 border-l-2 border-dashed border-muted-foreground/50 bg-muted/30 rounded-r-md text-center text-muted-foreground text-xs italic hover:border-primary hover:text-primary cursor-pointer"
                   onClick={(e) => { e.stopPropagation(); onAddChild(block.id, block.id); }}
                 >
                   <p>{block.type === BlockType.ALTERNATION ? 'Добавьте дочерний блок как первую альтернативу' : 'Перетащите дочерние блоки сюда'}</p>
@@ -384,7 +388,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                       <React.Fragment key={altChild.id}>
                         {renderChildNodes([altChild], block.id, depth + 1, groupInfos)}
                         {index < arr.length - 1 && (
-                          <div className="alternation-separator my-2 flex items-center justify-center ml-5" aria-hidden="true">
+                          <div className="alternation-separator my-2 flex items-center justify-center" aria-hidden="true">
                             <hr className="flex-grow border-t-0 border-b border-dashed border-purple-500/40" />
                             <span className="mx-2 px-1.5 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 rounded-full">
                               ИЛИ

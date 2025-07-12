@@ -4,11 +4,11 @@ import React, { useState, useEffect, useCallback, lazy, Suspense, useMemo } from
 import type { Block, RegexMatch, GroupInfo, CharacterClassSettings, RegexStringPart, SavedPattern, DropIndicator, GroupSettings } from './types';
 import { BlockType } from './types';
 import { BLOCK_CONFIGS } from './constants';
-import { generateId, cloneBlockForState, generateRegexStringAndGroupInfo, processAiBlocks, isRegexValid, reconstructPatternFromChildren } from './utils';
+import { generateId, cloneBlockForState, generateRegexStringAndGroupInfo, processAiBlocks, isRegexValid } from './utils';
 import { useToast } from '@/hooks/use-toast';
 import { parseRegexWithLibrary } from './regex-parser';
 
-import NewTreeNode from './newtree-node';
+import BlockNode from './BlockNode';
 import SettingsPanel from './SettingsPanel';
 import BlockPalette from './BlockPalette';
 import RegexOutputDisplay from './RegexOutputDisplay';
@@ -205,20 +205,23 @@ const RegexVisionWorkspace: React.FC = () => {
 };
 
 
-  const addChildRecursive = (currentBlocks: Block[], pId: string, newBlock: Block): Block[] => {
-    return currentBlocks.map(block => {
-      if (block.id === pId) {
-        const parentCanBeExpanded = [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL, BlockType.CHARACTER_CLASS].includes(block.type);
-        return { ...block, children: [...(block.children || []), newBlock], isExpanded: parentCanBeExpanded ? true : block.isExpanded };
-      }
-      if (block.children) {
-        return { ...block, children: addChildRecursive(block.children, pId, newBlock) };
-      }
-      return block;
+  const addChildRecursive = (currentBlocks: Block[], pId: string, newBlock: Block, contextId: string): Block[] => {
+     return currentBlocks.flatMap(block => {
+        if (block.id === pId) {
+            const newChildren = [...(block.children || []), newBlock];
+            return [{ ...block, children: newChildren, isExpanded: true }];
+        }
+        if (block.id === contextId && pId !== null) {
+            return [block, newBlock];
+        }
+        if (block.children) {
+            return [{ ...block, children: addChildRecursive(block.children, pId, newBlock, contextId) }];
+        }
+        return [block];
     });
   };
 
-  const handleAddBlock = useCallback((type: BlockType, customSettings?: any, parentId?: string | null) => {
+  const handleAddBlock = useCallback((type: BlockType, customSettings?: any, parentId?: string | null, contextId?: string | null) => {
     const config = BLOCK_CONFIGS[type];
     if (!config) {
       toast({ title: "Ошибка", description: `Неизвестный тип блока: ${type}`, variant: "destructive" });
@@ -232,13 +235,14 @@ const RegexVisionWorkspace: React.FC = () => {
       type,
       settings: customSettings || { ...config.defaultSettings },
       children: [],
-      isExpanded: canBeExpanded ? true : undefined,
+      isExpanded: canBeExpanded ? true : false,
     };
+
+    const finalContextId = contextId || selectedBlockId || '';
 
     // Special handling for quantifiers to attach them to the preceding block.
     if (type === BlockType.QUANTIFIER) {
-      const targetBlockId = contextualBlockId || selectedBlockId;
-      if (!targetBlockId) {
+      if (!finalContextId) {
         toast({ title: "Ошибка", description: "Выберите блок, к которому нужно применить квантификатор.", variant: "destructive" });
         return;
       }
@@ -266,7 +270,7 @@ const RegexVisionWorkspace: React.FC = () => {
         return null;
       };
       setBlocks(prev => {
-        const newTree = insertQuantifier(prev, targetBlockId);
+        const newTree = insertQuantifier(prev, finalContextId);
         if (newTree) {
           setSelectedBlockId(newBlock.id);
           return newTree;
@@ -279,60 +283,33 @@ const RegexVisionWorkspace: React.FC = () => {
       setIsPaletteVisible(false);
       return;
     }
-
-    // Default block addition logic
-    let targetParentId = parentId;
-    if (!targetParentId && selectedBlockId) {
-      const selBlock = findBlockRecursive(blocks, selectedBlockId);
-      if (selBlock) {
-         const isContainer =
-            [BlockType.GROUP, BlockType.LOOKAROUND, BlockType.ALTERNATION, BlockType.CONDITIONAL].includes(selBlock.type) ||
-            (selBlock.type === BlockType.CHARACTER_CLASS && (!(selBlock.settings as CharacterClassSettings).pattern || (selBlock.children && selBlock.children.length > 0)));
-
-        // If the selected block is a container, new blocks are added inside it by default.
-        if (isContainer) {
-            targetParentId = selectedBlockId;
+    
+    setBlocks(prev => {
+        // If parentId is provided, always add as a child to that parent
+        if (parentId) {
+             return addChildRecursive(prev, parentId, newBlock, finalContextId);
         }
-      }
-    }
-
-    if (targetParentId) {
-      setBlocks(prev => addChildRecursive(prev, targetParentId, newBlock));
-    } else {
-      // Find the parent of the selected block to add as a sibling
-      const findParentOfSelected = (nodes: Block[], sId: string, pId: string | null): string | null => {
-        for(const node of nodes) {
-            if (node.id === sId) return pId;
-            if (node.children) {
-                const found = findParentOfSelected(node.children, sId, node.id);
-                if (found !== null) return found;
-            }
-        }
-        return null;
-      }
-      const selectedParentId = selectedBlockId ? findParentOfSelected(blocks, selectedBlockId, null) : null;
-
-      if(selectedParentId && selectedBlockId) {
-        setBlocks(prev => {
-            const insertSibling = (bs: Block[], sId: string, newB: Block): Block[] => {
-                return bs.flatMap(b => {
-                    if (b.id === sId) return [b, newB];
-                    if (b.children) return [{ ...b, children: insertSibling(b.children, sId, newB) }];
+        // If no parent is provided, add as a sibling after the context block
+        if (finalContextId) {
+            const insertAfter = (nodes: Block[]): Block[] => {
+                return nodes.flatMap(b => {
+                    if (b.id === finalContextId) return [b, newBlock];
+                    if (b.children) return [{...b, children: insertAfter(b.children)}];
                     return [b];
                 });
-            }
-            return insertSibling(prev, selectedBlockId, newBlock);
-        });
-      } else {
-        // No parent, add to root
-        setBlocks(prev => [...prev, newBlock]);
-      }
-    }
+            };
+            return insertAfter(prev);
+        }
+        // If no context at all, add to root
+        return [...prev, newBlock];
+    });
+
+
     setSelectedBlockId(newBlock.id);
     setParentIdForNewBlock(null);
     setContextualBlockId(null);
     setIsPaletteVisible(false);
-  }, [toast, blocks, selectedBlockId, contextualBlockId]);
+  }, [toast, selectedBlockId]);
 
   const handleUpdateBlock = useCallback((id: string, updatedBlockData: Partial<Block>) => {
     setBlocks(prev => updateBlockRecursive(prev, id, updatedBlockData));
@@ -347,7 +324,7 @@ const RegexVisionWorkspace: React.FC = () => {
         }
         return result.updatedBlocks;
     });
-    toast({ title: "Блок удален", description: "Блок был успешно удален." });
+    toast({ title: "Блок удален" });
   }, [selectedBlockId, toast]);
 
   const duplicateAndInsertBlockRecursive = (currentBlocks: Block[], targetId: string): { updatedBlocks: Block[], success: boolean, newSelectedId?: string } => {
@@ -383,13 +360,13 @@ const RegexVisionWorkspace: React.FC = () => {
     setBlocks(prevBlocks => {
       const result = duplicateAndInsertBlockRecursive(prevBlocks, id);
       if (result.success) {
-        toast({ title: "Блок скопирован", description: "Копия блока добавлена в дерево." });
+        toast({ title: "Блок скопирован" });
         if (result.newSelectedId) {
             setSelectedBlockId(result.newSelectedId);
         }
         return result.updatedBlocks;
       }
-      toast({ title: "Ошибка копирования", description: "Не удалось найти блок для копирования.", variant: "destructive"});
+      toast({ title: "Ошибка копирования", variant: "destructive"});
       return prevBlocks;
     });
   }, [toast]);
@@ -410,7 +387,7 @@ const RegexVisionWorkspace: React.FC = () => {
   const handleUngroupBlock = useCallback((id: string) => {
     const blockToUngroup = findBlockRecursive(blocks, id);
     if (!blockToUngroup || !blockToUngroup.children || blockToUngroup.children.length === 0) {
-      toast({ title: "Ошибка", description: "Блок не может быть разгруппирован или не имеет дочерних элементов.", variant: "destructive" });
+      toast({ title: "Ошибка", description: "Блок не может быть разгруппирован или пуст.", variant: "destructive" });
       return;
     }
 
@@ -419,7 +396,7 @@ const RegexVisionWorkspace: React.FC = () => {
     if (selectedBlockId === id) {
       setSelectedBlockId(null);
     }
-    toast({ title: "Блок разгруппирован", description: "Дочерние элементы блока были подняты на уровень выше." });
+    toast({ title: "Блок разгруппирован" });
   }, [blocks, selectedBlockId, toast]);
 
   const handleWrapBlock = useCallback((blockIdToWrap: string) => {
@@ -468,11 +445,11 @@ const RegexVisionWorkspace: React.FC = () => {
 
       if (updatedTree) {
         setSelectedBlockId(newGroupBlock.id);
-        toast({ title: "Блок обернут", description: "Выбранный блок был обернут в новую группу." });
+        toast({ title: "Блок обернут" });
         return updatedTree;
       }
 
-      toast({ title: "Ошибка", description: "Не удалось обернуть блок.", variant: "destructive" });
+      toast({ title: "Ошибка", variant: "destructive" });
       return prevBlocks;
     });
   }, [toast]);
@@ -494,10 +471,7 @@ const RegexVisionWorkspace: React.FC = () => {
 
   const handleBlockHover = useCallback((blockId: string | null) => {
     setHoveredBlockId(blockId);
-    if (blockId) {
-      scrollBlockIntoView(blockId);
-    }
-  }, [scrollBlockIntoView]);
+  }, []);
 
 
   // --- Drag and Drop Handlers ---
@@ -647,8 +621,8 @@ const RegexVisionWorkspace: React.FC = () => {
   const handleShare = () => {
     // A more robust solution would involve encoding the state into the URL.
     navigator.clipboard.writeText(window.location.href)
-      .then(() => toast({ title: "Ссылка скопирована!", description: "Ссылка для обмена скопирована в буфер обмена." }))
-      .catch(() => toast({ title: "Ошибка", description: "Не удалось скопировать ссылку.", variant: "destructive" }));
+      .then(() => toast({ title: "Ссылка скопирована!" }))
+      .catch(() => toast({ title: "Ошибка", variant: "destructive" }));
   };
 
   const handleExport = () => {
@@ -660,9 +634,9 @@ const RegexVisionWorkspace: React.FC = () => {
       link.href = jsonString;
       link.download = "regexvision_config.json";
       link.click();
-      toast({ title: "Экспортировано!", description: "Конфигурация загружена." });
+      toast({ title: "Экспортировано!" });
     } catch (error) {
-      toast({ title: "Ошибка", description: "Не удалось экспортировать конфигурацию.", variant: "destructive" });
+      toast({ title: "Ошибка", variant: "destructive" });
     }
   };
   const handleImport = () => {
@@ -683,7 +657,7 @@ const RegexVisionWorkspace: React.FC = () => {
                   return {
                     ...b,
                     id: b.id || generateId(),
-                    isExpanded: b.isExpanded ?? (canBeExpanded ? true : undefined),
+                    isExpanded: b.isExpanded ?? (canBeExpanded ? true : false),
                     children: b.children ? processImportedBlocks(b.children) : []
                   };
                 });
@@ -692,12 +666,12 @@ const RegexVisionWorkspace: React.FC = () => {
               setRegexFlags(imported.regexFlags);
               setTestText(imported.testText);
               setSelectedBlockId(null);
-              toast({ title: "Импортировано!", description: "Конфигурация загружена." });
+              toast({ title: "Импортировано!" });
             } else {
               throw new Error("Неверный формат файла");
             }
           } catch (err) {
-            toast({ title: "Ошибка импорта", description: "Не удалось разобрать или неверный файл.", variant: "destructive" });
+            toast({ title: "Ошибка импорта", variant: "destructive" });
           }
         };
         reader.readAsText(file);
@@ -714,8 +688,7 @@ const RegexVisionWorkspace: React.FC = () => {
           b.type === BlockType.GROUP ||
           b.type === BlockType.LOOKAROUND ||
           b.type === BlockType.ALTERNATION ||
-          b.type === BlockType.CONDITIONAL ||
-          (b.type === BlockType.CHARACTER_CLASS && hasChildren);
+          b.type === BlockType.CONDITIONAL;
 
         return {
           ...b,
@@ -774,7 +747,7 @@ const RegexVisionWorkspace: React.FC = () => {
       setAst(parsedAst); // For debugging
       setNaturalLanguageQuery('');
 
-      toast({ title: "Выражение разобрано", description: "Структура блоков построена успешно." });
+      toast({ title: "Выражение разобрано" });
 
     } catch (error) {
       const message = error instanceof Error ? error.message : "Неизвестная ошибка парсера.";
@@ -829,23 +802,32 @@ const RegexVisionWorkspace: React.FC = () => {
       setNaturalLanguageQuery(fixResult.explanation); // Show AI explanation as new 'goal'
   };
 
+  const handleAddChild = (parentId: string, contextId: string) => {
+    handleOpenPaletteFor(parentId, contextId);
+  };
+  
+  const handleAddSibling = (parentId: string | null, contextId: string) => {
+    handleOpenPaletteFor(parentId, contextId);
+  };
+
+
   const renderBlockNodes = (nodes: Block[], parentId: string | null, depth: number, groupInfos: GroupInfo[]): React.ReactNode[] => {
     const nodeList: React.ReactNode[] = [];
-    const parentNode = parentId ? findBlockRecursive(blocks, parentId) : null;
-    const isParentAlternation = parentNode?.type === BlockType.ALTERNATION;
-
+    
     for (let i = 0; i < nodes.length; i++) {
         const block = nodes[i];
         
-        // Visual "unwrapping" for children of ALTERNATION
-        if (isParentAlternation && block.type === BlockType.GROUP && (block.settings as GroupSettings).type === 'non-capturing' && block.children) {
-            nodeList.push(...renderBlockNodes(block.children, block.id, depth, groupInfos));
-            continue;
+        // This is the "unwrapping" logic for ALTERNATION children
+        if (parentId && findBlockRecursive(blocks, parentId)?.type === BlockType.ALTERNATION) {
+          if (block.type === BlockType.GROUP && (block.settings as GroupSettings).type === 'non-capturing' && block.children) {
+              nodeList.push(...renderBlockNodes(block.children, block.id, depth, groupInfos));
+              continue;
+          }
         }
         
         let quantifierToRender: Block | null = null;
         if (block.type === BlockType.QUANTIFIER) {
-            continue;
+            continue; // Quantifiers are rendered by their preceding block
         }
 
         if (i + 1 < nodes.length && nodes[i + 1].type === BlockType.QUANTIFIER) {
@@ -853,31 +835,31 @@ const RegexVisionWorkspace: React.FC = () => {
         }
 
         nodeList.push(
-          <NewTreeNode
+          <BlockNode
             key={block.id}
             block={block}
             quantifierToRender={quantifierToRender}
-            // onUpdate={handleUpdateBlock}
-            // onDelete={handleDeleteBlock}
-            // onAddChild={(pId) => handleOpenPaletteFor(pId, block.id)}
-            // onAddSibling={(pId, ctxId) => handleOpenPaletteFor(pId, ctxId)}
-            // onDuplicate={handleDuplicateBlock}
-            // onUngroup={handleUngroupBlock}
-            // onWrapBlock={handleWrapBlock}
-            // selectedId={selectedBlockId}
-            // onSelect={handleSelectBlock}
+            onUpdate={handleUpdateBlock}
+            onDelete={handleDeleteBlock}
+            onAddChild={handleAddChild}
+            onAddSibling={handleAddSibling}
+            onDuplicate={handleDuplicateBlock}
+            onUngroup={handleUngroupBlock}
+            onWrapBlock={handleWrapBlock}
+            selectedId={selectedBlockId}
+            onSelect={handleSelectBlock}
             parentId={parentId}
             depth={depth}
-            // hoveredId={hoveredBlockId}
-            // onBlockHover={handleBlockHover}
-            renderChildNodes={(childNodes, pId, nextDepth, gInfos) => renderBlockNodes(childNodes, pId, nextDepth, gInfos)}
-            // groupInfos={groupInfos}
-            // onDragStart={handleDragStart}
-            // onDragEnd={handleDragEnd}
-            // onDrop={handleDrop}
-            // onDragOver={handleDragOver}
-            // onDragLeave={handleDragLeave}
-            // dropIndicator={dropIndicator}
+            hoveredId={hoveredBlockId}
+            onBlockHover={handleBlockHover}
+            renderChildNodes={renderBlockNodes}
+            groupInfos={groupInfos}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            dropIndicator={dropIndicator}
           />
         );
     }
@@ -915,37 +897,7 @@ const RegexVisionWorkspace: React.FC = () => {
                     </div>
                 ) : (
                     <div className="space-y-1 p-2">
-                      {blocks.map(block => {
-                          // Special handling for top-level Alternation to render separator
-                          if (block.type === BlockType.ALTERNATION && block.children) {
-                              return (
-                                  <div key={block.id}>
-                                      <NewTreeNode
-                                          block={block}
-                                          parentId={null}
-                                          depth={0}
-                                          renderChildNodes={(childNodes, pId, nextDepth, gInfos) => {
-                                              return childNodes.map((child, index) => (
-                                                  <React.Fragment key={child.id}>
-                                                      {renderBlockNodes([child], pId, nextDepth, gInfos)}
-                                                      {index < childNodes.length - 1 && (
-                                                          <div className="alternation-separator my-2 flex items-center justify-center ml-5" aria-hidden="true">
-                                                              <hr className="flex-grow border-t-0 border-b border-dashed border-purple-500/40" />
-                                                              <span className="mx-2 px-1.5 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 rounded-full">
-                                                                  ИЛИ
-                                                              </span>
-                                                              <hr className="flex-grow border-t-0 border-b border-dashed border-purple-500/40" />
-                                                          </div>
-                                                      )}
-                                                  </React.Fragment>
-                                              ));
-                                          }}
-                                      />
-                                  </div>
-                              );
-                          }
-                          return renderBlockNodes([block], null, 0, regexOutputState.groupInfos);
-                      })}
+                      {renderBlockNodes(blocks, null, 0, regexOutputState.groupInfos)}
                     </div>
                 )}
                 </ScrollArea>
@@ -1081,7 +1033,7 @@ const RegexVisionWorkspace: React.FC = () => {
     </Sheet>
 
       <BlockPalette
-        onAddBlock={handleAddBlock}
+        onAddBlock={(type, settings) => handleAddBlock(type, settings, parentIdForNewBlock, contextualBlockId)}
         isVisible={isPaletteVisible}
         onToggle={() => {
           setIsPaletteVisible(!isPaletteVisible);
