@@ -257,11 +257,10 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         onMouseEnter={() => onBlockHover(quantifierToRender!.id)}
         onMouseLeave={() => onBlockHover(null)}
         className={cn(
-          "absolute top-1/2 -translate-y-1/2 z-10 cursor-pointer",
+          "cursor-pointer",
           "bg-sky-100 text-sky-800 border-sky-300 border",
           "dark:bg-sky-900/50 dark:text-sky-300 dark:border-sky-700/50",
-          "px-2.5 py-1 rounded-full text-xs font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-1.5",
-          "right-2", // Position it on the right
+          "px-2 py-1 rounded-full text-xs font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-1.5",
           (hoveredId === quantifierToRender.id) && !isQuantifierSelected && "ring-2 ring-accent bg-accent/20 brightness-110",
           isQuantifierSelected && "ring-2 ring-primary bg-primary/20 brightness-110"
         )}
@@ -303,20 +302,44 @@ const BlockNode: React.FC<BlockNodeProps> = ({
       >
         <div
           className={cn(
-            "block-main-content border rounded-md relative transition-all",
+            "block-main-content border rounded-md relative transition-all flex items-center",
             "bg-card",
             isBlockHovered && "bg-accent/10 ring-1 ring-accent",
             isSelected && "ring-2 ring-primary shadow-lg bg-primary/10",
             dropIndicator?.targetId === block.id && dropIndicator?.position === 'inside' && 'ring-2 ring-blue-500 ring-inset'
           )}
         >
-          <div className="absolute top-1 right-1 flex items-center gap-0.5 z-20">
-              {isContainerBlock && (
-                <Button variant="ghost" size="iconSm" onClick={handleToggleExpand} className="h-6 w-6 text-muted-foreground hover:text-primary">
-                  {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                </Button>
-              )}
-              <div className="opacity-0 group-hover/blocknode:opacity-100 transition-opacity flex items-center gap-0.5">
+          <div className="p-2 flex items-start gap-3 flex-1 min-w-0">
+            <GripVertical className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1 cursor-grab" />
+            
+             <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-primary h-5 w-5 flex items-center justify-center">{icon}</span>
+                  <h3 className="font-semibold text-sm truncate">{title}</h3>
+                  {visualHint}
+                </div>
+
+                {(details || regexFragment) && (
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        {details && <p className="text-xs text-muted-foreground truncate">{details}</p>}
+                        {regexFragment && (
+                            <div className="px-1.5 py-0.5 bg-muted/70 rounded font-mono text-xs text-foreground/80">
+                                {regexFragment}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+          </div>
+          
+          <div className="flex-shrink-0 flex items-center gap-1 pr-2">
+             {quantifierToRender && renderQuantifierBadge()}
+             <div className="flex items-center gap-0.5 opacity-0 group-hover/blocknode:opacity-100 transition-opacity">
+                {isContainerBlock && (
+                    <Button variant="ghost" size="iconSm" onClick={handleToggleExpand} className="h-6 w-6 text-muted-foreground hover:text-primary">
+                        {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    </Button>
+                )}
                 {block.type === BlockType.GROUP && hasChildren && (
                    <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onUngroup(block.id); }} className="h-6 w-6 text-muted-foreground hover:text-primary" title="Разгруппировать"><Ungroup size={14}/></Button>
                 )}
@@ -347,36 +370,6 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                 </Button>
               </div>
           </div>
-
-          <div className="p-2 pr-4 flex items-start gap-3">
-            <GripVertical className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1 cursor-grab" />
-            
-             <div className={cn(
-                "flex-1 min-w-0", 
-                quantifierToRender && "pr-24"
-             )}>
-                <div className="flex items-center gap-2">
-                  <span className="text-primary h-5 w-5 flex items-center justify-center">{icon}</span>
-                  <h3 className="font-semibold text-sm truncate">{title}</h3>
-                  {visualHint}
-                </div>
-
-                {(details || regexFragment) && (
-                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                        {details && <p className="text-xs text-muted-foreground truncate">{details}</p>}
-                        {regexFragment && (
-                            <div className="px-1.5 py-0.5 bg-muted/70 rounded font-mono text-xs text-foreground/80">
-                                {regexFragment}
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
-          </div>
-          
-          <div className="opacity-0 group-hover/blocknode:opacity-100 transition-opacity">
-            {renderQuantifierBadge()}
-          </div>
         </div>
 
         {isContainerBlock && isCurrentlyExpanded && (
@@ -395,7 +388,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                  <div className="space-y-1 pt-1">
                     {(block.children || []).map((altChild, index, arr) => (
                       <React.Fragment key={altChild.id}>
-                        {renderChildNodes([altChild], block.id, depth + 1, groupInfos)}
+                        {renderBlockNodes([altChild], block.id, depth + 1, groupInfos)}
                         {index < arr.length - 1 && (
                           <div className="alternation-separator my-2 flex items-center justify-center" aria-hidden="true">
                             <hr className="flex-grow border-t-0 border-b border-dashed border-purple-500/40" />
