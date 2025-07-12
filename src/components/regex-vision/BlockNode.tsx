@@ -333,13 +333,13 @@ const BlockNode: React.FC<BlockNodeProps> = ({
           </div>
           
           <div className="flex-shrink-0 flex items-center gap-1 pr-2">
-             {quantifierToRender && renderQuantifierBadge()}
+             {renderQuantifierBadge()}
+             {isContainerBlock && (
+                <Button variant="ghost" size="iconSm" onClick={handleToggleExpand} className="h-6 w-6 text-muted-foreground hover:text-primary">
+                    {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                </Button>
+            )}
              <div className="flex items-center gap-0.5 opacity-0 group-hover/blocknode:opacity-100 transition-opacity">
-                {isContainerBlock && (
-                    <Button variant="ghost" size="iconSm" onClick={handleToggleExpand} className="h-6 w-6 text-muted-foreground hover:text-primary">
-                        {isCurrentlyExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                    </Button>
-                )}
                 {block.type === BlockType.GROUP && hasChildren && (
                    <Button variant="ghost" size="iconSm" onClick={(e) => { e.stopPropagation(); onUngroup(block.id); }} className="h-6 w-6 text-muted-foreground hover:text-primary" title="Разгруппировать"><Ungroup size={14}/></Button>
                 )}
