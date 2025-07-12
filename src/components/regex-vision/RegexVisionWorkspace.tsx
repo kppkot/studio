@@ -469,9 +469,12 @@ const RegexVisionWorkspace: React.FC = () => {
     }
   }, [scrollBlockIntoView]);
 
-  const handleBlockHover = useCallback((blockId: string | null) => {
+  const handleHighlightAndFocusPart = useCallback((blockId: string | null) => {
     setHoveredBlockId(blockId);
-  }, []);
+    if (blockId) {
+        scrollBlockIntoView(blockId);
+    }
+  }, [scrollBlockIntoView]);
 
 
   // --- Drag and Drop Handlers ---
@@ -851,7 +854,7 @@ const RegexVisionWorkspace: React.FC = () => {
             parentId={parentId}
             depth={depth}
             hoveredId={hoveredBlockId}
-            onBlockHover={handleBlockHover}
+            onBlockHover={handleHighlightAndFocusPart}
             renderChildNodes={renderBlockNodes}
             groupInfos={groupInfos}
             onDragStart={handleDragStart}
@@ -922,7 +925,7 @@ const RegexVisionWorkspace: React.FC = () => {
                 highlightedIds={idsToHighlight}
                 onSelectBlock={handleSelectBlock}
                 hoveredIds={idsToHover}
-                onHoverPart={handleBlockHover}
+                onHighlightAndFocusPart={handleHighlightAndFocusPart}
                 isReady={isReady}
               />
           </div>

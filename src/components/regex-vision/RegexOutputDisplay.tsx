@@ -38,7 +38,7 @@ interface RegexOutputDisplayProps {
   highlightedIds: string[];
   onSelectBlock: (id: string | null) => void;
   hoveredIds: string[];
-  onHoverPart: (blockId: string | null) => void;
+  onHighlightAndFocusPart: (blockId: string | null) => void;
   isReady: boolean;
 }
 
@@ -52,7 +52,7 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
   highlightedIds,
   onSelectBlock,
   hoveredIds,
-  onHoverPart,
+  onHighlightAndFocusPart,
   isReady,
 }) => {
   const { toast } = useToast();
@@ -139,7 +139,7 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
             onClick={() => setIsEditing(true)}
             role="textbox"
             tabIndex={0}
-            onMouseLeave={() => onHoverPart(null)}
+            onMouseLeave={() => onHighlightAndFocusPart(null)}
           >
               {stringParts.length > 0 ? stringParts.map((part, index) => {
                   const isSelected = highlightedIds.includes(part.blockId);
@@ -148,7 +148,7 @@ const RegexOutputDisplay: React.FC<RegexOutputDisplayProps> = ({
                   return (
                     <span 
                         key={`${part.blockId}-${index}`}
-                        onMouseEnter={() => onHoverPart(part.blockId)}
+                        onMouseEnter={() => onHighlightAndFocusPart(part.blockId)}
                         onClick={(e) => { e.stopPropagation(); onSelectBlock(part.blockId); }}
                         className={cn(
                           "transition-all duration-100 rounded-sm px-0.5 cursor-pointer",
