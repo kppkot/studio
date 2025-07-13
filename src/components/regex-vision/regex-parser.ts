@@ -13,14 +13,7 @@ export function parseRegexWithLibrary(regexString: string): { blocks: Block[], a
   }
   
   try {
-    // Strip unsupported inline modifiers like (?i) from the start of the regex.
-    // Also, escape any forward slashes in the user's regex to prevent parsing errors.
-    const sanitizedRegexString = regexString
-      .replace(/^\(\?i\)/, '')
-      .replace(/\//g, '\\/');
-
-
-    const ast = regexpTree.parse(`/${sanitizedRegexString}/u`, { allowGroupNameDuplicates: true });
+    const ast = regexpTree.parse(`/${regexString}/u`, { allowGroupNameDuplicates: true });
     console.log('[Parser] Raw AST from regexp-tree:', JSON.stringify(ast.body, null, 2));
     
     let resultBlocks: Block[] = [];
