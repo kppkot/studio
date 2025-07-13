@@ -276,7 +276,6 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   return (
     <div
       id={`block-node-${block.id}`}
-      style={{ marginLeft: `${depth * 1.5}rem` }}
       className="relative"
       onDragOver={(e) => onDragOver(e, block.id)}
       onDragLeave={onDragLeave}
@@ -308,6 +307,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
             isSelected && "ring-2 ring-primary shadow-lg bg-primary/10",
             dropIndicator?.targetId === block.id && dropIndicator?.position === 'inside' && 'ring-2 ring-blue-500 ring-inset'
           )}
+          style={{ paddingLeft: `${depth * 1.5}rem` }}
         >
           <div className="p-2 flex items-start gap-3 flex-1 min-w-0">
             <GripVertical className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1 cursor-grab" />
@@ -373,10 +373,10 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         </div>
 
         {isContainerBlock && isCurrentlyExpanded && (
-          <div className="children-container mt-1 pl-4 relative">
-             <div className="absolute left-0 top-0 bottom-2 w-px bg-primary/20 -translate-x-1/2"></div>
+          <div className="children-container mt-1 relative">
+             <div className="absolute left-0 top-0 bottom-2 w-px bg-primary/20" style={{ left: `calc(${depth * 1.5}rem + 18px)` }} />
              {isEmptyContainer ? (
-               <div className="pt-2 pb-1">
+               <div className="pt-2 pb-1" style={{ paddingLeft: `${(depth + 1) * 1.5}rem` }}>
                  <div
                   className="pl-4 pr-2 py-4 border-l-2 border-dashed border-muted-foreground/50 bg-muted/30 rounded-r-md text-center text-muted-foreground text-xs italic hover:border-primary hover:text-primary cursor-pointer"
                   onClick={(e) => { e.stopPropagation(); onAddChild(block.id, block.id); }}
@@ -390,7 +390,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                       <React.Fragment key={altChild.id}>
                         {renderChildNodes([altChild], block.id, depth + 1, groupInfos)}
                         {index < arr.length - 1 && (
-                          <div className="alternation-separator my-2 flex items-center justify-center" aria-hidden="true">
+                          <div className="alternation-separator my-2 flex items-center justify-center" aria-hidden="true" style={{ paddingLeft: `${(depth + 1) * 1.5}rem` }}>
                             <hr className="flex-grow border-t-0 border-b border-dashed border-purple-500/40" />
                             <span className="mx-2 px-1.5 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 rounded-full">
                               ИЛИ
@@ -414,5 +414,3 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 };
 
 export default BlockNode;
-
-    
