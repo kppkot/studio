@@ -276,7 +276,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
   return (
     <div
       id={`block-node-${block.id}`}
-      style={{ paddingLeft: `${depth * 1.5}rem` }}
+      style={{ marginLeft: `${depth * 1.5}rem` }}
       className="relative"
       onDragOver={(e) => onDragOver(e, block.id)}
       onDragLeave={onDragLeave}
@@ -373,7 +373,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
         </div>
 
         {isContainerBlock && isCurrentlyExpanded && (
-          <div className="children-container mt-1 pl-6 relative">
+          <div className="children-container mt-1 pl-4 relative">
              <div className="absolute left-0 top-0 bottom-2 w-px bg-primary/20 -translate-x-1/2"></div>
              {isEmptyContainer ? (
                <div className="pt-2 pb-1">
@@ -388,7 +388,7 @@ const BlockNode: React.FC<BlockNodeProps> = ({
                  <div className="space-y-1 pt-1">
                     {(block.children || []).map((altChild, index, arr) => (
                       <React.Fragment key={altChild.id}>
-                        {renderBlockNodes([altChild], block.id, depth + 1, groupInfos)}
+                        {renderChildNodes([altChild], block.id, depth + 1, groupInfos)}
                         {index < arr.length - 1 && (
                           <div className="alternation-separator my-2 flex items-center justify-center" aria-hidden="true">
                             <hr className="flex-grow border-t-0 border-b border-dashed border-purple-500/40" />
@@ -414,3 +414,5 @@ const BlockNode: React.FC<BlockNodeProps> = ({
 };
 
 export default BlockNode;
+
+    
